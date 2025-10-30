@@ -4,8 +4,8 @@ import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { getSupabaseClient } from "@/lib/supabase"
+import { canAccessSection, type UserRole } from "@/lib/permissions"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -15,12 +15,6 @@ export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [announcements, setAnnouncements] = useState<any[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
-  const [aiChatOpen, setAiChatOpen] = useState(false)
-  const [aiTab, setAiTab] = useState("functions")
-  const [aiMessages, setAiMessages] = useState<Array<{ type: "user" | "bot"; text: string }>>([
-    { type: "bot", text: "您好！我是社區 AI 助理。請問有什麼可以幫助您的嗎？" },
-  ])
-  const [aiInput, setAiInput] = useState("")
 
   const [votes, setVotes] = useState<any[]>([])
   const [votedPolls, setVotedPolls] = useState<Set<string>>(new Set())
@@ -29,7 +23,8 @@ export default function DashboardPage() {
   const [visitors, setVisitors] = useState<any[]>([])
   const [meetings, setMeetings] = useState<any[]>([])
   const [finances, setFinances] = useState<any[]>([])
-  const [emergencies, setEmergencies] = useState<any[]>([])
+  const [facilities, setFacilities] = useState<any[]>([])
+  const [myBookings, setMyBookings] = useState<any[]>([])
 
   // Form states
   const [profileForm, setProfileForm] = useState({
@@ -45,6 +40,19 @@ export default function DashboardPage() {
     description: "",
     image: null as File | null,
   })
+  const [bookingForm, setBookingForm] = useState({
+    facilityId: "",
+    bookingDate: "",
+    startTime: "",
+    endTime: "",
+    notes: "",
+  })
+
+  // AI Chat states
+  const [aiInput, setAiInput] = useState("")
+  const [aiMessages, setAiMessages] = useState<{ type: "user" | "bot"; text: string }[]>([])
+  const [aiChatOpen, setAiChatOpen] = useState(false)
+  const [aiTab, setAiTab] = useState("functions") // "functions", "resident", "emergency"
 
   useEffect(() => {
     initAuth()
@@ -73,34 +81,22 @@ export default function DashboardPage() {
     }
     try {
       const user = JSON.parse(storedUser)
-      console.log("[v0] Initializing auth for user:", user)
 
-      const tenantConfig = localStorage.getItem("tenantConfig")
-      if (!tenantConfig) {
-        console.error("[v0] Tenant configuration not found in localStorage")
-        alert("租戶配置遺失，請重新登入")
-        localStorage.removeItem("currentUser")
-        router.push("/auth")
+      if (user.role !== "resident") {
+        router.push("/admin")
         return
       }
-      console.log("[v0] Tenant config found:", JSON.parse(tenantConfig))
 
       const supabase = getSupabaseClient()
-      console.log("[v0] Fetching user profile from database...")
-
       const { data: userDataArray, error } = await supabase.from("profiles").select("*").eq("id", user.id)
 
       if (error) {
         console.error("[v0] Error fetching user profile:", error)
-        alert(`載入用戶資料失敗：${error.message}\n\n請檢查：\n1. 資料庫連接是否正常\n2. 環境變數是否正確設定`)
-        throw error
       }
 
       const userData = userDataArray && userDataArray.length > 0 ? userDataArray[0] : null
 
       if (!userData) {
-        console.warn("[v0] User profile not found in database, using stored user data")
-        // If profile doesn't exist in this tenant's database, use the stored user data
         setCurrentUser(user)
         setProfileForm({
           name: user.name || "",
@@ -110,7 +106,6 @@ export default function DashboardPage() {
           password: "",
         })
       } else {
-        console.log("[v0] User profile loaded successfully:", userData)
         const updatedUser = userData
         setCurrentUser(updatedUser)
         setProfileForm({
@@ -122,23 +117,19 @@ export default function DashboardPage() {
         })
       }
 
-      console.log("[v0] Loading announcements...")
       await loadAnnouncements()
-      console.log("[v0] Auth initialization complete")
     } catch (e: any) {
       console.error("[v0] Auth initialization failed:", e)
-      alert(`初始化失敗：${e.message}\n\n如果問題持續，請重新登入`)
+      alert(`初始化失敗：${e.message}`)
     }
   }
 
   const loadAnnouncements = async () => {
     try {
       const supabase = getSupabaseClient()
-      console.log("[v0] Fetching announcements...")
       const { data } = await supabase.from("announcements").select("*").order("created_at", { ascending: false })
 
       if (data) {
-        console.log("[v0] Announcements loaded:", data.length)
         setAnnouncements(data)
       }
     } catch (e) {
@@ -150,11 +141,10 @@ export default function DashboardPage() {
     const supabase = getSupabaseClient()
 
     switch (currentSection) {
-      case "voting":
+      case "votes":
         const { data: votesData } = await supabase.from("votes").select("*")
         if (votesData) setVotes(votesData)
 
-        // Check which votes the current user has already participated in
         if (currentUser?.id) {
           const { data: userVotes } = await supabase
             .from("vote_records")
@@ -202,6 +192,21 @@ export default function DashboardPage() {
           .eq("room", currentUser?.room)
           .order("due", { ascending: false })
         if (financesData) setFinances(financesData)
+        break
+      case "facilities":
+        const { data: facilitiesData } = await supabase
+          .from("facilities")
+          .select("*")
+          .eq("available", true)
+          .order("name", { ascending: true })
+        if (facilitiesData) setFacilities(facilitiesData)
+
+        const { data: bookingsData } = await supabase
+          .from("facility_bookings")
+          .select("*, facilities(name)")
+          .eq("user_id", currentUser?.id)
+          .order("booking_date", { ascending: false })
+        if (bookingsData) setMyBookings(bookingsData)
         break
     }
   }
@@ -362,15 +367,6 @@ export default function DashboardPage() {
         })
       }
 
-      console.log("[v0] Submitting maintenance request:", {
-        equipment: maintenanceForm.type,
-        item: maintenanceForm.location,
-        description: maintenanceForm.description,
-        created_by: currentUser.id,
-        reported_by: currentUser.name,
-        photo_url: photoUrl ? "已上傳照片" : "無照片",
-      })
-
       const { data, error } = await supabase
         .from("maintenance")
         .insert([
@@ -391,7 +387,6 @@ export default function DashboardPage() {
         throw error
       }
 
-      console.log("[v0] Maintenance request submitted successfully:", data)
       alert("維修申請已提交！")
       setMaintenanceForm({
         type: "水電",
@@ -453,31 +448,105 @@ export default function DashboardPage() {
     }
   }
 
+  const handleFacilityBooking = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!currentUser?.id) {
+      alert("請先登入")
+      return
+    }
+
+    try {
+      const supabase = getSupabaseClient()
+
+      // Check for conflicts
+      const { data: conflicts } = await supabase
+        .from("facility_bookings")
+        .select("*")
+        .eq("facility_id", bookingForm.facilityId)
+        .eq("booking_date", bookingForm.bookingDate)
+        .eq("status", "confirmed")
+
+      if (conflicts && conflicts.length > 0) {
+        const hasConflict = conflicts.some((booking) => {
+          const existingStart = booking.start_time
+          const existingEnd = booking.end_time
+          const newStart = bookingForm.startTime
+          const newEnd = bookingForm.endTime
+
+          return (
+            (newStart >= existingStart && newStart < existingEnd) ||
+            (newEnd > existingStart && newEnd <= existingEnd) ||
+            (newStart <= existingStart && newEnd >= existingEnd)
+          )
+        })
+
+        if (hasConflict) {
+          alert("此時段已被預約，請選擇其他時段")
+          return
+        }
+      }
+
+      const { error } = await supabase.from("facility_bookings").insert([
+        {
+          facility_id: bookingForm.facilityId,
+          user_id: currentUser.id,
+          user_name: currentUser.name || "未知",
+          user_room: currentUser.room || "",
+          booking_date: bookingForm.bookingDate,
+          start_time: bookingForm.startTime,
+          end_time: bookingForm.endTime,
+          notes: bookingForm.notes,
+          status: "confirmed",
+        },
+      ])
+
+      if (error) throw error
+
+      alert("預約成功！")
+      setBookingForm({
+        facilityId: "",
+        bookingDate: "",
+        startTime: "",
+        endTime: "",
+        notes: "",
+      })
+      await loadSectionData()
+    } catch (e: any) {
+      console.error(e)
+      alert("預約失敗：" + e.message)
+    }
+  }
+
   const sectionTitles: Record<string, string> = {
     dashboard: "首頁",
     profile: "個人資料",
     packages: "我的包裹",
-    voting: "社區投票",
+    votes: "社區投票",
     maintenance: "設備/維護",
     finance: "管理費/收支",
     visitors: "訪客紀錄",
     meetings: "會議/活動",
     emergencies: "緊急事件",
+    facilities: "設施預約",
   }
 
-  const navItems = [
+  const allNavItems = [
     { id: "dashboard", icon: "dashboard", label: "首頁" },
     { id: "profile", icon: "person", label: "個人資料" },
     { id: "packages", icon: "inventory_2", label: "我的包裹" },
-    { id: "voting", icon: "how_to_vote", label: "社區投票" },
+    { id: "votes", icon: "how_to_vote", label: "社區投票" },
     { id: "maintenance", icon: "build", label: "設備/維護" },
     { id: "finance", icon: "account_balance", label: "管理費/收支" },
     { id: "visitors", icon: "how_to_reg", label: "訪客紀錄" },
     { id: "meetings", icon: "event", label: "會議/活動" },
     { id: "emergencies", icon: "emergency", label: "緊急事件" },
+    { id: "facilities", icon: "meeting_room", label: "設施預約" },
   ]
 
-  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "committee"
+  const navItems = currentUser
+    ? allNavItems.filter((item) => canAccessSection(currentUser.role as UserRole, item.id as any))
+    : allNavItems
 
   return (
     <div className="h-screen flex overflow-hidden bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d]">
@@ -545,15 +614,6 @@ export default function DashboardPage() {
             <span>{sectionTitles[currentSection]}</span>
           </div>
           <div className="flex gap-2">
-            {isAdmin && (
-              <Link
-                href="/admin"
-                className="flex gap-2 items-center border-none rounded-lg px-3 py-2 bg-[#ffd700] text-[#222] cursor-pointer font-semibold hover:brightness-95"
-              >
-                <span className="material-icons text-lg">admin_panel_settings</span>
-                <span className="hidden sm:inline">進入後台</span>
-              </Link>
-            )}
             <button
               onClick={logout}
               className="flex gap-2 items-center border-none rounded-lg px-3 py-2 bg-[#ffd700] text-[#222] cursor-pointer font-semibold hover:brightness-95"
@@ -747,7 +807,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {currentSection === "voting" && (
+          {currentSection === "votes" && (
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
               <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
                 <span className="material-icons">how_to_vote</span>
@@ -1077,15 +1137,179 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {currentSection === "facilities" && (
+            <div className="space-y-4">
+              <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
+                <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                  <span className="material-icons">meeting_room</span>
+                  預約設施
+                </h2>
+                <form onSubmit={handleFacilityBooking} className="space-y-4 max-w-2xl">
+                  <div>
+                    <label className="block text-white mb-2">選擇設施</label>
+                    <select
+                      value={bookingForm.facilityId}
+                      onChange={(e) => setBookingForm({ ...bookingForm, facilityId: e.target.value })}
+                      className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+                      required
+                    >
+                      <option value="">請選擇設施</option>
+                      {facilities.map((facility) => (
+                        <option key={facility.id} value={facility.id}>
+                          {facility.name} - {facility.location || "無位置資訊"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-white mb-2">預約日期</label>
+                    <input
+                      type="date"
+                      value={bookingForm.bookingDate}
+                      onChange={(e) => setBookingForm({ ...bookingForm, bookingDate: e.target.value })}
+                      min={new Date().toISOString().split("T")[0]}
+                      className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-white mb-2">開始時間</label>
+                      <input
+                        type="time"
+                        value={bookingForm.startTime}
+                        onChange={(e) => setBookingForm({ ...bookingForm, startTime: e.target.value })}
+                        className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-white mb-2">結束時間</label>
+                      <input
+                        type="time"
+                        value={bookingForm.endTime}
+                        onChange={(e) => setBookingForm({ ...bookingForm, endTime: e.target.value })}
+                        className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-white mb-2">備註（選填）</label>
+                    <textarea
+                      value={bookingForm.notes}
+                      onChange={(e) => setBookingForm({ ...bookingForm, notes: e.target.value })}
+                      className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700] min-h-[80px]"
+                      placeholder="請輸入備註事項"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-6 py-3 bg-[#ffd700] text-[#222] rounded-lg font-bold hover:brightness-90 transition-all"
+                  >
+                    提交預約
+                  </button>
+                </form>
+              </div>
+
+              <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
+                <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                  <span className="material-icons">list</span>
+                  我的預約記錄
+                </h2>
+                <div className="space-y-3">
+                  {myBookings.length > 0 ? (
+                    myBookings.map((booking) => (
+                      <div
+                        key={booking.id}
+                        className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <div className="text-white font-bold">{booking.facilities?.name || "設施"}</div>
+                            <div className="text-[#b0b0b0] text-sm">
+                              日期: {new Date(booking.booking_date).toLocaleDateString("zh-TW")}
+                            </div>
+                            <div className="text-[#b0b0b0] text-sm">
+                              時間: {booking.start_time} - {booking.end_time}
+                            </div>
+                            {booking.notes && <div className="text-[#b0b0b0] text-sm">備註: {booking.notes}</div>}
+                          </div>
+                          <div
+                            className={`px-3 py-1 rounded-full text-sm font-bold ${
+                              booking.status === "confirmed"
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-red-500/20 text-red-400"
+                            }`}
+                          >
+                            {booking.status === "confirmed" ? "已確認" : "已取消"}
+                          </div>
+                        </div>
+                        <div className="text-[#b0b0b0] text-sm">
+                          預約時間: {new Date(booking.created_at).toLocaleString("zh-TW")}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-[#b0b0b0] py-8">目前沒有預約記錄</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
+                <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                  <span className="material-icons">info</span>
+                  可用設施
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {facilities.map((facility) => (
+                    <div
+                      key={facility.id}
+                      className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
+                    >
+                      {facility.image_url && (
+                        <img
+                          src={facility.image_url || "/placeholder.svg"}
+                          alt={facility.name}
+                          className="w-full h-40 object-cover rounded-lg mb-3"
+                        />
+                      )}
+                      <div className="text-white font-bold text-lg mb-2">{facility.name}</div>
+                      {facility.description && (
+                        <div className="text-[#b0b0b0] text-sm mb-2">{facility.description}</div>
+                      )}
+                      {facility.location && (
+                        <div className="text-[#b0b0b0] text-sm flex items-center gap-1">
+                          <span className="material-icons text-sm">place</span>
+                          {facility.location}
+                        </div>
+                      )}
+                      {facility.capacity && (
+                        <div className="text-[#b0b0b0] text-sm flex items-center gap-1">
+                          <span className="material-icons text-sm">people</span>
+                          容納人數: {facility.capacity}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {facilities.length === 0 && (
+                    <div className="col-span-2 text-center text-[#b0b0b0] py-8">目前沒有可用設施</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {currentSection !== "dashboard" &&
             currentSection !== "profile" &&
             currentSection !== "packages" &&
-            currentSection !== "voting" &&
+            currentSection !== "votes" &&
             currentSection !== "maintenance" &&
             currentSection !== "finance" &&
             currentSection !== "visitors" &&
             currentSection !== "meetings" &&
-            currentSection !== "emergencies" && (
+            currentSection !== "emergencies" &&
+            currentSection !== "facilities" && (
               <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
                 <h2 className="flex gap-2 items-center text-[#ffd700] mb-3 text-xl">
                   <span className="material-icons">{navItems.find((item) => item.id === currentSection)?.icon}</span>
@@ -1169,11 +1393,12 @@ export default function DashboardPage() {
               {aiTab === "functions" && (
                 <div className="flex flex-col gap-3">
                   {[
-                    { label: "📢 投票", section: "voting" },
+                    { label: "📢 投票", section: "votes" },
                     { label: "🔧 維修 / 客服", section: "maintenance" },
                     { label: "💰 帳務 / 收費", section: "finance" },
                     { label: "👤 住戶 / 人員", section: "profile" },
                     { label: "📦 訪客 / 包裹", section: "packages" },
+                    { label: "🚪 設施預約", section: "facilities" },
                   ].map((item) => (
                     <div
                       key={item.section}

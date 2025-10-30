@@ -4,6 +4,8 @@ import { createClient } from "@supabase/supabase-js"
 
 export type TenantId = "tenant_a" | "tenant_b"
 
+export type UserRole = "resident" | "guard" | "committee" | "vendor" | "admin"
+
 // Server-side tenant configuration (can access non-public env vars)
 const TENANT_CONFIG = {
   tenant_a: {
@@ -123,7 +125,7 @@ export async function registerUser(
   name: string,
   phone: string,
   room: string,
-  role: "resident" | "committee" | "vendor",
+  role: UserRole,
 ) {
   try {
     console.log(`[v0] Registering user in ${tenantId}:`, email)

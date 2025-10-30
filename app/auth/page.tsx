@@ -6,7 +6,8 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { setCurrentTenant, setTenantConfig, type TenantId } from "@/lib/supabase"
-import { authenticateUser, registerUser } from "@/lib/auth-actions"
+import { authenticateUser, registerUser, type UserRole } from "@/lib/auth-actions"
+import { shouldUseBackend } from "@/lib/permissions"
 
 export default function AuthPage() {
   const router = useRouter()
@@ -25,7 +26,9 @@ export default function AuthPage() {
     // Check if already logged in
     const currentUser = localStorage.getItem("currentUser")
     if (currentUser) {
-      router.push("/dashboard")
+      const user = JSON.parse(currentUser)
+      const useBackend = shouldUseBackend(user.role)
+      router.push(useBackend ? "/admin" : "/dashboard")
     }
   }, [searchParams, router])
 
@@ -61,8 +64,9 @@ export default function AuthPage() {
 
       setSuccessMessage("登入成功！正在跳轉...")
 
+      const useBackend = shouldUseBackend(result.user.role as UserRole)
       setTimeout(() => {
-        router.push("/dashboard")
+        router.push(useBackend ? "/admin" : "/dashboard")
       }, 1500)
     } catch (error: any) {
       setErrorMessage(error.message || "登入失敗，請檢查您的帳號密碼")
@@ -83,7 +87,7 @@ export default function AuthPage() {
     const name = formData.get("name") as string
     const phone = formData.get("phone") as string
     const unit = formData.get("unit") as string
-    const role = formData.get("role") as string
+    const role = formData.get("role") as UserRole
     const tenantId = formData.get("tenant") as TenantId
 
     if (!tenantId) {
@@ -93,15 +97,7 @@ export default function AuthPage() {
     }
 
     try {
-      const result = await registerUser(
-        tenantId,
-        email,
-        password,
-        name,
-        phone,
-        unit,
-        role as "resident" | "committee" | "vendor",
-      )
+      const result = await registerUser(tenantId, email, password, name, phone, unit, role)
 
       if (!result.success) {
         throw new Error(result.error)
@@ -266,10 +262,13 @@ export default function AuthPage() {
                   請選擇身份
                 </option>
                 <option value="resident" className="bg-[#2d2d2d] text-white">
-                  住戶
+                  租戶
+                </option>
+                <option value="guard" className="bg-[#2d2d2d] text-white">
+                  警衛
                 </option>
                 <option value="committee" className="bg-[#2d2d2d] text-white">
-                  委員會成員
+                  管委會
                 </option>
                 <option value="vendor" className="bg-[#2d2d2d] text-white">
                   廠商

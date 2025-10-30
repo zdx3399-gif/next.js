@@ -46,15 +46,12 @@ export function getSupabaseClient() {
   } catch (error) {
     console.error("[v0] Supabase client error:", error)
     // If tenant config is missing, redirect to auth page
-    if (
-      typeof window !== "undefined" &&
-      error instanceof Error &&
-      error.message.includes("Tenant configuration not found")
-    ) {
+    if (typeof window !== "undefined" && error instanceof Error && error.message.includes("Tenant configuration not found")) {
       window.location.href = "/auth"
     }
     throw error
   }
 }
 
-// Now all imports must use getSupabaseClient() function
+
+

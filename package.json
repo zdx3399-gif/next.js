@@ -60,7 +60,8 @@
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "latest",
     "url": "latest",
-    "vaul": "^1.1.2"
+    "vaul": "^1.1.2",
+    "react-hook-form": "7.65.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

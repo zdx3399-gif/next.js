@@ -187,15 +187,15 @@ export default function AuthPage() {
               <select
                 name="tenant"
                 required
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(45,45,45,0.95)] text-white focus:border-[#ffd700] outline-none cursor-pointer [&>option]:bg-[#2d2d2d] [&>option]:text-white [&>option]:py-2"
+                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
               >
-                <option value="" className="bg-[#2d2d2d] text-[#888]">
+                <option value="" className="bg-[#2a2a2a] text-[#b0b0b0]">
                   請選擇要註冊的社區
                 </option>
-                <option value="tenant_a" className="bg-[#2d2d2d] text-white">
+                <option value="tenant_a" className="bg-[#2a2a2a] text-white">
                   社區 A
                 </option>
-                <option value="tenant_b" className="bg-[#2d2d2d] text-white">
+                <option value="tenant_b" className="bg-[#2a2a2a] text-white">
                   社區 B
                 </option>
               </select>
@@ -256,21 +256,21 @@ export default function AuthPage() {
               <select
                 name="role"
                 required
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(45,45,45,0.95)] text-white focus:border-[#ffd700] focus:bg-[rgba(45,45,45,1)] outline-none cursor-pointer [&>option]:bg-[#2d2d2d] [&>option]:text-white [&>option]:py-2"
+                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
               >
-                <option value="" className="bg-[#2d2d2d] text-[#888]">
+                <option value="" className="bg-[#2a2a2a] text-[#b0b0b0]">
                   請選擇身份
                 </option>
-                <option value="resident" className="bg-[#2d2d2d] text-white">
-                  租戶
+                <option value="resident" className="bg-[#2a2a2a] text-white">
+                  住戶
                 </option>
-                <option value="guard" className="bg-[#2d2d2d] text-white">
+                <option value="guard" className="bg-[#2a2a2a] text-white">
                   警衛
                 </option>
-                <option value="committee" className="bg-[#2d2d2d] text-white">
+                <option value="committee" className="bg-[#2a2a2a] text-white">
                   管委會
                 </option>
-                <option value="vendor" className="bg-[#2d2d2d] text-white">
+                <option value="vendor" className="bg-[#2a2a2a] text-white">
                   廠商
                 </option>
               </select>

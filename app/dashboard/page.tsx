@@ -6,6 +6,9 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getSupabaseClient } from "@/lib/supabase"
 import { canAccessSection, type UserRole } from "@/lib/permissions"
+import { AnnouncementDetails } from "@/components/announcement-details" // Updated import path and use named import
+import { PackageManagement } from "@/components/package-management"
+import { VisitorManagement } from "@/components/visitor-management"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -15,6 +18,7 @@ export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [announcements, setAnnouncements] = useState<any[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
+  const [announcementLikes, setAnnouncementLikes] = useState<any[]>([]) // Added announcement likes management
 
   const [votes, setVotes] = useState<any[]>([])
   const [votedPolls, setVotedPolls] = useState<Set<string>>(new Set())
@@ -59,17 +63,18 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    if (currentSection === "dashboard" && announcements.length > 0) {
+    if (currentSection === "dashboard" && announcements.length > 0 && currentSlide < announcements.length) {
       const interval = setInterval(() => {
         setCurrentSlide((prev) => (prev + 1) % announcements.length)
       }, 5000)
       return () => clearInterval(interval)
     }
-  }, [currentSection, announcements.length])
+  }, [announcements.length]) // Only depend on announcements.length, not currentSlide
 
   useEffect(() => {
     if (currentUser) {
       loadSectionData()
+      loadAnnouncementLikes()
     }
   }, [currentSection, currentUser])
 
@@ -81,8 +86,10 @@ export default function DashboardPage() {
     }
     try {
       const user = JSON.parse(storedUser)
+      console.log("[v0] User role:", user.role)
 
-      if (user.role !== "resident") {
+      if (user.role !== "resident" && user.role !== "committee") {
+        console.log("[v0] Non-resident user detected, redirecting to admin")
         router.push("/admin")
         return
       }
@@ -131,9 +138,14 @@ export default function DashboardPage() {
 
       if (data) {
         setAnnouncements(data)
+      } else {
+        // Don't throw - silently fail and show empty announcements
+        setAnnouncements([])
       }
     } catch (e) {
       console.error("[v0] Failed to load announcements:", e)
+      // Don't throw - silently fail and show empty announcements
+      setAnnouncements([])
     }
   }
 
@@ -271,6 +283,13 @@ export default function DashboardPage() {
     localStorage.removeItem("currentUser")
     localStorage.removeItem("tenantConfig") // Clear tenant config on logout
     router.push("/")
+  }
+
+  const switchToAdmin = () => {
+    if (currentUser?.role === "committee") {
+      localStorage.setItem("currentUser", JSON.stringify({ ...currentUser, role: "committee" }))
+      router.push("/admin")
+    }
   }
 
   const sendAIMessage = () => {
@@ -518,6 +537,77 @@ export default function DashboardPage() {
     }
   }
 
+  const toggleAnnouncementLike = async (announcementId: string) => {
+    if (!currentUser) {
+      console.log("[v0] User not logged in")
+      return
+    }
+
+    console.log("[v0] Toggling like for announcement:", announcementId)
+
+    try {
+      const likesStr = localStorage.getItem("announcement_likes")
+      const likesObj = likesStr ? JSON.parse(likesStr) : {}
+
+      // Initialize announcement likes array if not exists
+      if (!likesObj[announcementId]) {
+        likesObj[announcementId] = []
+      }
+
+      // Toggle like
+      const userLikeIndex = likesObj[announcementId].indexOf(currentUser.id)
+      if (userLikeIndex > -1) {
+        likesObj[announcementId].splice(userLikeIndex, 1)
+        console.log("[v0] Removed like")
+      } else {
+        likesObj[announcementId].push(currentUser.id)
+        console.log("[v0] Added like")
+      }
+
+      localStorage.setItem("announcement_likes", JSON.stringify(likesObj))
+
+      await loadAnnouncementLikes()
+    } catch (e) {
+      console.error("[v0] Error toggling like:", e)
+    }
+  }
+
+  const loadAnnouncementLikes = async () => {
+    try {
+      console.log("[v0] Loading announcement likes from localStorage...")
+      const likesStr = localStorage.getItem("announcement_likes")
+      const likesObj = likesStr ? JSON.parse(likesStr) : {}
+
+      const likesArray: any[] = []
+      Object.keys(likesObj).forEach((announcementId) => {
+        if (Array.isArray(likesObj[announcementId])) {
+          likesObj[announcementId].forEach((userId: string) => {
+            likesArray.push({
+              id: `${announcementId}_${userId}`,
+              announcement_id: announcementId,
+              user_id: userId,
+            })
+          })
+        }
+      })
+
+      setAnnouncementLikes(likesArray)
+      console.log("[v0] Loaded likes:", likesArray.length)
+    } catch (e) {
+      console.error("[v0] Error loading likes:", e)
+    }
+  }
+
+  const handleAnnouncementSelect = (announcementId: string) => {
+    // This function is likely intended to navigate to a detailed view of the announcement.
+    // For now, we'll just log it or you can implement navigation here.
+    console.log("Navigating to announcement details for ID:", announcementId)
+    // Example navigation:
+    // router.push(`/announcements/${announcementId}`);
+    // Or set a state to show details within the current page
+    setCurrentSection("announcements")
+  }
+
   const sectionTitles: Record<string, string> = {
     dashboard: "首頁",
     profile: "個人資料",
@@ -529,10 +619,12 @@ export default function DashboardPage() {
     meetings: "會議/活動",
     emergencies: "緊急事件",
     facilities: "設施預約",
+    announcements: "公告詳情", // Added announcement section title
   }
 
   const allNavItems = [
     { id: "dashboard", icon: "dashboard", label: "首頁" },
+    { id: "announcements", icon: "campaign", label: "公告詳情" }, // Added announcements
     { id: "profile", icon: "person", label: "個人資料" },
     { id: "packages", icon: "inventory_2", label: "我的包裹" },
     { id: "votes", icon: "how_to_vote", label: "社區投票" },
@@ -614,6 +706,16 @@ export default function DashboardPage() {
             <span>{sectionTitles[currentSection]}</span>
           </div>
           <div className="flex gap-2">
+            {/* Add role switching button for committee members */}
+            {currentUser?.role === "committee" && (
+              <button
+                onClick={switchToAdmin}
+                className="flex gap-2 items-center border-2 border-[#ffd700] rounded-lg px-3 py-2 bg-transparent text-[#ffd700] cursor-pointer font-semibold hover:bg-[#ffd700] hover:text-[#222] transition-all"
+              >
+                <span className="material-icons text-lg">admin_panel_settings</span>
+                <span className="hidden sm:inline">管委會功能</span>
+              </button>
+            )}
             <button
               onClick={logout}
               className="flex gap-2 items-center border-none rounded-lg px-3 py-2 bg-[#ffd700] text-[#222] cursor-pointer font-semibold hover:brightness-95"
@@ -629,46 +731,67 @@ export default function DashboardPage() {
           {currentSection === "dashboard" && (
             <section>
               {/* Announcement Carousel */}
-              <div className="relative w-full h-[calc(100vh-280px)] overflow-hidden rounded-2xl mb-5">
-                {announcements.length > 0 ? (
-                  <>
+              {/* Update Announcement Carousel section */}
+              {announcements.length > 0 && (
+                <section className="mb-6 sm:mb-8">
+                  <div className="relative w-full h-[350px] sm:h-[600px] overflow-hidden rounded-2xl shadow-2xl group">
                     {announcements.map((announcement, idx) => (
                       <div
                         key={announcement.id}
-                        className={`absolute w-full h-full transition-opacity duration-700 bg-cover bg-center flex items-end p-8 ${
+                        className={`absolute w-full h-full transition-opacity duration-700 bg-cover bg-center flex items-end ${
                           idx === currentSlide ? "opacity-100" : "opacity-0"
                         }`}
                         style={{ backgroundImage: `url('${announcement.image_url}')` }}
                       >
-                        <div className="bg-black/20 backdrop-blur-lg p-5 rounded-xl w-full">
-                          <div className="text-[1.8rem] font-bold text-[#ffd700] mb-3">{announcement.title}</div>
-                          <div className="text-white mb-3 leading-relaxed">
+                        <div className="bg-black/40 backdrop-blur-md p-4 sm:p-6 md:p-8 rounded-xl w-full">
+                          <div
+                            className="text-xl sm:text-2xl md:text-3xl font-bold text-[#ffd700] mb-2 sm:mb-4 cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => handleAnnouncementSelect(announcement.id)}
+                          >
+                            {announcement.title}
+                          </div>
+                          <div className="text-white text-sm sm:text-base md:text-lg mb-2 sm:mb-4 leading-relaxed line-clamp-2 sm:line-clamp-3">
                             {announcement.content.slice(0, 200)}
                             {announcement.content.length > 200 ? "..." : ""}
                           </div>
-                          <div className="text-[#b0b0b0]">
+                          <div className="text-[#b0b0b0] text-xs sm:text-sm mb-3 sm:mb-4">
                             發布者: {announcement.author} |{" "}
                             {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
                           </div>
+                          <button
+                            onClick={() => toggleAnnouncementLike(announcement.id)}
+                            className={`flex items-center gap-1 px-3 py-1 rounded-lg text-sm transition-all ${
+                              announcementLikes.some(
+                                (like) => like.announcement_id === announcement.id && like.user_id === currentUser?.id,
+                              )
+                                ? "bg-[#ffd700] text-[#222]"
+                                : "bg-white/20 text-[#ffd700] hover:bg-white/30"
+                            }`}
+                          >
+                            <span className="material-icons text-base">favorite</span>
+                            <span>
+                              {announcementLikes.filter((like) => like.announcement_id === announcement.id).length}
+                            </span>
+                          </button>
                         </div>
                       </div>
                     ))}
-                    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+                    <div className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-10">
                       {announcements.map((_, idx) => (
                         <div
                           key={idx}
                           onClick={() => setCurrentSlide(idx)}
-                          className={`h-3 rounded-full cursor-pointer transition-all ${
-                            idx === currentSlide ? "w-8 bg-[#ffd700]" : "w-3 bg-white/50 hover:bg-white/70"
+                          className={`h-2 sm:h-3 rounded-full cursor-pointer transition-all ${
+                            idx === currentSlide
+                              ? "w-6 sm:w-8 bg-[#ffd700]"
+                              : "w-2 sm:w-3 bg-white/50 hover:bg-white/70"
                           }`}
                         />
                       ))}
                     </div>
-                  </>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-[#b0b0b0]">載入中...</div>
-                )}
-              </div>
+                  </div>
+                </section>
+              )}
 
               {/* Emergency Actions */}
               <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-4 mt-3">
@@ -770,40 +893,7 @@ export default function DashboardPage() {
                 <span className="material-icons">inventory_2</span>
                 我的包裹
               </h2>
-              <div className="space-y-3">
-                {packages.length > 0 ? (
-                  packages.map((pkg) => (
-                    <div
-                      key={pkg.id}
-                      className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <div className="text-white font-bold">{pkg.courier}</div>
-                          <div className="text-[#b0b0b0] text-sm">收件人: {pkg.recipient_name}</div>
-                          <div className="text-[#b0b0b0] text-sm">房號: {pkg.recipient_room}</div>
-                          {pkg.tracking_number && (
-                            <div className="text-[#b0b0b0] text-sm">追蹤號碼: {pkg.tracking_number}</div>
-                          )}
-                        </div>
-                        <div
-                          className={`px-3 py-1 rounded-full text-sm font-bold ${
-                            pkg.status === "pending" ? "bg-[#ffd700] text-[#222]" : "bg-green-500/20 text-green-400"
-                          }`}
-                        >
-                          {pkg.status === "pending" ? "待領取" : "已領取"}
-                        </div>
-                      </div>
-                      <div className="text-[#b0b0b0] text-sm">
-                        到達時間: {new Date(pkg.arrived_at).toLocaleString("zh-TW")}
-                        {pkg.picked_up_at && ` | 領取時間: ${new Date(pkg.picked_up_at).toLocaleString("zh-TW")}`}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center text-[#b0b0b0] py-8">目前沒有包裹</div>
-                )}
-              </div>
+              <PackageManagement userRoom={currentUser?.room} currentUser={currentUser} />
             </div>
           )}
 
@@ -876,12 +966,20 @@ export default function DashboardPage() {
                     <select
                       value={maintenanceForm.type}
                       onChange={(e) => setMaintenanceForm({ ...maintenanceForm, type: e.target.value })}
-                      className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+                      className="w-full p-3 rounded-lg bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
                     >
-                      <option value="水電">水電</option>
-                      <option value="門窗">門窗</option>
-                      <option value="公共設施">公共設施</option>
-                      <option value="其他">其他</option>
+                      <option value="水電" className="bg-[#2a2a2a] text-white">
+                        水電
+                      </option>
+                      <option value="門窗" className="bg-[#2a2a2a] text-white">
+                        門窗
+                      </option>
+                      <option value="公共設施" className="bg-[#2a2a2a] text-white">
+                        公共設施
+                      </option>
+                      <option value="其他" className="bg-[#2a2a2a] text-white">
+                        其他
+                      </option>
                     </select>
                   </div>
                   <div>
@@ -1028,42 +1126,9 @@ export default function DashboardPage() {
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
               <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
                 <span className="material-icons">how_to_reg</span>
-                訪客紀錄
+                訪客管理
               </h2>
-              <div className="space-y-3">
-                {visitors.length > 0 ? (
-                  visitors.map((visitor) => (
-                    <div
-                      key={visitor.id}
-                      className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <div className="text-white font-bold">{visitor.name}</div>
-                          <div className="text-[#b0b0b0] text-sm">拜訪房號: {visitor.room}</div>
-                        </div>
-                        <div
-                          className={`px-3 py-1 rounded-full text-sm font-bold ${
-                            visitor.out ? "bg-green-500/20 text-green-400" : "bg-[#ffd700] text-[#222]"
-                          }`}
-                        >
-                          {visitor.out ? "已離開" : "訪客中"}
-                        </div>
-                      </div>
-                      <div className="text-[#b0b0b0] text-sm">
-                        進場時間: {new Date(visitor.in).toLocaleString("zh-TW")}
-                      </div>
-                      {visitor.out && (
-                        <div className="text-[#b0b0b0] text-sm">
-                          離場時間: {new Date(visitor.out).toLocaleString("zh-TW")}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center text-[#b0b0b0] py-8">目前沒有訪客紀錄</div>
-                )}
-              </div>
+              <VisitorManagement userRoom={currentUser?.room} currentUser={currentUser} isAdmin={false} />
             </div>
           )}
 
@@ -1150,12 +1215,14 @@ export default function DashboardPage() {
                     <select
                       value={bookingForm.facilityId}
                       onChange={(e) => setBookingForm({ ...bookingForm, facilityId: e.target.value })}
-                      className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+                      className="w-full p-3 rounded-lg bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
                       required
                     >
-                      <option value="">請選擇設施</option>
+                      <option value="" className="bg-[#2a2a2a] text-[#b0b0b0]">
+                        請選擇設施
+                      </option>
                       {facilities.map((facility) => (
-                        <option key={facility.id} value={facility.id}>
+                        <option key={facility.id} value={facility.id} className="bg-[#2a2a2a] text-white py-2">
                           {facility.name} - {facility.location || "無位置資訊"}
                         </option>
                       ))}
@@ -1300,6 +1367,17 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* Add announcements section to main content */}
+          {currentSection === "announcements" && (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">campaign</span>
+                公告詳情
+              </h2>
+              <AnnouncementDetails onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
+            </div>
+          )}
+
           {currentSection !== "dashboard" &&
             currentSection !== "profile" &&
             currentSection !== "packages" &&
@@ -1309,7 +1387,8 @@ export default function DashboardPage() {
             currentSection !== "visitors" &&
             currentSection !== "meetings" &&
             currentSection !== "emergencies" &&
-            currentSection !== "facilities" && (
+            currentSection !== "facilities" &&
+            currentSection !== "announcements" && ( // Added announcement to the condition
               <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
                 <h2 className="flex gap-2 items-center text-[#ffd700] mb-3 text-xl">
                   <span className="material-icons">{navItems.find((item) => item.id === currentSection)?.icon}</span>
@@ -1328,151 +1407,146 @@ export default function DashboardPage() {
       >
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-10 h-10">
           <rect x="7" y="5" width="10" height="12" rx="2" fill="#222" />
-          <circle cx="10" cy="9" r="1.5" fill="#FFD93D" />
-          <circle cx="14" cy="9" r="1.5" fill="#FFD93D" />
-          <rect x="9" y="12" width="6" height="1.5" rx="0.75" fill="#FFD93D" />
-          <rect x="5" y="9" width="2" height="4" rx="1" fill="#222" />
-          <rect x="17" y="9" width="2" height="4" rx="1" fill="#222" />
-          <circle cx="12" cy="4" r="1.5" fill="#222" />
-          <rect x="8" y="17" width="2" height="3" rx="1" fill="#222" />
-          <rect x="14" y="17" width="2" height="3" rx="1" fill="#222" />
+          <circle cx="10" cy="8" r="1" fill="#FFD93D" />
+          <circle cx="14" cy="8" r="1" fill="#FFD93D" />
+          <path
+            d="M12 17C13.1046 17 14 17.8954 14 19C14 20.1046 13.1046 21 12 21C10.8954 21 10 20.1046 10 19C10 17.8954 10.8954 17 12 17Z"
+            fill="#FFD93D"
+          />
         </svg>
       </div>
 
-      {/* AI Chat Modal */}
+      {/* AI Chat Window */}
       {aiChatOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[1001]">
-          <div className="bg-[#2d2d2d] border-2 border-[#ffd700] rounded-3xl w-[90%] max-w-[600px] max-h-[80vh] flex flex-col shadow-[0_10px_50px_rgba(0,0,0,0.5)]">
-            {/* Header */}
-            <div className="flex justify-between items-center p-5 border-b-2 border-[rgba(255,215,0,0.3)]">
-              <div className="text-xl font-bold text-[#ffd700] flex items-center gap-3">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-8 h-8">
-                  <rect x="7" y="5" width="10" height="12" rx="2" fill="#222" />
-                  <circle cx="10" cy="9" r="1.5" fill="#FFD93D" />
-                  <circle cx="14" cy="9" r="1.5" fill="#FFD93D" />
-                  <rect x="9" y="12" width="6" height="1.5" rx="0.75" fill="#FFD93D" />
-                  <rect x="5" y="9" width="2" height="4" rx="1" fill="#222" />
-                  <rect x="17" y="9" width="2" height="4" rx="1" fill="#222" />
-                  <circle cx="12" cy="4" r="1.5" fill="#222" />
-                  <rect x="8" y="17" width="2" height="3" rx="1" fill="#222" />
-                  <rect x="14" y="17" width="2" height="3" rx="1" fill="#222" />
-                </svg>
-                AI 客服（社區功能快捷）
-              </div>
-              <button
-                onClick={() => setAiChatOpen(false)}
-                className="w-9 h-9 rounded-full bg-transparent border-2 border-[#ffd700] text-white cursor-pointer flex items-center justify-center hover:bg-[#ffd700] hover:text-[#222] transition-all"
-              >
-                ✕
-              </button>
+        <div className="fixed inset-y-0 right-0 w-96 bg-[#2d2d2d] border-l-2 border-[#ffd700] shadow-2xl flex flex-col z-[999] transition-all duration-500">
+          <div className="flex items-center justify-between p-4 bg-[#1a1a1a] border-b border-[rgba(255,215,0,0.2)]">
+            <div className="flex gap-2 items-center text-[#ffd700] font-bold">
+              <span className="material-icons">smart_toy</span>
+              AI 助理
             </div>
-
-            {/* Tabs */}
-            <div className="flex gap-0 border-b-2 border-[rgba(255,215,0,0.2)] bg-black/20">
-              {[
-                { id: "functions", label: "常用功能" },
-                { id: "resident", label: "住戶服務" },
-                { id: "emergency", label: "緊急服務" },
-              ].map((tab) => (
+            <button onClick={() => setAiChatOpen(false)} className="material-icons text-white cursor-pointer">
+              close
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {aiMessages.map((msg, index) => (
+              <div key={index} className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  key={tab.id}
-                  onClick={() => setAiTab(tab.id)}
-                  className={`flex-1 py-4 text-center cursor-pointer border-b-[3px] transition-all font-semibold ${
-                    aiTab === tab.id
-                      ? "text-[#ffd700] border-[#ffd700] bg-[rgba(255,215,0,0.05)]"
-                      : "text-[#b0b0b0] border-transparent hover:bg-[rgba(255,215,0,0.08)]"
+                  className={`max-w-xs p-3 rounded-lg ${
+                    msg.type === "user" ? "bg-[#ffd700] text-[#222]" : "bg-[#4a4a4a] text-white"
                   }`}
                 >
-                  {tab.label}
+                  {msg.text}
                 </div>
-              ))}
+              </div>
+            ))}
+          </div>
+          <div className="p-4 bg-[#1a1a1a] border-t border-[rgba(255,215,0,0.2)]">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={aiInput}
+                onChange={(e) => setAiInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") sendAIMessage()
+                }}
+                placeholder="輸入訊息..."
+                className="flex-1 p-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+              />
+              <button
+                onClick={sendAIMessage}
+                className="p-2 bg-[#ffd700] text-[#222] rounded-lg font-bold hover:brightness-90 transition-all disabled:opacity-500 disabled:cursor-not-allowed"
+              >
+                <span className="material-icons">send</span>
+              </button>
             </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-5">
-              {aiTab === "functions" && (
-                <div className="flex flex-col gap-3">
-                  {[
-                    { label: "📢 投票", section: "votes" },
-                    { label: "🔧 維修 / 客服", section: "maintenance" },
-                    { label: "💰 帳務 / 收費", section: "finance" },
-                    { label: "👤 住戶 / 人員", section: "profile" },
-                    { label: "📦 訪客 / 包裹", section: "packages" },
-                    { label: "🚪 設施預約", section: "facilities" },
-                  ].map((item) => (
-                    <div
-                      key={item.section}
-                      onClick={() => {
-                        setAiChatOpen(false)
-                        switchSection(item.section)
-                      }}
-                      className="p-4 bg-white/5 border-l-4 border-[#ffd700] rounded-lg cursor-pointer hover:bg-[rgba(255,215,0,0.1)] hover:translate-x-1 transition-all"
-                    >
-                      {item.label}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {aiTab === "resident" && (
-                <div className="flex flex-col gap-3 min-h-[300px]">
-                  {aiMessages.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className={`py-3 px-4 rounded-xl max-w-[80%] break-words ${
-                        msg.type === "user"
-                          ? "bg-[#ffd700] text-[#222] self-end ml-auto"
-                          : "bg-white/8 text-white self-start"
-                      }`}
-                    >
-                      {msg.text}
-                    </div>
-                  ))}
-                  <div className="text-[#b0b0b0] text-center py-5 text-sm">
-                    提示：您可以詢問關於公告、維修、繳費、包裹等問題
-                  </div>
-                </div>
-              )}
-
-              {aiTab === "emergency" && (
-                <div className="flex flex-col gap-3">
-                  {[
-                    { type: "救護車119", note: "醫療緊急狀況", emoji: "🚑" },
-                    { type: "報警110", note: "治安緊急狀況", emoji: "🚨" },
-                    { type: "AED", note: "需要AED急救設備", emoji: "❤️" },
-                    { type: "可疑人員", note: "陌生人員闖入警告", emoji: "⚠️" },
-                  ].map((emergency) => (
-                    <div
-                      key={emergency.type}
-                      onClick={() => {
-                        confirmEmergency(emergency.type, emergency.note)
-                        setAiChatOpen(false)
-                      }}
-                      className="p-4 bg-white/5 border-l-4 border-[#ffd700] rounded-lg cursor-pointer hover:bg-[rgba(255,215,0,0.1)] hover:translate-x-1 transition-all"
-                    >
-                      {emergency.emoji} {emergency.type}
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div className="flex justify-center gap-4 mt-3">
+              <button
+                onClick={() => setAiTab("functions")}
+                className={`text-sm font-medium transition-colors ${
+                  aiTab === "functions" ? "text-[#ffd700]" : "text-white/70 hover:text-white"
+                }`}
+              >
+                常用功能
+              </button>
+              <button
+                onClick={() => setAiTab("resident")}
+                className={`text-sm font-medium transition-colors ${
+                  aiTab === "resident" ? "text-[#ffd700]" : "text-white/70 hover:text-white"
+                }`}
+              >
+                住戶資訊
+              </button>
+              <button
+                onClick={() => setAiTab("emergency")}
+                className={`text-sm font-medium transition-colors ${
+                  aiTab === "emergency" ? "text-[#ffd700]" : "text-white/70 hover:text-white"
+                }`}
+              >
+                緊急協助
+              </button>
             </div>
-
-            {/* Input Area (only for resident tab) */}
-            {aiTab === "resident" && (
-              <div className="flex gap-3 p-4 border-t-2 border-[rgba(255,215,0,0.2)] bg-black/20">
-                <input
-                  type="text"
-                  value={aiInput}
-                  onChange={(e) => setAiInput(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && sendAIMessage()}
-                  placeholder="請輸入您的問題..."
-                  className="flex-1 py-3 px-4 rounded-xl border border-[rgba(255,215,0,0.3)] bg-white/6 text-white outline-none focus:border-[#ffd700] focus:bg-white/8"
-                />
+            {aiTab === "functions" && (
+              <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
                 <button
-                  onClick={sendAIMessage}
-                  className="py-3 px-5 bg-[#ffd700] text-[#222] border-none rounded-xl font-bold cursor-pointer hover:brightness-90 transition-all"
+                  onClick={() => setAiInput("查詢公告")}
+                  className="p-2 rounded-md bg-white/100 text-white/80 hover:bg-white/20 hover:text-white"
                 >
-                  ▶
+                  查詢公告
+                </button>
+                <button
+                  onClick={() => setAiInput("我要報修")}
+                  className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                >
+                  我要報修
+                </button>
+                <button
+                  onClick={() => setAiInput("我的包裹在哪裡？")}
+                  className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                >
+                  我的包裹在哪裡？
+                </button>
+                <button
+                  onClick={() => setAiInput("查詢管理費")}
+                  className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                >
+                  查詢管理費
+                </button>
+                <button
+                  onClick={() => setAiInput("預約設施")}
+                  className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                >
+                  預約設施
+                </button>
+                <button
+                  onClick={() => setAiInput("修改個人資料")}
+                  className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                >
+                  修改個人資料
+                </button>
+              </div>
+            )}
+            {aiTab === "resident" && (
+              <div className="mt-3 text-xs text-white/70">
+                <p>您的姓名：{currentUser?.name}</p>
+                <p>您的房號：{currentUser?.room}</p>
+                <p>您的電話：{currentUser?.phone}</p>
+                <p>您的Email：{currentUser?.email}</p>
+              </div>
+            )}
+            {aiTab === "emergency" && (
+              <div className="grid grid-cols-1 gap-2 mt-3 text-xs">
+                <button
+                  onClick={() => confirmEmergency("救護車119", "醫療緊急狀況")}
+                  className="p-2 rounded-md bg-[#f44336]/10 text-[#f44336] hover:bg-[#f44336]/20"
+                >
+                  緊急救護 (119)
+                </button>
+                <button
+                  onClick={() => confirmEmergency("報警110", "治安緊急狀況")}
+                  className="p-2 rounded-md bg-[#f44336]/10 text-[#f44336] hover:bg-[#f44336]/20"
+                >
+                  緊急報警 (110)
                 </button>
               </div>
             )}

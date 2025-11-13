@@ -4,6 +4,7 @@ export type Section =
   | "dashboard"
   | "profile"
   | "announcements"
+  | "announcement-details"
   | "votes"
   | "maintenance"
   | "finance"
@@ -20,6 +21,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
   resident: [
     "dashboard",
     "profile",
+    "announcements",
     "packages",
     "votes",
     "maintenance",
@@ -33,10 +35,12 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
   // 警衛 (Guard): Backend - dashboard, packages, visitors only
   guard: ["dashboard", "packages", "visitors"],
 
-  // 管委會 (Management Committee): Backend - everything except packages and visitors
+  // 管委會 (Management Committee): Backend + Full Frontend access when switching (except guard functions)
   committee: [
     "dashboard",
+    "profile",
     "announcements",
+    "announcement-details",
     "votes",
     "maintenance",
     "finance",
@@ -54,6 +58,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "dashboard",
     "profile",
     "announcements",
+    "announcement-details",
     "votes",
     "maintenance",
     "finance",

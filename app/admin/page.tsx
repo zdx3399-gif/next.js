@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getSupabaseClient } from "@/lib/supabase"
+import { AnnouncementDetailsAdmin } from "@/components/announcement-details-admin" // Import the admin version
 import { canAccessSection, getRoleLabel, shouldUseBackend, type UserRole } from "@/lib/permissions"
+import { VisitorManagement } from "@/components/visitor-management"
+import { PackageManagement } from "@/components/package-management"
 
 type User = {
   id: string
@@ -27,6 +30,16 @@ type Section =
   | "meetings"
   | "emergencies"
   | "facilities"
+  | "announcement-details" // Added new section for announcement details
+
+// Placeholder for AnnouncementDetails component (replace with actual component import if available)
+// const AnnouncementDetails = () => (
+//   <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+//     <h2 className="text-2xl font-bold text-[#ffd700] mb-4">公告詳情</h2>
+//     <p className="text-white">公告詳情內容將會在這裡顯示。</p>
+//     {/* Add logic to fetch and display announcement details */}
+//   </div>
+// )
 
 export default function AdminPage() {
   const router = useRouter()
@@ -111,6 +124,7 @@ export default function AdminPage() {
         meetings: "meetings",
         emergencies: "emergencies",
         facilities: "facilities",
+        "announcement-details": "", // Should not be loaded directly via loadData
       }
 
       const table = tableMap[currentSection]
@@ -147,6 +161,7 @@ export default function AdminPage() {
         meetings: "meetings",
         emergencies: "emergencies",
         facilities: "facilities",
+        "announcement-details": "", // Should not be saved directly
       }
 
       const table = tableMap[currentSection]
@@ -223,6 +238,7 @@ export default function AdminPage() {
         meetings: "meetings",
         emergencies: "emergencies",
         facilities: "facilities",
+        "announcement-details": "", // Should not be deleted directly
       }
 
       const table = tableMap[currentSection]
@@ -364,6 +380,13 @@ export default function AdminPage() {
     router.push("/")
   }
 
+  const switchToResident = () => {
+    if (currentUser?.role === "committee") {
+      localStorage.setItem("currentUser", JSON.stringify({ ...currentUser, role: "resident" }))
+      router.push("/dashboard")
+    }
+  }
+
   const toggleSidebar = () => {
     if (window.innerWidth >= 1024) {
       setSidebarCollapsed(!sidebarCollapsed)
@@ -380,6 +403,7 @@ export default function AdminPage() {
   const allNavItems = [
     { id: "dashboard", icon: "dashboard", label: "首頁" },
     { id: "announcements", icon: "campaign", label: "公告管理" },
+    { id: "announcement-details", icon: "article", label: "公告詳情" }, // Added announcement details nav item
     { id: "votes", icon: "how_to_vote", label: "投票管理" },
     { id: "maintenance", icon: "build", label: "設備/維護" },
     { id: "finance", icon: "account_balance", label: "管理費/收支" },
@@ -462,6 +486,15 @@ export default function AdminPage() {
             </span>
           </div>
           <div className="flex gap-2">
+            {currentUser?.role === "committee" && (
+              <button
+                onClick={switchToResident}
+                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-2 border-[#ffd700] rounded-lg text-[#ffd700] hover:bg-[#ffd700] hover:text-[#1a1a1a] transition-all font-semibold text-xs sm:text-sm"
+              >
+                <span className="material-icons text-base sm:text-lg">home</span>
+                <span className="hidden sm:inline">住戶功能</span>
+              </button>
+            )}
             <button
               onClick={logout}
               className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 bg-[#ffd700] text-[#1a1a1a] rounded-lg hover:bg-[#ffed4e] transition-all font-semibold text-xs sm:text-sm"
@@ -473,7 +506,7 @@ export default function AdminPage() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-2 sm:p-4">
-          {!hasAccess && currentSection !== "dashboard" ? (
+          {!hasAccess && currentSection !== "dashboard" && currentSection !== "announcement-details" ? (
             <div className="flex items-center justify-center h-full">
               <div className="bg-[rgba(45,45,45,0.85)] border-2 border-[#f44336] rounded-2xl p-8 text-center max-w-md">
                 <span className="material-icons text-6xl text-[#f44336] mb-4">block</span>
@@ -485,7 +518,7 @@ export default function AdminPage() {
           ) : currentSection === "dashboard" ? (
             <div className="space-y-4">
               {announcements.length > 0 && (
-                <div className="relative h-[calc(100vh-280px)] min-h-[400px] rounded-2xl overflow-hidden">
+                <div className="relative h-[calc(100vh-200px)] min-h-[600px] rounded-2xl overflow-hidden">
                   {announcements.map((announcement, index) => (
                     <div
                       key={announcement.id}
@@ -553,6 +586,26 @@ export default function AdminPage() {
                   ))}
                 </div>
               </div>
+            </div>
+          ) : currentSection === "visitors" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">how_to_reg</span>
+                訪客管理 (警衛)
+              </h2>
+              <VisitorManagement currentUser={currentUser} isAdmin={true} />
+            </div>
+          ) : currentSection === "packages" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">inventory_2</span>
+                包裹管理 (警衛)
+              </h2>
+              <PackageManagement currentUser={currentUser} isAdmin={true} />
+            </div>
+          ) : currentSection === "announcement-details" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <AnnouncementDetailsAdmin onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
             </div>
           ) : (
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
@@ -748,10 +801,14 @@ export default function AdminPage() {
                                     <select
                                       value={String(row.available)}
                                       onChange={(e) => updateRow(index, "available", e.target.value === "true")}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
                                     >
-                                      <option value="true">可用</option>
-                                      <option value="false">不可用</option>
+                                      <option value="true" className="bg-[#2a2a2a] text-white">
+                                        可用
+                                      </option>
+                                      <option value="false" className="bg-[#2a2a2a] text-white">
+                                        不可用
+                                      </option>
                                     </select>
                                   </td>
                                   <td className="p-3 border-b border-white/5">
@@ -821,10 +878,14 @@ export default function AdminPage() {
                                     <select
                                       value={row.status || "draft"}
                                       onChange={(e) => updateRow(index, "status", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
                                     >
-                                      <option value="draft">草稿</option>
-                                      <option value="published">已發布</option>
+                                      <option value="draft" className="bg-[#2a2a2a] text-white">
+                                        草稿
+                                      </option>
+                                      <option value="published" className="bg-[#2a2a2a] text-white">
+                                        已發布
+                                      </option>
                                     </select>
                                   </td>
                                   <td className="p-3 border-b border-white/5">
@@ -893,10 +954,14 @@ export default function AdminPage() {
                                     <select
                                       value={row.status || "active"}
                                       onChange={(e) => updateRow(index, "status", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
                                     >
-                                      <option value="active">進行中</option>
-                                      <option value="closed">已結束</option>
+                                      <option value="active" className="bg-[#2a2a2a] text-white">
+                                        進行中
+                                      </option>
+                                      <option value="closed" className="bg-[#2a2a2a] text-white">
+                                        已結束
+                                      </option>
                                     </select>
                                   </td>
                                   <td className="p-3 border-b border-white/5">
@@ -968,11 +1033,17 @@ export default function AdminPage() {
                                     <select
                                       value={row.status || "open"}
                                       onChange={(e) => updateRow(index, "status", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
                                     >
-                                      <option value="open">待處理</option>
-                                      <option value="progress">處理中</option>
-                                      <option value="closed">已完成</option>
+                                      <option value="open" className="bg-[#2a2a2a] text-white">
+                                        待處理
+                                      </option>
+                                      <option value="progress" className="bg-[#2a2a2a] text-white">
+                                        處理中
+                                      </option>
+                                      <option value="closed" className="bg-[#2a2a2a] text-white">
+                                        已完成
+                                      </option>
                                     </select>
                                   </td>
                                   <td className="p-3 border-b border-white/5">
@@ -1049,10 +1120,14 @@ export default function AdminPage() {
                                     <select
                                       value={String(row.paid)}
                                       onChange={(e) => updateRow(index, "paid", e.target.value === "true")}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
                                     >
-                                      <option value="false">未繳</option>
-                                      <option value="true">已繳</option>
+                                      <option value="false" className="bg-[#2a2a2a] text-white">
+                                        未繳
+                                      </option>
+                                      <option value="true" className="bg-[#2a2a2a] text-white">
+                                        已繳
+                                      </option>
                                     </select>
                                   </td>
                                   <td className="p-3 border-b border-white/5">
@@ -1113,12 +1188,20 @@ export default function AdminPage() {
                                     <select
                                       value={row.role || "resident"}
                                       onChange={(e) => updateRow(index, "role", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
                                     >
-                                      <option value="resident">住戶</option>
-                                      <option value="committee">委員會</option>
-                                      <option value="vendor">廠商</option>
-                                      <option value="admin">管理員</option>
+                                      <option value="resident" className="bg-[#2a2a2a] text-white">
+                                        住戶
+                                      </option>
+                                      <option value="committee" className="bg-[#2a2a2a] text-white">
+                                        委員會
+                                      </option>
+                                      <option value="vendor" className="bg-[#2a2a2a] text-white">
+                                        廠商
+                                      </option>
+                                      <option value="admin" className="bg-[#2a2a2a] text-white">
+                                        管理員
+                                      </option>
                                     </select>
                                   </td>
                                   <td className="p-3 border-b border-white/5">
@@ -1187,10 +1270,14 @@ export default function AdminPage() {
                                     <select
                                       value={row.status || "pending"}
                                       onChange={(e) => updateRow(index, "status", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
                                     >
-                                      <option value="pending">待領取</option>
-                                      <option value="picked-up">已領取</option>
+                                      <option value="pending" className="bg-[#2a2a2a] text-white">
+                                        待領取
+                                      </option>
+                                      <option value="picked-up" className="bg-[#2a2a2a] text-white">
+                                        已領取
+                                      </option>
                                     </select>
                                   </td>
                                   <td className="p-3 border-b border-white/5">

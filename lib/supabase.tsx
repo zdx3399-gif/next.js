@@ -16,11 +16,38 @@ export function setCurrentTenant(tenantId: TenantId) {
   }
 }
 
-// Get tenant config from localStorage
+// Get tenant config from localStorage with fallback recovery
 export function getTenantConfigFromStorage() {
   if (typeof window === "undefined") return null
   const stored = localStorage.getItem("tenantConfig")
-  return stored ? JSON.parse(stored) : null
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      console.error("[v0] Failed to parse tenant config")
+      localStorage.removeItem("tenantConfig")
+      return null
+    }
+  }
+
+  // This helps recover from config loss when navigating between pages
+  const tenantId = getCurrentTenant()
+  if (typeof process !== "undefined" && process.env) {
+    const urlKey = tenantId === "tenant_a" ? "TENANT_A_SUPABASE_URL" : "TENANT_B_SUPABASE_URL"
+    const keyKey = tenantId === "tenant_a" ? "TENANT_A_SUPABASE_ANON_KEY" : "TENANT_B_SUPABASE_ANON_KEY"
+
+    const url = process.env[`NEXT_PUBLIC_${urlKey}`] || process.env[urlKey]
+    const anonKey = process.env[`NEXT_PUBLIC_${keyKey}`] || process.env[keyKey]
+
+    if (url && anonKey) {
+      const config = { url, anonKey, name: `Tenant ${tenantId === "tenant_a" ? "A" : "B"}` }
+      // Restore to localStorage for future reference
+      localStorage.setItem("tenantConfig", JSON.stringify(config))
+      return config
+    }
+  }
+
+  return null
 }
 
 // Set tenant config in localStorage
@@ -39,19 +66,23 @@ export function createTenantClient() {
   return createBrowserClient(config.url, config.anonKey)
 }
 
-// Get current Supabase client
+// Get current Supabase client with better error handling
 export function getSupabaseClient() {
   try {
     return createTenantClient()
   } catch (error) {
     console.error("[v0] Supabase client error:", error)
     // If tenant config is missing, redirect to auth page
-    if (typeof window !== "undefined" && error instanceof Error && error.message.includes("Tenant configuration not found")) {
-      window.location.href = "/auth"
+    if (
+      typeof window !== "undefined" &&
+      error instanceof Error &&
+      error.message.includes("Tenant configuration not found")
+    ) {
+      // Give a short delay to allow current operation to complete
+      setTimeout(() => {
+        window.location.href = "/auth"
+      }, 100)
     }
     throw error
   }
 }
-
-
-

@@ -981,48 +981,92 @@ export default function DashboardPage() {
           )}
 
           {currentSection === "finance" && (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">account_balance</span>
-                管理費/收支
-              </h2>
-              <div className="space-y-3">
-                {finances.length > 0 ? (
-                  finances.map((finance) => (
-                    <div
-                      key={finance.id}
-                      className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex gap-2 items-center mb-1">
-                            <span className="text-white font-bold">房號: {finance.room}</span>
-                            <span
-                              className={`px-2 py-1 rounded text-xs font-bold ${
-                                finance.paid ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                              }`}
-                            >
-                              {finance.paid ? "已繳" : "未繳"}
-                            </span>
-                          </div>
-                          {finance.invoice && <div className="text-[#b0b0b0] text-sm">發票: {finance.invoice}</div>}
-                          {finance.note && <div className="text-[#b0b0b0] text-sm">{finance.note}</div>}
-                          <div className="text-[#b0b0b0] text-sm mt-1">
-                            到期日: {new Date(finance.due).toLocaleDateString("zh-TW")}
-                          </div>
-                        </div>
-                        <div className={`text-xl font-bold ${finance.paid ? "text-green-400" : "text-red-400"}`}>
-                          ${finance.amount.toLocaleString()}
-                        </div>
-                      </div>
+  <div className="space-y-6">
+    {/* --- Unpaid Fees Section --- */}
+    <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
+      <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+        <span className="material-icons">account_balance</span>
+        未繳費用
+      </h2>
+      <div className="space-y-3">
+        {(() => {
+          const unpaidFees = finances.filter((f) => !f.paid);
+          if (unpaidFees.length > 0) {
+            return unpaidFees.map((finance) => (
+              <div
+                key={finance.id}
+                className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex gap-2 items-center mb-1">
+                      <span className="text-white font-bold">房號: {finance.room}</span>
+                      <span className="px-2 py-1 rounded text-xs font-bold bg-red-500/20 text-red-400">
+                        未繳
+                      </span>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center text-[#b0b0b0] py-8">目前沒有財務記錄</div>
-                )}
+                    {finance.invoice && <div className="text-[#b0b0b0] text-sm">發票: {finance.invoice}</div>}
+                    {finance.note && <div className="text-[#b0b0b0] text-sm">{finance.note}</div>}
+                    <div className="text-[#b0b0b0] text-sm mt-1">
+                      到期日: {new Date(finance.due).toLocaleDateString("zh-TW")}
+                    </div>
+                  </div>
+                  <div className="text-xl font-bold text-red-400">
+                    ${finance.amount.toLocaleString()}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            ));
+          } else {
+            return <div className="text-center text-[#b0b0b0] py-8">目前沒有未繳費用</div>;
+          }
+        })()}
+      </div>
+    </div>
+
+    {/* --- Paid Records Section (Your Request) --- */}
+    <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
+      <h2 className="flex gap-2 items-center text-white mb-5 text-xl">
+        <span className="material-icons">history</span>
+        繳費紀錄 (Payment History)
+      </h2>
+      <div className="space-y-3">
+        {(() => {
+          const paidFees = finances.filter((f) => f.paid);
+          if (paidFees.length > 0) {
+            return paidFees.map((finance) => (
+              <div
+                key={finance.id}
+                className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex gap-2 items-center mb-1">
+                      <span className="text-white font-bold">房號: {finance.room}</span>
+                      <span className="px-2 py-1 rounded text-xs font-bold bg-green-500/20 text-green-400">
+                        已繳
+                      </span>
+                    </div>
+                    {finance.invoice && <div className="text-[#b0b0b0] text-sm">發票: {finance.invoice}</div>}
+                    <div className="text-[#b0b0b0] text-sm mt-1">
+                      繳費日期: {new Date(finance.due).toLocaleDateString("zh-TW")}
+                    </div>
+                  </div>
+                  <div className="text-xl font-bold text-green-400">
+                    ${finance.amount.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            ));
+          } else {
+            return <div className="text-center text-[#b0b0b0] py-8">目前沒有繳費紀錄</div>;
+          }
+        })()}
+      </div>
+    </div>
+  </div>
+)}
+          
 
           {currentSection === "visitors" && (
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">

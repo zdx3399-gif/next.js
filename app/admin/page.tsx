@@ -40,6 +40,14 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [imageFiles, setImageFiles] = useState<{ [key: number]: File | null }>({})
 
+
+  // --- ADD THESE FOUR LINES ---
+  const [showResultsModal, setShowResultsModal] = useState(false)
+  const [selectedVote, setSelectedVote] = useState<any>(null)
+  const [voteResults, setVoteResults] = useState<{ [key: string]: number } | null>(null)
+  const [resultsLoading, setResultsLoading] = useState(false)
+  // --- END ADDITION ---
+const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid', or 'all'
   useEffect(() => {
     const storedUser = localStorage.getItem("currentUser")
     if (!storedUser) {
@@ -204,6 +212,57 @@ export default function AdminPage() {
     } catch (e: any) {
       console.error(e)
       alert("操作失敗：" + e.message)
+    }
+  }
+
+  const handleViewResults = async (vote: any) => {
+    if (!vote) return
+    setSelectedVote(vote)
+    setShowResultsModal(true)
+    setResultsLoading(true)
+    setVoteResults(null) // Clear old results
+
+    try {
+      const supabase = getSupabaseClient()
+      // 1. Fetch from the correct table and column
+      const { data: responses, error } = await supabase
+        .from("vote_records") // Correct: Uses your 'vote_records' table
+        .select("option_selected") // Correct: Uses your 'option_selected' column
+        .eq("vote_id", vote.id)
+
+      if (error) throw error
+
+      // 2. Parse the options from the vote row
+      let options: string[] = []
+      try {
+        options = typeof vote.options === 'string' 
+          ? JSON.parse(vote.options) 
+          : vote.options; 
+        if (!Array.isArray(options)) throw new Error("Options are not an array");
+      } catch (parseError) {
+        console.error("Failed to parse vote options:", parseError);
+        throw new Error("投票選項格式不正確。");
+      }
+      
+      // 3. Initialize counts for all possible options to 0
+      const counts: { [key: string]: number } = {}
+      options.forEach((option: string) => {
+        counts[option] = 0
+      })
+
+      // 4. Count the actual responses using the correct column name
+      responses.forEach((response: any) => {
+        if (counts.hasOwnProperty(response.option_selected)) { // Correct: 'option_selected'
+          counts[response.option_selected]++
+        }
+      })
+
+      setVoteResults(counts)
+    } catch (e: any) {
+      console.error("Error fetching vote results:", e)
+      alert("抓取結果失敗：" + e.message)
+    } finally {
+      setResultsLoading(false)
     }
   }
 
@@ -557,25 +616,63 @@ export default function AdminPage() {
           ) : (
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
               <div className="flex gap-2 mb-4 flex-wrap">
-                {currentSection !== "emergencies" && (
-                  <button
-                    onClick={handleAdd}
-                    className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-[#4caf50] text-white rounded-lg hover:brightness-90 transition-all text-xs sm:text-sm"
-                  >
-                    <span className="material-icons text-base sm:text-xl">add</span>
-                    <span className="hidden sm:inline">新增一筆</span>
-                    <span className="sm:hidden">新增</span>
-                  </button>
-                )}
-                <button
-                  onClick={loadData}
-                  className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 border border-[#ffd700] text-white rounded-lg hover:bg-[#ffd700] hover:text-[#222] transition-all text-xs sm:text-sm"
-                >
-                  <span className="material-icons text-base sm:text-xl">sync</span>
-                  <span className="hidden sm:inline">重新整理</span>
-                  <span className="sm:hidden">重整</span>
-                </button>
-              </div>
+  {currentSection !== "emergencies" && (
+    <button
+      onClick={handleAdd}
+      className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-[#4caf50] text-white rounded-lg hover:brightness-90 transition-all text-xs sm:text-sm"
+    >
+      <span className="material-icons text-base sm:text-xl">add</span>
+      <span className="hidden sm:inline">新增一筆</span>
+      <span className="sm:hidden">新增</span>
+    </button>
+  )}
+  <button
+    onClick={loadData}
+    className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 border border-[#ffd700] text-white rounded-lg hover:bg-[#ffd700] hover:text-[#222] transition-all text-xs sm:text-sm"
+  >
+    <span className="material-icons text-base sm:text-xl">sync</span>
+    <span className="hidden sm:inline">重新整理</span>
+    <span className="sm:hidden">重整</span>
+  </button>
+
+  {/* --- ADD THIS NEW BLOCK OF BUTTONS --- */}
+  {currentSection === "finance" && (
+    <div className="flex gap-2 border-l-2 border-white/20 pl-2 ml-2">
+      <button
+        onClick={() => setFinanceFilter("unpaid")}
+        className={`px-3 py-2 rounded-lg text-xs sm:text-sm transition-all ${
+          financeFilter === "unpaid"
+            ? "bg-[#f44336] text-white"
+            : "bg-white/10 text-white hover:bg-white/20"
+        }`}
+      >
+        未繳 (Unpaid)
+      </button>
+      <button
+        onClick={() => setFinanceFilter("paid")}
+        className={`px-3 py-2 rounded-lg text-xs sm:text-sm transition-all ${
+          financeFilter === "paid"
+            ? "bg-[#4caf50] text-white"
+            : "bg-white/10 text-white hover:bg-white/20"
+        }`}
+      >
+        已繳 (Paid)
+      </button>
+      <button
+        onClick={() => setFinanceFilter("all")}
+        className={`px-3 py-2 rounded-lg text-xs sm:text-sm transition-all ${
+          financeFilter === "all"
+            ? "bg-white/30 text-white"
+            : "bg-white/10 text-white hover:bg-white/20"
+        }`}
+      >
+        全部 (All)
+      </button>
+    </div>
+  )}
+  {/* --- END OF ADDITION --- */}
+
+</div>
 
               {loading ? (
                 <div className="text-center text-[#b0b0b0] py-12">載入中...</div>
@@ -915,6 +1012,16 @@ export default function AdminPage() {
                                           刪除
                                         </button>
                                       )}
+                                      {/* --- ADD THIS BUTTON --- */}
+        {row.id && (
+          <button
+            onClick={() => handleViewResults(row)}
+            className="px-3 py-1 bg-[#2196f3] text-white rounded hover:brightness-90 transition-all text-sm"
+          >
+            查看結果
+          </button>
+        )}
+        {/* --- END OF ADDITION --- */}
                                     </div>
                                   </td>
                                 </>
@@ -1351,8 +1458,71 @@ export default function AdminPage() {
               )}
             </div>
           )}
-        </div>
-      </main>
+        {/* // ... (This is the end of the main content area) */}
+        </div>
+      </main>
+
+      {showResultsModal && selectedVote && (
+  <div
+    className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[199] flex items-center justify-center p-4"
+    onClick={() => setShowResultsModal(false)} // Click background to close
+  >
+    <div
+      className="bg-[#2d2d2d] border-2 border-[#ffd700] rounded-2xl p-6 max-w-lg w-full text-white"
+      onClick={(e) => e.stopPropagation()} // Stop click from bubbling to background
+    >
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold text-[#ffd700]">投票結果</h2>
+        <button
+          onClick={() => setShowResultsModal(false)}
+          className="material-icons text-white hover:text-[#ffd700]"
+        >
+          close
+        </button>
+      </div>
+
+      <h3 className="text-xl font-semibold text-white mb-6">{selectedVote.title}</h3>
+
+      {resultsLoading ? (
+        <div className="text-center text-[#b0b0b0] py-8">載入結果中...</div>
+      ) : voteResults ? (
+        (() => {
+          // Calculate total votes first for percentage
+          const totalVotes = Object.values(voteResults).reduce((a: number, b: number) => a + b, 0)
+          
+          return (
+            <div className="space-y-4">
+              {Object.entries(voteResults).map(([option, count]) => (
+                <div key={option}>
+                  <div className="flex justify-between text-white mb-1 font-medium">
+                    <span>{option}</span>
+                    <span>{count} 票</span>
+                  </div>
+                  <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden">
+                    <div
+                      className="bg-[#ffd700] h-4 rounded-full transition-all duration-500"
+                      style={{
+                        width: totalVotes === 0 ? "0%" : `${(count / totalVotes) * 100}%`,
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+              <div className="text-right text-[#b0b0b0] mt-6 pt-4 border-t border-white/10">
+                <strong>總票數: {totalVotes}</strong>
+              </div>
+            </div>
+          )
+        })()
+      ) : (
+        <div className="text-center text-red-400 py-8">無法載入結果或尚無人投票。</div>
+      )}
     </div>
-  )
-}
+  </div>
+)}
+{/* --- END OF MODAL BLOCK --- */}
+    </div>
+  )
+}     
+    
+ 

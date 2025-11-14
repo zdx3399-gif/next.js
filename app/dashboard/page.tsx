@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from "@/lib/supabase"
 import { canAccessSection, type UserRole } from "@/lib/permissions"
 import { AnnouncementDetails } from "@/components/announcement-details" // Updated import path and use named import
@@ -637,7 +637,7 @@ export default function DashboardPage() {
   ]
 
   const navItems = currentUser
-    ? allNavItems.filter((item) => canAccessSection(currentUser.role as UserRole, item.id as any))
+    ? allNavItems.filter((item) => canAccessSection(currentUser.role as UserRole, item.id as any, true))
     : allNavItems
 
   return (
@@ -670,7 +670,9 @@ export default function DashboardPage() {
                       ? "廠商"
                       : currentUser?.role === "admin"
                         ? "管理員"
-                        : "住戶"}
+                        : currentUser?.role === "guest"
+                          ? "訪客"
+                          : "住戶"}
               </div>
             </div>
           </div>

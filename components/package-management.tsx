@@ -27,6 +27,14 @@ export function PackageManagement({ userRoom, currentUser, isAdmin = false }: Pa
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(false)
   const [pickerNames, setPickerNames] = useState<{ [key: string]: string }>({})
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newPackage, setNewPackage] = useState({
+    courier: "",
+    recipient_name: "",
+    recipient_room: "",
+    tracking_number: "",
+    arrived_at: new Date().toISOString().slice(0, 16),
+  })
 
   useEffect(() => {
     loadPackages()
@@ -131,8 +139,143 @@ export function PackageManagement({ userRoom, currentUser, isAdmin = false }: Pa
     }
   }
 
+  const handleAddPackage = async () => {
+    try {
+      if (!newPackage.courier || !newPackage.recipient_name || !newPackage.recipient_room) {
+        alert("請填寫快遞公司、收件人和房號")
+        return
+      }
+
+      const supabase = getSupabaseClient()
+      const { data, error } = await supabase
+        .from("packages")
+        .insert([
+          {
+            courier: newPackage.courier,
+            recipient_name: newPackage.recipient_name,
+            recipient_room: newPackage.recipient_room,
+            tracking_number: newPackage.tracking_number || null,
+            arrived_at: newPackage.arrived_at,
+            status: "pending",
+          },
+        ])
+        .select()
+
+      if (error) throw error
+
+      alert("包裹新增成功")
+      setShowAddForm(false)
+      setNewPackage({
+        courier: "",
+        recipient_name: "",
+        recipient_room: "",
+        tracking_number: "",
+        arrived_at: new Date().toISOString().slice(0, 16),
+      })
+      await loadPackages()
+    } catch (e: any) {
+      console.error("[v0] Error adding package:", e)
+      alert("新增失敗：" + e.message)
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {isAdmin && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg hover:brightness-90 transition-all font-bold"
+          >
+            <span className="material-icons text-xl">add</span>
+            新增包裹
+          </button>
+        </div>
+      )}
+
+      {isAdmin && showAddForm && (
+        <div className="bg-white/5 border-2 border-[#ffd700] rounded-xl p-5">
+          <h3 className="flex gap-2 items-center text-[#ffd700] font-bold text-lg mb-4">
+            <span className="material-icons">add_box</span>
+            新增包裹
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-[#ffd700] text-sm font-bold mb-1 block">快遞公司 *</label>
+              <input
+                type="text"
+                placeholder="例如：UPS、郵局、黑貓"
+                value={newPackage.courier}
+                onChange={(e) => setNewPackage({ ...newPackage, courier: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white placeholder-white/40 outline-none focus:border-[#ffd700]"
+              />
+            </div>
+            <div>
+              <label className="text-[#ffd700] text-sm font-bold mb-1 block">收件人 *</label>
+              <input
+                type="text"
+                placeholder="收件人姓名"
+                value={newPackage.recipient_name}
+                onChange={(e) => setNewPackage({ ...newPackage, recipient_name: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white placeholder-white/40 outline-none focus:border-[#ffd700]"
+              />
+            </div>
+            <div>
+              <label className="text-[#ffd700] text-sm font-bold mb-1 block">房號 *</label>
+              <input
+                type="text"
+                placeholder="例如：A-102"
+                value={newPackage.recipient_room}
+                onChange={(e) => setNewPackage({ ...newPackage, recipient_room: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white placeholder-white/40 outline-none focus:border-[#ffd700]"
+              />
+            </div>
+            <div>
+              <label className="text-[#ffd700] text-sm font-bold mb-1 block">追蹤號碼</label>
+              <input
+                type="text"
+                placeholder="選填"
+                value={newPackage.tracking_number}
+                onChange={(e) => setNewPackage({ ...newPackage, tracking_number: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white placeholder-white/40 outline-none focus:border-[#ffd700]"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="text-[#ffd700] text-sm font-bold mb-1 block">到達時間</label>
+              <input
+                type="datetime-local"
+                value={newPackage.arrived_at}
+                onChange={(e) => setNewPackage({ ...newPackage, arrived_at: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={handleAddPackage}
+              className="px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg font-bold hover:brightness-90 transition-all"
+            >
+              確認新增
+            </button>
+            <button
+              onClick={() => {
+                setShowAddForm(false)
+                setNewPackage({
+                  courier: "",
+                  recipient_name: "",
+                  recipient_room: "",
+                  tracking_number: "",
+                  arrived_at: new Date().toISOString().slice(0, 16),
+                })
+              }}
+              className="px-4 py-2 border-2 border-[#ffd700] text-[#ffd700] rounded-lg font-bold hover:bg-[#ffd700] hover:text-[#222] transition-all"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
       <input
         type="text"
         placeholder="搜尋快遞商、收件人或追蹤號碼..."

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from "@/lib/supabase"
 import { AnnouncementDetailsAdmin } from "@/components/announcement-details-admin" // Import the admin version
 import { canAccessSection, getRoleLabel, shouldUseBackend, type UserRole } from "@/lib/permissions"
@@ -403,7 +403,7 @@ export default function AdminPage() {
   const allNavItems = [
     { id: "dashboard", icon: "dashboard", label: "首頁" },
     { id: "announcements", icon: "campaign", label: "公告管理" },
-    { id: "announcement-details", icon: "article", label: "公告詳情" }, // Added announcement details nav item
+    { id: "announcement-details", icon: "article", label: "公告詳情" },
     { id: "votes", icon: "how_to_vote", label: "投票管理" },
     { id: "maintenance", icon: "build", label: "設備/維護" },
     { id: "finance", icon: "account_balance", label: "管理費/收支" },
@@ -416,10 +416,10 @@ export default function AdminPage() {
   ]
 
   const navItems = currentUser
-    ? allNavItems.filter((item) => canAccessSection(currentUser.role as UserRole, item.id as any))
+    ? allNavItems.filter((item) => canAccessSection(currentUser.role as UserRole, item.id as any, false))
     : allNavItems
 
-  const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection) : false
+  const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection, false) : false
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d]">
@@ -613,7 +613,7 @@ export default function AdminPage() {
                 {currentSection !== "emergencies" && (
                   <button
                     onClick={handleAdd}
-                    className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-[#4caf50] text-white rounded-lg hover:brightness-90 transition-all text-xs sm:text-sm"
+                    className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-[#ffd700] text-[#1a1a1a] rounded-lg hover:bg-[#ffed4e] transition-all text-xs sm:text-sm font-semibold"
                   >
                     <span className="material-icons text-base sm:text-xl">add</span>
                     <span className="hidden sm:inline">新增一筆</span>
@@ -622,7 +622,7 @@ export default function AdminPage() {
                 )}
                 <button
                   onClick={loadData}
-                  className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 border border-[#ffd700] text-white rounded-lg hover:bg-[#ffd700] hover:text-[#222] transition-all text-xs sm:text-sm"
+                  className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 border-2 border-[#ffd700] text-[#ffd700] rounded-lg hover:bg-[#ffd700] hover:text-[#1a1a1a] transition-all text-xs sm:text-sm font-semibold"
                 >
                   <span className="material-icons text-base sm:text-xl">sync</span>
                   <span className="hidden sm:inline">重新整理</span>
@@ -815,14 +815,14 @@ export default function AdminPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
                                       >
                                         儲存
                                       </button>
                                       {row.id && (
                                         <button
                                           onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
                                         >
                                           刪除
                                         </button>
@@ -892,14 +892,14 @@ export default function AdminPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
                                       >
                                         儲存
                                       </button>
                                       {row.id && (
                                         <button
                                           onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
                                         >
                                           刪除
                                         </button>
@@ -968,14 +968,14 @@ export default function AdminPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
                                       >
                                         儲存
                                       </button>
                                       {row.id && (
                                         <button
                                           onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
                                         >
                                           刪除
                                         </button>
@@ -1066,14 +1066,14 @@ export default function AdminPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
                                       >
                                         儲存
                                       </button>
                                       {row.id && (
                                         <button
                                           onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
                                         >
                                           刪除
                                         </button>
@@ -1134,14 +1134,14 @@ export default function AdminPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
                                       >
                                         儲存
                                       </button>
                                       {row.id && (
                                         <button
                                           onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
                                         >
                                           刪除
                                         </button>
@@ -1208,14 +1208,14 @@ export default function AdminPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
                                       >
                                         儲存
                                       </button>
                                       {row.id && (
                                         <button
                                           onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
                                         >
                                           刪除
                                         </button>
@@ -1284,14 +1284,14 @@ export default function AdminPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
                                       >
                                         儲存
                                       </button>
                                       {row.id && (
                                         <button
                                           onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
                                         >
                                           刪除
                                         </button>
@@ -1332,7 +1332,7 @@ export default function AdminPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
                                       >
                                         儲存
                                       </button>
@@ -1342,7 +1342,7 @@ export default function AdminPage() {
                                             updateRow(index, "out", new Date().toISOString())
                                             await handleSave({ ...row, out: new Date().toISOString() }, index)
                                           }}
-                                          className="px-3 py-1 bg-[#ff9800] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 bg-[#ff9800] text-white rounded hover:brightness-90 transition-all text-sm font-semibold"
                                         >
                                           簽出
                                         </button>
@@ -1350,7 +1350,7 @@ export default function AdminPage() {
                                       {row.id && (
                                         <button
                                           onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
                                         >
                                           刪除
                                         </button>
@@ -1396,14 +1396,14 @@ export default function AdminPage() {
                                     <div className="flex gap-2">
                                       <button
                                         onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
                                       >
                                         儲存
                                       </button>
                                       {row.id && (
                                         <button
                                           onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
                                         >
                                           刪除
                                         </button>

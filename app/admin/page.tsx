@@ -7,6 +7,8 @@ import { AnnouncementDetailsAdmin } from "@/components/announcement-details-admi
 import { canAccessSection, getRoleLabel, shouldUseBackend, type UserRole } from "@/lib/permissions"
 import { VisitorManagement } from "@/components/visitor-management"
 import { PackageManagement } from "@/components/package-management"
+import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
+import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCarousel"
 
 type User = {
   id: string
@@ -48,7 +50,8 @@ export default function AdminPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
-  const [announcements, setAnnouncements] = useState<any[]>([])
+  const { announcements, loading: announcementsLoading, reload } = useAnnouncements(false)
+  
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [imageFiles, setImageFiles] = useState<{ [key: number]: File | null }>({})
@@ -74,40 +77,15 @@ export default function AdminPage() {
       router.push("/auth")
     }
 
-    loadAnnouncements()
   }, [router])
 
-  useEffect(() => {
-    if (currentSection === "dashboard" && announcements.length > 0) {
-      const interval = setInterval(() => {
-        setCurrentSlide((prev) => (prev + 1) % announcements.length)
-      }, 5000)
-      return () => clearInterval(interval)
-    }
-  }, [currentSection, announcements.length])
-
+  
   useEffect(() => {
     if (currentSection !== "dashboard") {
       loadData()
     }
   }, [currentSection])
 
-  const loadAnnouncements = async () => {
-    try {
-      const supabase = getSupabaseClient()
-      const { data, error } = await supabase
-        .from("announcements")
-        .select("*")
-        .eq("status", "published")
-        .order("created_at", { ascending: false })
-        .limit(5)
-
-      if (error) throw error
-      if (data) setAnnouncements(data)
-    } catch (e) {
-      console.error(e)
-    }
-  }
 
   const loadData = async () => {
     setLoading(true)
@@ -215,7 +193,7 @@ export default function AdminPage() {
       }
 
       await loadData()
-      if (currentSection === "announcements") await loadAnnouncements()
+      if (currentSection === "announcements") await reload()
     } catch (e: any) {
       console.error(e)
       alert("操作失敗：" + e.message)
@@ -250,7 +228,7 @@ export default function AdminPage() {
 
       alert("刪除成功！")
       await loadData()
-      if (currentSection === "announcements") await loadAnnouncements()
+      if (currentSection === "announcements") await reload()
     } catch (e: any) {
       console.error(e)
       alert("刪除失敗：" + e.message)
@@ -518,49 +496,10 @@ export default function AdminPage() {
           ) : currentSection === "dashboard" ? (
             <div className="space-y-4">
               {announcements.length > 0 && (
-                <div className="relative h-[calc(100vh-200px)] min-h-[600px] rounded-2xl overflow-hidden">
-                  {announcements.map((announcement, index) => (
-                    <div
-                      key={announcement.id}
-                      className={`absolute inset-0 transition-opacity duration-700 ${
-                        index === currentSlide ? "opacity-100" : "opacity-0"
-                      }`}
-                      style={{
-                        backgroundImage: `url('${announcement.image_url || "/placeholder.svg?height=400&width=1200"}')`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                      }}
-                    >
-                      <div className="absolute inset-0 flex items-end p-4 sm:p-8">
-                        <div className="bg-black/75 backdrop-blur-lg p-3 sm:p-5 rounded-xl w-full">
-                          <h2 className="text-xl sm:text-3xl font-bold text-[#ffd700] mb-2">{announcement.title}</h2>
-                          <p className="text-white text-sm sm:text-base mb-2 leading-relaxed">
-                            {announcement.content.substring(0, 200)}
-                            {announcement.content.length > 200 ? "..." : ""}
-                          </p>
-                          <div className="text-[#b0b0b0] text-xs sm:text-sm">
-                            發布者: {announcement.author} |{" "}
-                            {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                    {announcements.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentSlide(index)}
-                        className={`h-2 sm:h-3 rounded-full transition-all ${
-                          index === currentSlide
-                            ? "w-6 sm:w-8 bg-[#ffd700]"
-                            : "w-2 sm:w-3 bg-white/50 hover:bg-white/70"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <AnnouncementCarousel 
+                  announcements={announcements} 
+                  loading={announcementsLoading}
+                />
               )}
 
               <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-4 sm:p-6">

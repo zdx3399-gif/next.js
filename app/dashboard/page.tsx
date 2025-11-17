@@ -6,6 +6,8 @@ import { useEffect, useState } from "react"
 import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from "@/lib/supabase"
 import { canAccessSection, type UserRole } from "@/lib/permissions"
+import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
+import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCarousel"
 import { AnnouncementDetails } from "@/components/announcement-details" // Updated import path and use named import
 import { PackageManagement } from "@/components/package-management"
 import { VisitorManagement } from "@/components/visitor-management"
@@ -16,9 +18,15 @@ export default function DashboardPage() {
   const [currentSection, setCurrentSection] = useState("dashboard")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [announcements, setAnnouncements] = useState<any[]>([])
+  
+  const {
+    announcements,
+    loading: announcementsLoading,
+    likes: announcementLikes,
+    toggleLike: toggleAnnouncementLike,
+  } = useAnnouncements(true, currentUser?.id)
+  
   const [currentSlide, setCurrentSlide] = useState(0)
-  const [announcementLikes, setAnnouncementLikes] = useState<any[]>([]) // Added announcement likes management
 
   const [votes, setVotes] = useState<any[]>([])
   const [votedPolls, setVotedPolls] = useState<Set<string>>(new Set())
@@ -62,19 +70,10 @@ export default function DashboardPage() {
     initAuth()
   }, [])
 
-  useEffect(() => {
-    if (currentSection === "dashboard" && announcements.length > 0 && currentSlide < announcements.length) {
-      const interval = setInterval(() => {
-        setCurrentSlide((prev) => (prev + 1) % announcements.length)
-      }, 5000)
-      return () => clearInterval(interval)
-    }
-  }, [announcements.length]) // Only depend on announcements.length, not currentSlide
 
   useEffect(() => {
     if (currentUser) {
       loadSectionData()
-      loadAnnouncementLikes()
     }
   }, [currentSection, currentUser])
 
@@ -124,30 +123,12 @@ export default function DashboardPage() {
         })
       }
 
-      await loadAnnouncements()
     } catch (e: any) {
       console.error("[v0] Auth initialization failed:", e)
       alert(`初始化失敗：${e.message}`)
     }
   }
 
-  const loadAnnouncements = async () => {
-    try {
-      const supabase = getSupabaseClient()
-      const { data } = await supabase.from("announcements").select("*").order("created_at", { ascending: false })
-
-      if (data) {
-        setAnnouncements(data)
-      } else {
-        // Don't throw - silently fail and show empty announcements
-        setAnnouncements([])
-      }
-    } catch (e) {
-      console.error("[v0] Failed to load announcements:", e)
-      // Don't throw - silently fail and show empty announcements
-      setAnnouncements([])
-    }
-  }
 
   const loadSectionData = async () => {
     const supabase = getSupabaseClient()
@@ -537,74 +518,9 @@ export default function DashboardPage() {
     }
   }
 
-  const toggleAnnouncementLike = async (announcementId: string) => {
-    if (!currentUser) {
-      console.log("[v0] User not logged in")
-      return
-    }
-
-    console.log("[v0] Toggling like for announcement:", announcementId)
-
-    try {
-      const likesStr = localStorage.getItem("announcement_likes")
-      const likesObj = likesStr ? JSON.parse(likesStr) : {}
-
-      // Initialize announcement likes array if not exists
-      if (!likesObj[announcementId]) {
-        likesObj[announcementId] = []
-      }
-
-      // Toggle like
-      const userLikeIndex = likesObj[announcementId].indexOf(currentUser.id)
-      if (userLikeIndex > -1) {
-        likesObj[announcementId].splice(userLikeIndex, 1)
-        console.log("[v0] Removed like")
-      } else {
-        likesObj[announcementId].push(currentUser.id)
-        console.log("[v0] Added like")
-      }
-
-      localStorage.setItem("announcement_likes", JSON.stringify(likesObj))
-
-      await loadAnnouncementLikes()
-    } catch (e) {
-      console.error("[v0] Error toggling like:", e)
-    }
-  }
-
-  const loadAnnouncementLikes = async () => {
-    try {
-      console.log("[v0] Loading announcement likes from localStorage...")
-      const likesStr = localStorage.getItem("announcement_likes")
-      const likesObj = likesStr ? JSON.parse(likesStr) : {}
-
-      const likesArray: any[] = []
-      Object.keys(likesObj).forEach((announcementId) => {
-        if (Array.isArray(likesObj[announcementId])) {
-          likesObj[announcementId].forEach((userId: string) => {
-            likesArray.push({
-              id: `${announcementId}_${userId}`,
-              announcement_id: announcementId,
-              user_id: userId,
-            })
-          })
-        }
-      })
-
-      setAnnouncementLikes(likesArray)
-      console.log("[v0] Loaded likes:", likesArray.length)
-    } catch (e) {
-      console.error("[v0] Error loading likes:", e)
-    }
-  }
 
   const handleAnnouncementSelect = (announcementId: string) => {
-    // This function is likely intended to navigate to a detailed view of the announcement.
-    // For now, we'll just log it or you can implement navigation here.
     console.log("Navigating to announcement details for ID:", announcementId)
-    // Example navigation:
-    // router.push(`/announcements/${announcementId}`);
-    // Or set a state to show details within the current page
     setCurrentSection("announcements")
   }
 
@@ -732,66 +648,16 @@ export default function DashboardPage() {
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
           {currentSection === "dashboard" && (
             <section>
-              {/* Announcement Carousel */}
-              {/* Update Announcement Carousel section */}
               {announcements.length > 0 && (
                 <section className="mb-6 sm:mb-8">
-                  <div className="relative w-full h-[350px] sm:h-[600px] overflow-hidden rounded-2xl shadow-2xl group">
-                    {announcements.map((announcement, idx) => (
-                      <div
-                        key={announcement.id}
-                        className={`absolute w-full h-full transition-opacity duration-700 bg-cover bg-center flex items-end ${
-                          idx === currentSlide ? "opacity-100" : "opacity-0"
-                        }`}
-                        style={{ backgroundImage: `url('${announcement.image_url}')` }}
-                      >
-                        <div className="bg-black/40 backdrop-blur-md p-4 sm:p-6 md:p-8 rounded-xl w-full">
-                          <div
-                            className="text-xl sm:text-2xl md:text-3xl font-bold text-[#ffd700] mb-2 sm:mb-4 cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={() => handleAnnouncementSelect(announcement.id)}
-                          >
-                            {announcement.title}
-                          </div>
-                          <div className="text-white text-sm sm:text-base md:text-lg mb-2 sm:mb-4 leading-relaxed line-clamp-2 sm:line-clamp-3">
-                            {announcement.content.slice(0, 200)}
-                            {announcement.content.length > 200 ? "..." : ""}
-                          </div>
-                          <div className="text-[#b0b0b0] text-xs sm:text-sm mb-3 sm:mb-4">
-                            發布者: {announcement.author} |{" "}
-                            {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
-                          </div>
-                          <button
-                            onClick={() => toggleAnnouncementLike(announcement.id)}
-                            className={`flex items-center gap-1 px-3 py-1 rounded-lg text-sm transition-all ${
-                              announcementLikes.some(
-                                (like) => like.announcement_id === announcement.id && like.user_id === currentUser?.id,
-                              )
-                                ? "bg-[#ffd700] text-[#222]"
-                                : "bg-white/20 text-[#ffd700] hover:bg-white/30"
-                            }`}
-                          >
-                            <span className="material-icons text-base">favorite</span>
-                            <span>
-                              {announcementLikes.filter((like) => like.announcement_id === announcement.id).length}
-                            </span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                      {announcements.map((_, idx) => (
-                        <div
-                          key={idx}
-                          onClick={() => setCurrentSlide(idx)}
-                          className={`h-2 sm:h-3 rounded-full cursor-pointer transition-all ${
-                            idx === currentSlide
-                              ? "w-6 sm:w-8 bg-[#ffd700]"
-                              : "w-2 sm:w-3 bg-white/50 hover:bg-white/70"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                  <AnnouncementCarousel 
+                    announcements={announcements}
+                    loading={announcementsLoading}
+                    onLike={toggleAnnouncementLike} // Use the hook's toggle function
+                    onSelect={handleAnnouncementSelect}
+                    likes={announcementLikes} // Use the hook's likes data
+                    currentUserId={currentUser?.id}
+                  />
                 </section>
               )}
 

@@ -4,6 +4,7 @@ export type Section =
   | "dashboard"
   | "profile"
   | "announcements"
+  | "announcement-details"
   | "votes"
   | "maintenance"
   | "finance"
@@ -20,6 +21,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
   resident: [
     "dashboard",
     "profile",
+    "announcements",
     "packages",
     "votes",
     "maintenance",
@@ -33,10 +35,11 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
   // 警衛 (Guard): Backend - dashboard, packages, visitors only
   guard: ["dashboard", "packages", "visitors"],
 
-  // 管委會 (Management Committee): Backend - everything except packages and visitors
+  // 管委會 (Management Committee): Backend access (no packages/visitors management)
   committee: [
     "dashboard",
     "announcements",
+    "announcement-details",
     "votes",
     "maintenance",
     "finance",
@@ -49,29 +52,50 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
   // 廠商 (Vendor): Backend - maintenance only
   vendor: ["dashboard", "maintenance"],
 
-  // 管理員 (Admin): Full access
+  // 管理員 (Admin): Full access except packages/visitors
   admin: [
     "dashboard",
     "profile",
     "announcements",
+    "announcement-details",
     "votes",
     "maintenance",
     "finance",
     "residents",
-    "packages",
-    "visitors",
     "meetings",
     "emergencies",
     "facilities",
   ],
 }
 
-export function canAccessSection(role: UserRole, section: Section): boolean {
+const COMMITTEE_RESIDENT_PERMISSIONS: Section[] = [
+  "dashboard",
+  "profile",
+  "announcements",
+  "packages",  // Committee members can view their own packages as residents
+  "votes",
+  "maintenance",
+  "finance",
+  "visitors",  // Committee members can use visitor functions as residents
+  "meetings",
+  "emergencies",
+  "facilities",
+]
+
+export function canAccessSection(role: UserRole, section: Section, isResidentMode: boolean = false): boolean {
+  if (role === "committee" && isResidentMode) {
+    return COMMITTEE_RESIDENT_PERMISSIONS.includes(section)
+  }
+  
   const allowedSections = ROLE_PERMISSIONS[role] || []
   return allowedSections.includes(section)
 }
 
-export function getAllowedSections(role: UserRole): Section[] {
+export function getAllowedSections(role: UserRole, isResidentMode: boolean = false): Section[] {
+  if (role === "committee" && isResidentMode) {
+    return COMMITTEE_RESIDENT_PERMISSIONS
+  }
+  
   return ROLE_PERMISSIONS[role] || []
 }
 

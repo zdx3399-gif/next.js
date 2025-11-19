@@ -1,9 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from "@/lib/supabase"
+import { AnnouncementDetailsAdmin } from "@/components/announcement-details-admin" // Import the admin version
 import { canAccessSection, getRoleLabel, shouldUseBackend, type UserRole } from "@/lib/permissions"
+import { VisitorManagement } from "@/components/visitor-management"
+import { PackageManagement } from "@/components/package-management"
+import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
+import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCarousel"
 
 type User = {
   id: string
@@ -27,6 +32,16 @@ type Section =
   | "meetings"
   | "emergencies"
   | "facilities"
+  | "announcement-details" // Added new section for announcement details
+
+// Placeholder for AnnouncementDetails component (replace with actual component import if available)
+// const AnnouncementDetails = () => (
+//   <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+//     <h2 className="text-2xl font-bold text-[#ffd700] mb-4">公告詳情</h2>
+//     <p className="text-white">公告詳情內容將會在這裡顯示。</p>
+//     {/* Add logic to fetch and display announcement details */}
+//   </div>
+// )
 
 export default function AdminPage() {
   const router = useRouter()
@@ -35,7 +50,8 @@ export default function AdminPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
-  const [announcements, setAnnouncements] = useState<any[]>([])
+  const { announcements, loading: announcementsLoading, reload } = useAnnouncements(false)
+  
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [imageFiles, setImageFiles] = useState<{ [key: number]: File | null }>({})
@@ -69,40 +85,15 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
       router.push("/auth")
     }
 
-    loadAnnouncements()
   }, [router])
 
-  useEffect(() => {
-    if (currentSection === "dashboard" && announcements.length > 0) {
-      const interval = setInterval(() => {
-        setCurrentSlide((prev) => (prev + 1) % announcements.length)
-      }, 5000)
-      return () => clearInterval(interval)
-    }
-  }, [currentSection, announcements.length])
-
+  
   useEffect(() => {
     if (currentSection !== "dashboard") {
       loadData()
     }
   }, [currentSection])
 
-  const loadAnnouncements = async () => {
-    try {
-      const supabase = getSupabaseClient()
-      const { data, error } = await supabase
-        .from("announcements")
-        .select("*")
-        .eq("status", "published")
-        .order("created_at", { ascending: false })
-        .limit(5)
-
-      if (error) throw error
-      if (data) setAnnouncements(data)
-    } catch (e) {
-      console.error(e)
-    }
-  }
 
   const loadData = async () => {
     setLoading(true)
@@ -119,6 +110,7 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
         meetings: "meetings",
         emergencies: "emergencies",
         facilities: "facilities",
+        "announcement-details": "", // Should not be loaded directly via loadData
       }
 
       const table = tableMap[currentSection]
@@ -155,6 +147,7 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
         meetings: "meetings",
         emergencies: "emergencies",
         facilities: "facilities",
+        "announcement-details": "", // Should not be saved directly
       }
 
       const table = tableMap[currentSection]
@@ -208,7 +201,7 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
       }
 
       await loadData()
-      if (currentSection === "announcements") await loadAnnouncements()
+      if (currentSection === "announcements") await reload()
     } catch (e: any) {
       console.error(e)
       alert("操作失敗：" + e.message)
@@ -282,6 +275,7 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
         meetings: "meetings",
         emergencies: "emergencies",
         facilities: "facilities",
+        "announcement-details": "", // Should not be deleted directly
       }
 
       const table = tableMap[currentSection]
@@ -293,7 +287,7 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
 
       alert("刪除成功！")
       await loadData()
-      if (currentSection === "announcements") await loadAnnouncements()
+      if (currentSection === "announcements") await reload()
     } catch (e: any) {
       console.error(e)
       alert("刪除失敗：" + e.message)
@@ -423,6 +417,13 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
     router.push("/")
   }
 
+  const switchToResident = () => {
+    if (currentUser?.role === "committee") {
+      localStorage.setItem("currentUser", JSON.stringify({ ...currentUser, role: "resident" }))
+      router.push("/dashboard")
+    }
+  }
+
   const toggleSidebar = () => {
     if (window.innerWidth >= 1024) {
       setSidebarCollapsed(!sidebarCollapsed)
@@ -439,6 +440,7 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
   const allNavItems = [
     { id: "dashboard", icon: "dashboard", label: "首頁" },
     { id: "announcements", icon: "campaign", label: "公告管理" },
+    { id: "announcement-details", icon: "article", label: "公告詳情" },
     { id: "votes", icon: "how_to_vote", label: "投票管理" },
     { id: "maintenance", icon: "build", label: "設備/維護" },
     { id: "finance", icon: "account_balance", label: "管理費/收支" },
@@ -451,10 +453,10 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
   ]
 
   const navItems = currentUser
-    ? allNavItems.filter((item) => canAccessSection(currentUser.role as UserRole, item.id as any))
+    ? allNavItems.filter((item) => canAccessSection(currentUser.role as UserRole, item.id as any, false))
     : allNavItems
 
-  const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection) : false
+  const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection, false) : false
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d]">
@@ -521,6 +523,15 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
             </span>
           </div>
           <div className="flex gap-2">
+            {currentUser?.role === "committee" && (
+              <button
+                onClick={switchToResident}
+                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-2 border-[#ffd700] rounded-lg text-[#ffd700] hover:bg-[#ffd700] hover:text-[#1a1a1a] transition-all font-semibold text-xs sm:text-sm"
+              >
+                <span className="material-icons text-base sm:text-lg">home</span>
+                <span className="hidden sm:inline">住戶功能</span>
+              </button>
+            )}
             <button
               onClick={logout}
               className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 bg-[#ffd700] text-[#1a1a1a] rounded-lg hover:bg-[#ffed4e] transition-all font-semibold text-xs sm:text-sm"
@@ -532,7 +543,7 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
         </header>
 
         <div className="flex-1 overflow-y-auto p-2 sm:p-4">
-          {!hasAccess && currentSection !== "dashboard" ? (
+          {!hasAccess && currentSection !== "dashboard" && currentSection !== "announcement-details" ? (
             <div className="flex items-center justify-center h-full">
               <div className="bg-[rgba(45,45,45,0.85)] border-2 border-[#f44336] rounded-2xl p-8 text-center max-w-md">
                 <span className="material-icons text-6xl text-[#f44336] mb-4">block</span>
@@ -544,49 +555,10 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
           ) : currentSection === "dashboard" ? (
             <div className="space-y-4">
               {announcements.length > 0 && (
-                <div className="relative h-[calc(100vh-280px)] min-h-[400px] rounded-2xl overflow-hidden">
-                  {announcements.map((announcement, index) => (
-                    <div
-                      key={announcement.id}
-                      className={`absolute inset-0 transition-opacity duration-700 ${
-                        index === currentSlide ? "opacity-100" : "opacity-0"
-                      }`}
-                      style={{
-                        backgroundImage: `url('${announcement.image_url || "/placeholder.svg?height=400&width=1200"}')`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                      }}
-                    >
-                      <div className="absolute inset-0 flex items-end p-4 sm:p-8">
-                        <div className="bg-black/75 backdrop-blur-lg p-3 sm:p-5 rounded-xl w-full">
-                          <h2 className="text-xl sm:text-3xl font-bold text-[#ffd700] mb-2">{announcement.title}</h2>
-                          <p className="text-white text-sm sm:text-base mb-2 leading-relaxed">
-                            {announcement.content.substring(0, 200)}
-                            {announcement.content.length > 200 ? "..." : ""}
-                          </p>
-                          <div className="text-[#b0b0b0] text-xs sm:text-sm">
-                            發布者: {announcement.author} |{" "}
-                            {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                    {announcements.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentSlide(index)}
-                        className={`h-2 sm:h-3 rounded-full transition-all ${
-                          index === currentSlide
-                            ? "w-6 sm:w-8 bg-[#ffd700]"
-                            : "w-2 sm:w-3 bg-white/50 hover:bg-white/70"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <AnnouncementCarousel 
+                  announcements={announcements} 
+                  loading={announcementsLoading}
+                />
               )}
 
               <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-4 sm:p-6">
@@ -613,66 +585,48 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
                 </div>
               </div>
             </div>
+          ) : currentSection === "visitors" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">how_to_reg</span>
+                訪客管理 (警衛)
+              </h2>
+              <VisitorManagement currentUser={currentUser} isAdmin={true} />
+            </div>
+          ) : currentSection === "packages" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">inventory_2</span>
+                包裹管理 (警衛)
+              </h2>
+              <PackageManagement currentUser={currentUser} isAdmin={true} />
+            </div>
+          ) : currentSection === "announcement-details" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <AnnouncementDetailsAdmin onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
+            </div>
           ) : (
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
               <div className="flex gap-2 mb-4 flex-wrap">
-  {currentSection !== "emergencies" && (
-    <button
-      onClick={handleAdd}
-      className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-[#4caf50] text-white rounded-lg hover:brightness-90 transition-all text-xs sm:text-sm"
-    >
-      <span className="material-icons text-base sm:text-xl">add</span>
-      <span className="hidden sm:inline">新增一筆</span>
-      <span className="sm:hidden">新增</span>
-    </button>
-  )}
-  <button
-    onClick={loadData}
-    className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 border border-[#ffd700] text-white rounded-lg hover:bg-[#ffd700] hover:text-[#222] transition-all text-xs sm:text-sm"
-  >
-    <span className="material-icons text-base sm:text-xl">sync</span>
-    <span className="hidden sm:inline">重新整理</span>
-    <span className="sm:hidden">重整</span>
-  </button>
-
-  {/* --- ADD THIS NEW BLOCK OF BUTTONS --- */}
-  {currentSection === "finance" && (
-    <div className="flex gap-2 border-l-2 border-white/20 pl-2 ml-2">
-      <button
-        onClick={() => setFinanceFilter("unpaid")}
-        className={`px-3 py-2 rounded-lg text-xs sm:text-sm transition-all ${
-          financeFilter === "unpaid"
-            ? "bg-[#f44336] text-white"
-            : "bg-white/10 text-white hover:bg-white/20"
-        }`}
-      >
-        未繳 (Unpaid)
-      </button>
-      <button
-        onClick={() => setFinanceFilter("paid")}
-        className={`px-3 py-2 rounded-lg text-xs sm:text-sm transition-all ${
-          financeFilter === "paid"
-            ? "bg-[#4caf50] text-white"
-            : "bg-white/10 text-white hover:bg-white/20"
-        }`}
-      >
-        已繳 (Paid)
-      </button>
-      <button
-        onClick={() => setFinanceFilter("all")}
-        className={`px-3 py-2 rounded-lg text-xs sm:text-sm transition-all ${
-          financeFilter === "all"
-            ? "bg-white/30 text-white"
-            : "bg-white/10 text-white hover:bg-white/20"
-        }`}
-      >
-        全部 (All)
-      </button>
-    </div>
-  )}
-  {/* --- END OF ADDITION --- */}
-
-</div>
+                {currentSection !== "emergencies" && (
+                  <button
+                    onClick={handleAdd}
+                    className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-[#4caf50] text-white rounded-lg hover:brightness-90 transition-all text-xs sm:text-sm"
+                  >
+                    <span className="material-icons text-base sm:text-xl">add</span>
+                    <span className="hidden sm:inline">新增一筆</span>
+                    <span className="sm:hidden">新增</span>
+                  </button>
+                )}
+                <button
+                  onClick={loadData}
+                  className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 border border-[#ffd700] text-white rounded-lg hover:bg-[#ffd700] hover:text-[#222] transition-all text-xs sm:text-sm"
+                >
+                  <span className="material-icons text-base sm:text-xl">sync</span>
+                  <span className="hidden sm:inline">重新整理</span>
+                  <span className="sm:hidden">重整</span>
+                </button>
+              </div>
 
               {loading ? (
                 <div className="text-center text-[#b0b0b0] py-12">載入中...</div>
@@ -786,681 +740,662 @@ const [financeFilter, setFinanceFilter] = useState("unpaid") // 'unpaid', 'paid'
                           )}
                         </tr>
                       </thead>
-                      
-                        <tbody>
-  {data.length > 0 ? (
-    data
-      // FIX #2: ADDED THIS .filter() TO MAKE THE FINANCE BUTTONS WORK
-      .filter((row) => {
-        if (currentSection !== "finance") return true // Show all if not in finance section
-        if (financeFilter === "all") return true // Show all if filter is 'all'
-        if (financeFilter === "paid") return row.paid === true
-        if (financeFilter === "unpaid") return row.paid === false
-        return true
-      })
-      .map((row, index) => (
-        <tr key={row.id || index} className="hover:bg-white/5 transition-colors">
-          {currentSection === "facilities" && (
-            <>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.name || ""}
-                  onChange={(e) => updateRow(index, "name", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <textarea
-                  value={row.description || ""}
-                  onChange={(e) => updateRow(index, "description", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.location || ""}
-                  onChange={(e) => updateRow(index, "location", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="number"
-                  value={row.capacity || 1}
-                  onChange={(e) => updateRow(index, "capacity", Number(e.target.value))}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="space-y-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageFileChange(index, e.target.files?.[0] || null)}
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white text-sm outline-none focus:border-[#ffd700]"
-                  />
-                  {imageFiles[index] && (
-                    <div className="text-green-400 text-xs">已選擇: {imageFiles[index]!.name}</div>
-                  )}
-                  {row.image_url && !imageFiles[index] && (
-                    <div className="text-[#b0b0b0] text-xs truncate">
-                      目前: {row.image_url.substring(0, 30)}...
-                    </div>
-                  )}
-                </div>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <select
-                  value={String(row.available)}
-                  onChange={(e) => updateRow(index, "available", e.target.value === "true")}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                >
-                  <option value="true">可用</option>
-                  <option value="false">不可用</option>
-                </select>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSave(row, index)}
-                    className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
-                  >
-                    儲存
-                  </button>
-                  {row.id && (
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      刪除
-                    </button>
-                  )}
-                </div>
-              </td>
-            </>
-          )}
-          {currentSection === "announcements" && (
-            <>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.title || ""}
-                  onChange={(e) => updateRow(index, "title", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <textarea
-                  value={row.content || ""}
-                  onChange={(e) => updateRow(index, "content", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] min-h-[80px]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="space-y-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageFileChange(index, e.target.files?.[0] || null)}
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white text-sm outline-none focus:border-[#ffd700]"
-                  />
-                  {imageFiles[index] && (
-                    <div className="text-green-400 text-xs">已選擇: {imageFiles[index]!.name}</div>
-                  )}
-                  {row.image_url && !imageFiles[index] && (
-                    <div className="text-[#b0b0b0] text-xs truncate">
-                      目前: {row.image_url.substring(0, 30)}...
-                    </div>
-                  )}
-                </div>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.author || ""}
-                  onChange={(e) => updateRow(index, "author", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <select
-                  value={row.status || "draft"}
-                  onChange={(e) => updateRow(index, "status", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                >
-                  <option value="draft">草稿</option>
-                  <option value="published">已發布</option>
-                </select>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSave(row, index)}
-                    className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
-                  >
-                    儲存
-                  </button>
-                  {row.id && (
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      刪除
-                    </button>
-                  )}
-                </div>
-              </td>
-            </>
-          )}
-          {currentSection === "votes" && (
-            <>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.title || ""}
-                  onChange={(e) => updateRow(index, "title", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <textarea
-                  value={row.description || ""}
-                  onChange={(e) => updateRow(index, "description", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <textarea
-                  value={
-                    typeof row.options === "string" ? row.options : JSON.stringify(row.options)
-                  }
-                  onChange={(e) => updateRow(index, "options", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.author || ""}
-                  onChange={(e) => updateRow(index, "author", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="date"
-                  value={row.ends_at ? row.ends_at.split("T")[0] : ""}
-                  onChange={(e) => updateRow(index, "ends_at", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <select
-                  value={row.status || "active"}
-                  onChange={(e) => updateRow(index, "status", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                >
-                  <option value="active">進行中</option>
-                  <option value="closed">已結束</option>
-                </select>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                {/* FIX #1: MOVED THE 'View Results' BUTTON *INSIDE* THIS DIV */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSave(row, index)}
-                    className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
-                  >
-                    儲存
-                  </button>
-                  {row.id && (
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      刪除
-                    </button>
-                  )}
-                  {row.id && (
-                    <button
-                      onClick={() => handleViewResults(row)}
-                      className="px-3 py-1 bg-[#2196f3] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      查看結果
-                    </button>
-                  )}
-                </div>
-              </td>
-            </>
-          )}
-          {currentSection === "maintenance" && (
-            <>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.equipment || ""}
-                  onChange={(e) => updateRow(index, "equipment", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.item || ""}
-                  onChange={(e) => updateRow(index, "item", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <textarea
-                  value={row.description || ""}
-                  onChange={(e) => updateRow(index, "description", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.reported_by || ""}
-                  onChange={(e) => updateRow(index, "reported_by", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                {row.photo_url ? (
-                  <img
-                    src={row.photo_url || "/placeholder.svg"}
-                    alt="維修照片"
-                    className="max-w-[100px] h-auto rounded cursor-pointer hover:scale-150 transition-transform"
-                    onClick={() => window.open(row.photo_url, "_blank")}
-                  />
-                ) : (
-                  <span className="text-[#b0b0b0] text-sm">無照片</span>
-                )}
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <select
-                  value={row.status || "open"}
-                  onChange={(e) => updateRow(index, "status", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                >
-                  <option value="open">待處理</option>
-                  <option value="progress">處理中</option>
-                  <option value="closed">已完成</option>
-                </select>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.handler || ""}
-                  onChange={(e) => updateRow(index, "handler", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="number"
-                  value={row.cost || 0}
-                  onChange={(e) => updateRow(index, "cost", Number(e.target.value))}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSave(row, index)}
-                    className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
-                  >
-                    儲存
-                  </button>
-                  {row.id && (
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      刪除
-                    </button>
-                  )}
-                </div>
-              </td>
-            </>
-          )}
-          {currentSection === "finance" && (
-            <>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.room || ""}
-                  onChange={(e) => updateRow(index, "room", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="number"
-                  value={row.amount || 0}
-                  onChange={(e) => updateRow(index, "amount", Number(e.target.value))}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="date"
-                  value={row.due ? row.due.split("T")[0] : ""}
-                  onChange={(e) => updateRow(index, "due", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.invoice || ""}
-                  onChange={(e) => updateRow(index, "invoice", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <select
-                  value={String(row.paid)}
-                  onChange={(e) => updateRow(index, "paid", e.target.value === "true")}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                >
-                  <option value="false">未繳</option>
-                  <option value="true">已繳</option>
-                </select>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSave(row, index)}
-                    className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
-                  >
-                    儲存
-                  </button>
-                  {row.id && (
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      刪除
-                    </button>
-                  )}
-                </div>
-              </td>
-            </>
-          )}
-          {currentSection === "residents" && (
-            <>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.name || ""}
-                  onChange={(e) => updateRow(index, "name", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.room || ""}
-                  onChange={(e) => updateRow(index, "room", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="tel"
-                  value={row.phone || ""}
-                  onChange={(e) => updateRow(index, "phone", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="email"
-                  value={row.email || ""}
-                  onChange={(e) => updateRow(index, "email", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <select
-                  value={row.role || "resident"}
-                  onChange={(e) => updateRow(index, "role", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                >
-                  <option value="resident">住戶</option>
-                  <option value="committee">委員會</option>
-                  <option value="vendor">廠商</option>
-                  <option value="admin">管理員</option>
-                </select>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSave(row, index)}
-                    className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
-                  >
-                    儲存
-                  </button>
-                  {row.id && (
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      刪除
-                    </button>
-                  )}
-                </div>
-              </td>
-            </>
-          )}
-          {currentSection === "packages" && (
-            <>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.recipient_name || ""}
-                  onChange={(e) => updateRow(index, "recipient_name", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.recipient_room || ""}
-                  onChange={(e) => updateRow(index, "recipient_room", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.courier || ""}
-                  onChange={(e) => updateRow(index, "courier", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.tracking_number || ""}
-                  onChange={(e) => updateRow(index, "tracking_number", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="datetime-local"
-                  value={row.arrived_at ? row.arrived_at.slice(0, 16) : ""}
-                  onChange={(e) => updateRow(index, "arrived_at", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <select
-                  value={row.status || "pending"}
-                  onChange={(e) => updateRow(index, "status", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                >
-                  <option value="pending">待領取</option>
-                  <option value="picked-up">已領取</option>
-                </select>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSave(row, index)}
-                    className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
-                  >
-                    儲存
-                  </button>
-                  {row.id && (
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      刪除
-                    </button>
-                  )}
-                </div>
-              </td>
-            </>
-          )}
-          {currentSection === "visitors" && (
-            <>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.name || ""}
-                  onChange={(e) => updateRow(index, "name", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.room || ""}
-                  onChange={(e) => updateRow(index, "room", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="text-[#b0b0b0] text-sm">
-                  {row.in ? new Date(row.in).toLocaleString("zh-TW") : "-"}
-                </div>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="text-[#b0b0b0] text-sm">
-                  {row.out ? new Date(row.out).toLocaleString("zh-TW") : "-"}
-                </div>
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSave(row, index)}
-                    className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
-                  >
-                    儲存
-                  </button>
-                  {row.id && !row.out && (
-                    <button
-                      onClick={async () => {
-                        updateRow(index, "out", new Date().toISOString())
-                        await handleSave({ ...row, out: new Date().toISOString() }, index)
-                      }}
-                      className="px-3 py-1 bg-[#ff9800] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      簽出
-                    </button>
-                  )}
-                  {row.id && (
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      刪除
-                    </button>
-                  )}
-                </div>
-              </td>
-            </>
-          )}
-          {currentSection === "meetings" && (
-            <>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.topic || ""}
-                  onChange={(e) => updateRow(index, "topic", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="datetime-local"
-                  value={row.time ? row.time.slice(0, 16) : ""}
-                  onChange={(e) => updateRow(index, "time", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <input
-                  type="text"
-                  value={row.location || ""}
-                  onChange={(e) => updateRow(index, "location", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <textarea
-                  value={row.notes || ""}
-                  onChange={(e) => updateRow(index, "notes", e.target.value)}
-                  className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                />
-              </td>
-              <td className="p-3 border-b border-white/5">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleSave(row, index)}
-                    className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
-                  >
-                    儲存
-                  </button>
-                  {row.id && (
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
-                    >
-                      刪除
-                    </button>
-                  )}
-                </div>
-              </td>
-            </>
-          )}
-          {currentSection === "emergencies" && (
-            <>
-              <td className="p-3 border-b border-white/5 text-[#f44336]">{row.type}</td>
-              <td className="p-3 border-b border-white/5 text-[#b0b0b0]">
-                {new Date(row.time).toLocaleString("zh-TW")}
-              </td>
-              <td className="p-3 border-b border-white/5 text-white">{row.by}</td>
-              <td className="p-3 border-b border-white/5 text-[#b0b0b0]">{row.note}</td>
-            </>
-          )}
-        </tr>
-      ))
-  ) : (
-    <tr>
-      <td colSpan={20} className="p-8 text-center text-[#b0b0b0]">
-        目前無資料
-      </td>
-    </tr>
-  )}
-</tbody>
+                      <tbody>
+                        {data.length > 0 ? (
+                          data.map((row, index) => (
+                            <tr key={row.id || index} className="hover:bg-white/5 transition-colors">
+                              {currentSection === "facilities" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.name || ""}
+                                      onChange={(e) => updateRow(index, "name", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <textarea
+                                      value={row.description || ""}
+                                      onChange={(e) => updateRow(index, "description", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.location || ""}
+                                      onChange={(e) => updateRow(index, "location", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="number"
+                                      value={row.capacity || 1}
+                                      onChange={(e) => updateRow(index, "capacity", Number(e.target.value))}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="space-y-2">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleImageFileChange(index, e.target.files?.[0] || null)}
+                                        className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white text-sm outline-none focus:border-[#ffd700]"
+                                      />
+                                      {imageFiles[index] && (
+                                        <div className="text-green-400 text-xs">已選擇: {imageFiles[index]!.name}</div>
+                                      )}
+                                      {row.image_url && !imageFiles[index] && (
+                                        <div className="text-[#b0b0b0] text-xs truncate">
+                                          目前: {row.image_url.substring(0, 30)}...
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <select
+                                      value={String(row.available)}
+                                      onChange={(e) => updateRow(index, "available", e.target.value === "true")}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    >
+                                      <option value="true">可用</option>
+                                      <option value="false">不可用</option>
+                                    </select>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleSave(row, index)}
+                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                      >
+                                        儲存
+                                      </button>
+                                      {row.id && (
+                                        <button
+                                          onClick={() => handleDelete(row.id)}
+                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          刪除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {currentSection === "announcements" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.title || ""}
+                                      onChange={(e) => updateRow(index, "title", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <textarea
+                                      value={row.content || ""}
+                                      onChange={(e) => updateRow(index, "content", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] min-h-[80px]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="space-y-2">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => handleImageFileChange(index, e.target.files?.[0] || null)}
+                                        className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white text-sm outline-none focus:border-[#ffd700]"
+                                      />
+                                      {imageFiles[index] && (
+                                        <div className="text-green-400 text-xs">已選擇: {imageFiles[index]!.name}</div>
+                                      )}
+                                      {row.image_url && !imageFiles[index] && (
+                                        <div className="text-[#b0b0b0] text-xs truncate">
+                                          目前: {row.image_url.substring(0, 30)}...
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.author || ""}
+                                      onChange={(e) => updateRow(index, "author", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <select
+                                      value={row.status || "draft"}
+                                      onChange={(e) => updateRow(index, "status", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    >
+                                      <option value="draft">草稿</option>
+                                      <option value="published">已發布</option>
+                                    </select>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleSave(row, index)}
+                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                      >
+                                        儲存
+                                      </button>
+                                      {row.id && (
+                                        <button
+                                          onClick={() => handleDelete(row.id)}
+                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          刪除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {currentSection === "votes" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.title || ""}
+                                      onChange={(e) => updateRow(index, "title", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <textarea
+                                      value={row.description || ""}
+                                      onChange={(e) => updateRow(index, "description", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <textarea
+                                      value={
+                                        typeof row.options === "string" ? row.options : JSON.stringify(row.options)
+                                      }
+                                      onChange={(e) => updateRow(index, "options", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.author || ""}
+                                      onChange={(e) => updateRow(index, "author", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="date"
+                                      value={row.ends_at ? row.ends_at.split("T")[0] : ""}
+                                      onChange={(e) => updateRow(index, "ends_at", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <select
+                                      value={row.status || "active"}
+                                      onChange={(e) => updateRow(index, "status", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    >
+                                      <option value="active">進行中</option>
+                                      <option value="closed">已結束</option>
+                                    </select>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleSave(row, index)}
+                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                      >
+                                        儲存
+                                      </button>
+                                      {row.id && (
+                                        <button
+                                          onClick={() => handleDelete(row.id)}
+                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          刪除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {currentSection === "maintenance" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.equipment || ""}
+                                      onChange={(e) => updateRow(index, "equipment", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.item || ""}
+                                      onChange={(e) => updateRow(index, "item", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <textarea
+                                      value={row.description || ""}
+                                      onChange={(e) => updateRow(index, "description", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.reported_by || ""}
+                                      onChange={(e) => updateRow(index, "reported_by", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    {row.photo_url ? (
+                                      <img
+                                        src={row.photo_url || "/placeholder.svg"}
+                                        alt="維修照片"
+                                        className="max-w-[100px] h-auto rounded cursor-pointer hover:scale-150 transition-transform"
+                                        onClick={() => window.open(row.photo_url, "_blank")}
+                                      />
+                                    ) : (
+                                      <span className="text-[#b0b0b0] text-sm">無照片</span>
+                                    )}
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <select
+                                      value={row.status || "open"}
+                                      onChange={(e) => updateRow(index, "status", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    >
+                                      <option value="open">待處理</option>
+                                      <option value="progress">處理中</option>
+                                      <option value="closed">已完成</option>
+                                    </select>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.handler || ""}
+                                      onChange={(e) => updateRow(index, "handler", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="number"
+                                      value={row.cost || 0}
+                                      onChange={(e) => updateRow(index, "cost", Number(e.target.value))}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleSave(row, index)}
+                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                      >
+                                        儲存
+                                      </button>
+                                      {row.id && (
+                                        <button
+                                          onClick={() => handleDelete(row.id)}
+                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          刪除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {currentSection === "finance" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.room || ""}
+                                      onChange={(e) => updateRow(index, "room", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="number"
+                                      value={row.amount || 0}
+                                      onChange={(e) => updateRow(index, "amount", Number(e.target.value))}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="date"
+                                      value={row.due ? row.due.split("T")[0] : ""}
+                                      onChange={(e) => updateRow(index, "due", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.invoice || ""}
+                                      onChange={(e) => updateRow(index, "invoice", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <select
+                                      value={String(row.paid)}
+                                      onChange={(e) => updateRow(index, "paid", e.target.value === "true")}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    >
+                                      <option value="false">未繳</option>
+                                      <option value="true">已繳</option>
+                                    </select>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleSave(row, index)}
+                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                      >
+                                        儲存
+                                      </button>
+                                      {row.id && (
+                                        <button
+                                          onClick={() => handleDelete(row.id)}
+                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          刪除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {currentSection === "residents" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.name || ""}
+                                      onChange={(e) => updateRow(index, "name", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.room || ""}
+                                      onChange={(e) => updateRow(index, "room", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="tel"
+                                      value={row.phone || ""}
+                                      onChange={(e) => updateRow(index, "phone", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="email"
+                                      value={row.email || ""}
+                                      onChange={(e) => updateRow(index, "email", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <select
+                                      value={row.role || "resident"}
+                                      onChange={(e) => updateRow(index, "role", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    >
+                                      <option value="resident">住戶</option>
+                                      <option value="committee">委員會</option>
+                                      <option value="vendor">廠商</option>
+                                      <option value="admin">管理員</option>
+                                    </select>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleSave(row, index)}
+                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                      >
+                                        儲存
+                                      </button>
+                                      {row.id && (
+                                        <button
+                                          onClick={() => handleDelete(row.id)}
+                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          刪除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {currentSection === "packages" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.recipient_name || ""}
+                                      onChange={(e) => updateRow(index, "recipient_name", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.recipient_room || ""}
+                                      onChange={(e) => updateRow(index, "recipient_room", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.courier || ""}
+                                      onChange={(e) => updateRow(index, "courier", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.tracking_number || ""}
+                                      onChange={(e) => updateRow(index, "tracking_number", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="datetime-local"
+                                      value={row.arrived_at ? row.arrived_at.slice(0, 16) : ""}
+                                      onChange={(e) => updateRow(index, "arrived_at", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <select
+                                      value={row.status || "pending"}
+                                      onChange={(e) => updateRow(index, "status", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    >
+                                      <option value="pending">待領取</option>
+                                      <option value="picked-up">已領取</option>
+                                    </select>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleSave(row, index)}
+                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                      >
+                                        儲存
+                                      </button>
+                                      {row.id && (
+                                        <button
+                                          onClick={() => handleDelete(row.id)}
+                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          刪除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {currentSection === "visitors" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.name || ""}
+                                      onChange={(e) => updateRow(index, "name", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.room || ""}
+                                      onChange={(e) => updateRow(index, "room", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="text-[#b0b0b0] text-sm">
+                                      {row.in ? new Date(row.in).toLocaleString("zh-TW") : "-"}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="text-[#b0b0b0] text-sm">
+                                      {row.out ? new Date(row.out).toLocaleString("zh-TW") : "-"}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleSave(row, index)}
+                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                      >
+                                        儲存
+                                      </button>
+                                      {row.id && !row.out && (
+                                        <button
+                                          onClick={async () => {
+                                            updateRow(index, "out", new Date().toISOString())
+                                            await handleSave({ ...row, out: new Date().toISOString() }, index)
+                                          }}
+                                          className="px-3 py-1 bg-[#ff9800] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          簽出
+                                        </button>
+                                      )}
+                                      {row.id && (
+                                        <button
+                                          onClick={() => handleDelete(row.id)}
+                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          刪除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {currentSection === "meetings" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.topic || ""}
+                                      onChange={(e) => updateRow(index, "topic", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="datetime-local"
+                                      value={row.time ? row.time.slice(0, 16) : ""}
+                                      onChange={(e) => updateRow(index, "time", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <input
+                                      type="text"
+                                      value={row.location || ""}
+                                      onChange={(e) => updateRow(index, "location", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <textarea
+                                      value={row.notes || ""}
+                                      onChange={(e) => updateRow(index, "notes", e.target.value)}
+                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
+                                    />
+                                  </td>
+                                  <td className="p-3 border-b border-white/5">
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleSave(row, index)}
+                                        className="px-3 py-1 bg-[#4caf50] text-white rounded hover:brightness-90 transition-all text-sm"
+                                      >
+                                        儲存
+                                      </button>
+                                      {row.id && (
+                                        <button
+                                          onClick={() => handleDelete(row.id)}
+                                          className="px-3 py-1 bg-[#f44336] text-white rounded hover:brightness-90 transition-all text-sm"
+                                        >
+                                          刪除
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </>
+                              )}
+                              {currentSection === "emergencies" && (
+                                <>
+                                  <td className="p-3 border-b border-white/5 text-[#f44336]">{row.type}</td>
+                                  <td className="p-3 border-b border-white/5 text-[#b0b0b0]">
+                                    {new Date(row.time).toLocaleString("zh-TW")}
+                                  </td>
+                                  <td className="p-3 border-b border-white/5 text-white">{row.by}</td>
+                                  <td className="p-3 border-b border-white/5 text-[#b0b0b0]">{row.note}</td>
+                                </>
+                              )}
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={20} className="p-8 text-center text-[#b0b0b0]">
+                              目前無資料
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
                     </table>
                   </div>
                 </div>

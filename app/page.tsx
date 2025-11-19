@@ -3,74 +3,69 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { getSupabaseClient } from "@/lib/supabase"
 
 export default function HomePage() {
   const router = useRouter()
-  const [announcements, setAnnouncements] = useState<any[]>([])
-  const [currentSlide, setCurrentSlide] = useState(0)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [currentUser, setCurrentUser] = useState<any | null>(null)
 
   useEffect(() => {
     checkAuth()
-    loadAnnouncements()
   }, [])
-
-  useEffect(() => {
-    if (announcements.length > 0) {
-      const interval = setInterval(() => {
-        setCurrentSlide((prev) => (prev + 1) % announcements.length)
-      }, 5000)
-      return () => clearInterval(interval)
-    }
-  }, [announcements.length])
 
   const checkAuth = () => {
     const storedCurrentUser = localStorage.getItem("currentUser")
     if (storedCurrentUser) {
       const user = JSON.parse(storedCurrentUser)
       setCurrentUser(user)
-      setIsAdmin(user.role === "admin" || user.role === "committee")
-      router.push("/dashboard")
-    }
-  }
-
-  const loadAnnouncements = async () => {
-    try {
-      const supabase = getSupabaseClient()
-      const { data, error } = await supabase
-        .from("announcements")
-        .select("*")
-        .eq("status", "published")
-        .order("created_at", { ascending: false })
-        .limit(5)
-
-      if (error) {
-        console.error("Error loading announcements:", error)
-        return
+      if (user.role === "resident" || user.role === "committee") {
+        router.push("/dashboard")
+      } else {
+        router.push("/admin")
       }
-
-      if (data && data.length > 0) {
-        setAnnouncements(data)
-      }
-    } catch (error) {
-      console.error("Error loading announcements:", error)
     }
   }
 
   const modules = [
-    { icon: "campaign", title: "公告/投票", description: "查看最新社區公告和參與投票活動", id: "announcements" },
-    { icon: "build", title: "設備/維護", description: "報修設備問題和查看維護進度", id: "maintenance" },
-    { icon: "account_balance", title: "管理費/收支", description: "查看管理費繳費狀況和收支明細", id: "finance" },
-    { icon: "people", title: "住戶/人員", description: "住戶資料管理和人員聯絡資訊", id: "residents" },
-    { icon: "how_to_reg", title: "訪客/包裹", description: "訪客登記和包裹收發管理", id: "visitors" },
-    { icon: "event", title: "會議/活動", description: "社區會議記錄和活動安排", id: "meetings" },
+    {
+      icon: "campaign",
+      title: "公告/投票",
+      description: "查看最新社區公告和參與投票活動",
+      features: ["即時公告更新", "社區投票", "公開討論"],
+    },
+    {
+      icon: "build",
+      title: "設備/維護",
+      description: "報修設備問題和查看維護進度",
+      features: ["快速報修", "狀態追蹤", "照片上傳"],
+    },
+    {
+      icon: "account_balance",
+      title: "管理費/收支",
+      description: "查看管理費繳費狀況和收支明細",
+      features: ["費用查詢", "繳費記錄", "收支明細"],
+    },
+    {
+      icon: "people",
+      title: "住戶/人員",
+      description: "住戶資料管理和人員聯絡資訊",
+      features: ["住戶目錄", "聯絡資訊", "資料驗證"],
+    },
+    {
+      icon: "how_to_reg",
+      title: "訪客/包裹",
+      description: "訪客登記和包裹收發管理",
+      features: ["訪客登記", "包裹追蹤", "收發通知"],
+    },
+    {
+      icon: "event",
+      title: "會議/活動",
+      description: "社區會議記錄和活動安排",
+      features: ["會議通知", "活動報名", "會議記錄"],
+    },
   ]
 
-  const navigateToModule = (moduleId: string) => {
-    alert("請先登入系統")
-    router.push("/auth")
+  const navigateToModule = (moduleTitle: string) => {
+    router.push("/auth?mode=login")
   }
 
   return (
@@ -109,73 +104,94 @@ export default function HomePage() {
             <p className="text-base sm:text-lg md:text-2xl text-white mb-6 sm:mb-10 drop-shadow-md px-4 max-w-3xl mx-auto">
               現代化的社區管理解決方案，讓居民生活更便利
             </p>
-            {!currentUser && (
-              <Link
-                href="/auth"
-                className="inline-flex items-center gap-2 px-6 sm:px-10 py-3 sm:py-5 bg-[#ffd700] text-[#1a1a1a] rounded-xl hover:bg-[#ffed4e] hover:-translate-y-1 hover:shadow-2xl transition-all font-bold text-base sm:text-xl"
-              >
-                <span className="material-icons text-xl sm:text-2xl">dashboard</span>
-                進入系統
-              </Link>
-            )}
+            <Link
+              href="/auth?mode=login"
+              className="inline-flex items-center gap-2 px-6 sm:px-10 py-3 sm:py-5 bg-[#ffd700] text-[#1a1a1a] rounded-xl hover:bg-[#ffed4e] hover:-translate-y-1 hover:shadow-2xl transition-all font-bold text-base sm:text-xl"
+            >
+              <span className="material-icons text-xl sm:text-2xl">dashboard</span>
+              進入系統
+            </Link>
           </section>
 
-          {/* Announcement Carousel */}
-          {announcements.length > 0 && (
-            <section className="mb-6 sm:mb-8">
-              <div className="relative w-full h-[350px] sm:h-[450px] overflow-hidden rounded-2xl shadow-2xl">
-                {announcements.map((announcement, idx) => (
-                  <div
-                    key={announcement.id}
-                    className={`absolute w-full h-full transition-opacity duration-700 bg-cover bg-center flex items-end ${
-                      idx === currentSlide ? "opacity-100" : "opacity-0"
-                    }`}
-                    style={{ backgroundImage: `url('${announcement.image_url}')` }}
-                  >
-                    <div className="bg-black/40 backdrop-blur-md p-4 sm:p-6 md:p-8 rounded-xl w-full">
-                      <div className="text-xl sm:text-2xl md:text-3xl font-bold text-[#ffd700] mb-2 sm:mb-4">
-                        {announcement.title}
-                      </div>
-                      <div className="text-white text-sm sm:text-base md:text-lg mb-2 sm:mb-4 leading-relaxed line-clamp-2 sm:line-clamp-3">
-                        {announcement.content.slice(0, 200)}
-                        {announcement.content.length > 200 ? "..." : ""}
-                      </div>
-                      <div className="text-[#b0b0b0] text-xs sm:text-sm">
-                        發布者: {announcement.author} | {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
-                      </div>
+          {/* Service Modules */}
+          <section className="mb-12">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#ffd700] mb-2">完整功能介紹</h2>
+              <p className="text-[#b0b0b0] text-sm sm:text-base">社區管理系統提供以下功能，幫助社區更有效地運作</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {modules.map((module) => (
+                <div
+                  key={module.title}
+                  onClick={() => navigateToModule(module.title)}
+                  className="bg-[rgba(45,45,45,0.9)] rounded-2xl p-5 sm:p-6 text-left border-2 border-[rgba(255,215,0,0.2)] hover:border-[#ffd700] hover:-translate-y-2 hover:shadow-[0_15px_40px_rgba(255,215,0,0.3)] transition-all cursor-pointer group"
+                >
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="material-icons text-3xl sm:text-4xl text-[#ffd700] group-hover:scale-110 transition-transform flex-shrink-0">
+                      {module.icon}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg sm:text-xl font-semibold mb-1 text-white">{module.title}</h3>
+                      <p className="text-xs sm:text-sm text-[#b0b0b0]">{module.description}</p>
                     </div>
                   </div>
-                ))}
-                <div className="absolute bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                  {announcements.map((_, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => setCurrentSlide(idx)}
-                      className={`h-2 sm:h-3 rounded-full cursor-pointer transition-all ${
-                        idx === currentSlide ? "w-6 sm:w-8 bg-[#ffd700]" : "w-2 sm:w-3 bg-white/50 hover:bg-white/70"
-                      }`}
-                    />
-                  ))}
+                  <div className="flex flex-wrap gap-2">
+                    {module.features.map((feature, idx) => (
+                      <span
+                        key={idx}
+                        className="text-xs px-2 py-1 rounded-full bg-[#ffd700]/10 text-[#ffd700] border border-[#ffd700]/30"
+                      >
+                        {feature}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </section>
-          )}
+              ))}
+            </div>
+          </section>
 
-          {/* Service Modules */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {modules.map((module) => (
-              <div
-                key={module.id}
-                onClick={() => navigateToModule(module.id)}
-                className="bg-[rgba(45,45,45,0.9)] rounded-2xl p-5 sm:p-6 text-center border-2 border-[rgba(255,215,0,0.2)] hover:border-[#ffd700] hover:-translate-y-2 hover:shadow-[0_15px_40px_rgba(255,215,0,0.3)] transition-all cursor-pointer group"
-              >
-                <div className="material-icons text-4xl sm:text-5xl text-[#ffd700] mb-3 sm:mb-4 group-hover:scale-110 transition-transform">
-                  {module.icon}
-                </div>
-                <h3 className="text-lg sm:text-xl font-semibold mb-2 text-white">{module.title}</h3>
-                <p className="text-sm sm:text-base text-[#b0b0b0]">{module.description}</p>
+          {/* Benefits Section */}
+          <section className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-6 sm:p-8 mb-12">
+            <h2 className="text-2xl font-bold text-[#ffd700] mb-6 text-center">為什麼選擇我們？</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="material-icons text-5xl text-[#ffd700] mx-auto mb-3">lock</div>
+                <h3 className="text-lg font-semibold text-white mb-2">安全可靠</h3>
+                <p className="text-[#b0b0b0] text-sm">採用最新的加密技術，確保您的資料安全無虞</p>
               </div>
-            ))}
+              <div className="text-center">
+                <div className="material-icons text-5xl text-[#ffd700] mx-auto mb-3">speed</div>
+                <h3 className="text-lg font-semibold text-white mb-2">快速高效</h3>
+                <p className="text-[#b0b0b0] text-sm">簡潔的界面設計，讓您快速找到所需功能</p>
+              </div>
+              <div className="text-center">
+                <div className="material-icons text-5xl text-[#ffd700] mx-auto mb-3">support_agent</div>
+                <h3 className="text-lg font-semibold text-white mb-2">24/7 支持</h3>
+                <p className="text-[#b0b0b0] text-sm">隨時可用的 AI 助手，幫助您解答問題</p>
+              </div>
+            </div>
+          </section>
+
+          {/* Call to Action */}
+          <section className="text-center py-12">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">準備好開始了嗎？</h2>
+            <p className="text-[#b0b0b0] mb-6 max-w-2xl mx-auto">加入社區管理系統，享受更便利的社區生活</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                href="/auth?mode=register"
+                className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-[#ffd700] text-[#1a1a1a] rounded-lg font-semibold hover:bg-[#ffed4e] transition-all"
+              >
+                <span className="material-icons">person_add</span>
+                立即註冊
+              </Link>
+              <Link
+                href="/auth?mode=login"
+                className="inline-flex items-center justify-center gap-2 px-8 py-3 border-2 border-[#ffd700] text-white rounded-lg font-semibold hover:bg-[#ffd700] hover:text-[#1a1a1a] transition-all"
+              >
+                <span className="material-icons">login</span>
+                登入帳號
+              </Link>
+            </div>
           </section>
         </div>
       </main>

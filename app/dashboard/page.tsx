@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from "@/lib/supabase"
 import { canAccessSection, type UserRole } from "@/lib/permissions"
-import { AnnouncementDetails } from "@/components/announcement-details" // Updated import path and use named import
+import { AnnouncementDetails } from "@/components/announcement-details" 
 import { PackageManagement } from "@/components/package-management"
 import { VisitorManagement } from "@/components/visitor-management"
 
@@ -18,10 +18,10 @@ export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [announcements, setAnnouncements] = useState<any[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
-  const [announcementLikes, setAnnouncementLikes] = useState<any[]>([]) // Added announcement likes management
+  const [announcementLikes, setAnnouncementLikes] = useState<any[]>([]) 
 
-  const [votes, setVotes] = useState<any[]>([])
-  const [votedPolls, setVotedPolls] = useState<Set<string>>(new Set())
+  // --- CLEANUP: Removed 'votes' and 'votedPolls' state variables ---
+  
   const [maintenance, setMaintenance] = useState<any[]>([])
   const [packages, setPackages] = useState<any[]>([])
   const [visitors, setVisitors] = useState<any[]>([])
@@ -56,7 +56,7 @@ export default function DashboardPage() {
   const [aiInput, setAiInput] = useState("")
   const [aiMessages, setAiMessages] = useState<{ type: "user" | "bot"; text: string }[]>([])
   const [aiChatOpen, setAiChatOpen] = useState(false)
-  const [aiTab, setAiTab] = useState("functions") // "functions", "resident", "emergency"
+  const [aiTab, setAiTab] = useState("functions") 
 
   useEffect(() => {
     initAuth()
@@ -69,7 +69,7 @@ export default function DashboardPage() {
       }, 5000)
       return () => clearInterval(interval)
     }
-  }, [announcements.length]) // Only depend on announcements.length, not currentSlide
+  }, [announcements.length]) 
 
   useEffect(() => {
     if (currentUser) {
@@ -86,10 +86,8 @@ export default function DashboardPage() {
     }
     try {
       const user = JSON.parse(storedUser)
-      console.log("[v0] User role:", user.role)
-
+      
       if (user.role !== "resident" && user.role !== "committee") {
-        console.log("[v0] Non-resident user detected, redirecting to admin")
         router.push("/admin")
         return
       }
@@ -139,12 +137,10 @@ export default function DashboardPage() {
       if (data) {
         setAnnouncements(data)
       } else {
-        // Don't throw - silently fail and show empty announcements
         setAnnouncements([])
       }
     } catch (e) {
       console.error("[v0] Failed to load announcements:", e)
-      // Don't throw - silently fail and show empty announcements
       setAnnouncements([])
     }
   }
@@ -153,22 +149,7 @@ export default function DashboardPage() {
     const supabase = getSupabaseClient()
 
     switch (currentSection) {
-      case "votes":
-        const { data: votesData } = await supabase.from("votes").select("*")
-        if (votesData) setVotes(votesData)
-
-        if (currentUser?.id) {
-          const { data: userVotes } = await supabase
-            .from("vote_records")
-            .select("vote_id")
-            .eq("user_id", currentUser.id)
-
-          if (userVotes) {
-            const votedIds = new Set(userVotes.map((v) => v.vote_id))
-            setVotedPolls(votedIds)
-          }
-        }
-        break
+      // --- CLEANUP: Removed 'votes' case from database loading ---
       case "maintenance":
         const { data: maintenanceData } = await supabase
           .from("maintenance")
@@ -225,10 +206,8 @@ export default function DashboardPage() {
 
   const toggleSidebar = () => {
     if (window.innerWidth >= 1024) {
-      // Desktop: toggle collapse
       setSidebarCollapsed(!sidebarCollapsed)
     } else {
-      // Mobile: toggle open/close
       setSidebarOpen(!sidebarOpen)
       if (!sidebarOpen) {
         document.body.style.overflow = "hidden"
@@ -281,7 +260,7 @@ export default function DashboardPage() {
 
   const logout = () => {
     localStorage.removeItem("currentUser")
-    localStorage.removeItem("tenantConfig") // Clear tenant config on logout
+    localStorage.removeItem("tenantConfig") 
     router.push("/")
   }
 
@@ -312,21 +291,11 @@ export default function DashboardPage() {
       return "您可以在「公告」頁面查看最新公告。公告會以輪播方式顯示在首頁。"
     }
     if (msg.includes("投票")) {
-      return "您可以在「投票」頁面查看所有投票並參與投票。每個投票都會顯示即時統計結果。"
+      return "您可以在「投票」頁面查看所有投票並參與投票。"
     }
     if (msg.includes("維修") || msg.includes("報修")) {
-      return "您可以在「設備/維護」頁面提交維修申請，包括設備名稱、問題描述和照片。提交後可以在「我的維修申請」中查看處理狀態。"
+      return "您可以在「設備/維護」頁面提交維修申請。"
     }
-    if (msg.includes("包裹") || msg.includes("快遞")) {
-      return "您可以在「我的包裹」頁面查看包裹領取狀況，包括快遞公司、追蹤號碼和到達時間。"
-    }
-    if (msg.includes("管理費") || msg.includes("繳費")) {
-      return "您可以在「管理費/收支」頁面查看繳費狀況。如有問題請聯繫管委會。"
-    }
-    if (msg.includes("個人") || msg.includes("資料") || msg.includes("密碼")) {
-      return "您可以在「個人資料」頁面修改姓名、房號、電話、Email 和密碼。"
-    }
-
     return "抱歉,我還在學習中。您可以詢問關於公告、維修、繳費、包裹等問題，或使用「常用功能」快速導航。"
   }
 
@@ -402,7 +371,6 @@ export default function DashboardPage() {
         .select()
 
       if (error) {
-        console.error("[v0] Maintenance submission error:", error)
         throw error
       }
 
@@ -416,56 +384,11 @@ export default function DashboardPage() {
       await loadSectionData()
     } catch (e: any) {
       console.error("[v0] Maintenance submission failed:", e)
-      alert(`提交失敗：${e.message}\n\n請確認：\n1. 已設定環境變數\n2. 已正確登入\n3. 資料庫連接正常`)
+      alert(`提交失敗：${e.message}`)
     }
   }
 
-  const handleVote = async (voteId: string, optionIndex: number) => {
-    if (!currentUser || !currentUser.id) {
-      alert("請先登入")
-      return
-    }
-
-    if (votedPolls.has(voteId)) {
-      alert("您已經投過票了")
-      return
-    }
-
-    try {
-      const vote = votes.find((v) => v.id === voteId)
-      if (!vote) return
-
-      const options = Array.isArray(vote.options) ? vote.options : JSON.parse(vote.options || "[]")
-      const selectedOption = options[optionIndex]
-
-      const supabase = getSupabaseClient()
-      const { error } = await supabase.from("vote_records").insert([
-        {
-          vote_id: voteId,
-          user_id: currentUser.id,
-          user_name: currentUser.name || "未知",
-          option_selected: selectedOption,
-        },
-      ])
-
-      if (error) {
-        if (error.code === "23505") {
-          alert("您已經投過票了")
-          // Add to voted polls set
-          setVotedPolls((prev) => new Set(prev).add(voteId))
-          return
-        }
-        throw error
-      }
-
-      alert("投票成功！")
-      setVotedPolls((prev) => new Set(prev).add(voteId))
-      await loadSectionData()
-    } catch (e: any) {
-      console.error(e)
-      alert("投票失敗：" + e.message)
-    }
-  }
+  // --- CLEANUP: Removed handleVote function entirely ---
 
   const handleFacilityBooking = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -538,34 +461,24 @@ export default function DashboardPage() {
   }
 
   const toggleAnnouncementLike = async (announcementId: string) => {
-    if (!currentUser) {
-      console.log("[v0] User not logged in")
-      return
-    }
-
-    console.log("[v0] Toggling like for announcement:", announcementId)
+    if (!currentUser) return
 
     try {
       const likesStr = localStorage.getItem("announcement_likes")
       const likesObj = likesStr ? JSON.parse(likesStr) : {}
 
-      // Initialize announcement likes array if not exists
       if (!likesObj[announcementId]) {
         likesObj[announcementId] = []
       }
 
-      // Toggle like
       const userLikeIndex = likesObj[announcementId].indexOf(currentUser.id)
       if (userLikeIndex > -1) {
         likesObj[announcementId].splice(userLikeIndex, 1)
-        console.log("[v0] Removed like")
       } else {
         likesObj[announcementId].push(currentUser.id)
-        console.log("[v0] Added like")
       }
 
       localStorage.setItem("announcement_likes", JSON.stringify(likesObj))
-
       await loadAnnouncementLikes()
     } catch (e) {
       console.error("[v0] Error toggling like:", e)
@@ -574,7 +487,6 @@ export default function DashboardPage() {
 
   const loadAnnouncementLikes = async () => {
     try {
-      console.log("[v0] Loading announcement likes from localStorage...")
       const likesStr = localStorage.getItem("announcement_likes")
       const likesObj = likesStr ? JSON.parse(likesStr) : {}
 
@@ -592,19 +504,12 @@ export default function DashboardPage() {
       })
 
       setAnnouncementLikes(likesArray)
-      console.log("[v0] Loaded likes:", likesArray.length)
     } catch (e) {
       console.error("[v0] Error loading likes:", e)
     }
   }
 
   const handleAnnouncementSelect = (announcementId: string) => {
-    // This function is likely intended to navigate to a detailed view of the announcement.
-    // For now, we'll just log it or you can implement navigation here.
-    console.log("Navigating to announcement details for ID:", announcementId)
-    // Example navigation:
-    // router.push(`/announcements/${announcementId}`);
-    // Or set a state to show details within the current page
     setCurrentSection("announcements")
   }
 
@@ -619,12 +524,12 @@ export default function DashboardPage() {
     meetings: "會議/活動",
     emergencies: "緊急事件",
     facilities: "設施預約",
-    announcements: "公告詳情", // Added announcement section title
+    announcements: "公告詳情", 
   }
 
   const allNavItems = [
     { id: "dashboard", icon: "dashboard", label: "首頁" },
-    { id: "announcements", icon: "campaign", label: "公告詳情" }, // Added announcements
+    { id: "announcements", icon: "campaign", label: "公告詳情" },
     { id: "profile", icon: "person", label: "個人資料" },
     { id: "packages", icon: "inventory_2", label: "我的包裹" },
     { id: "votes", icon: "how_to_vote", label: "社區投票" },
@@ -642,12 +547,10 @@ export default function DashboardPage() {
 
   return (
     <div className="h-screen flex overflow-hidden bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d]">
-      {/* Sidebar Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99] lg:hidden" onClick={toggleSidebar} />
       )}
 
-      {/* Sidebar */}
       <nav
         className={`fixed lg:static top-0 left-0 h-screen bg-[rgba(45,45,45,0.95)] backdrop-blur-lg border-r-2 border-[#ffd700] overflow-y-auto overflow-x-hidden transition-all duration-300 z-[100] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
@@ -697,9 +600,7 @@ export default function DashboardPage() {
         </ul>
       </nav>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header */}
         <header className="flex justify-between items-center px-4 py-3 bg-[#1a1a1a] border-b border-[rgba(255,215,0,0.2)] flex-shrink-0">
           <div className="flex gap-2 items-center text-[#ffd700] font-bold">
             <button onClick={toggleSidebar} className="material-icons cursor-pointer">
@@ -708,7 +609,6 @@ export default function DashboardPage() {
             <span>{sectionTitles[currentSection]}</span>
           </div>
           <div className="flex gap-2">
-            {/* Add role switching button for committee members */}
             {currentUser?.role === "committee" && (
               <button
                 onClick={switchToAdmin}
@@ -728,12 +628,9 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
           {currentSection === "dashboard" && (
             <section>
-              {/* Announcement Carousel */}
-              {/* Update Announcement Carousel section */}
               {announcements.length > 0 && (
                 <section className="mb-6 sm:mb-8">
                   <div className="relative w-full h-[350px] sm:h-[600px] overflow-hidden rounded-2xl shadow-2xl group">
@@ -899,61 +796,47 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* ---------------------------------------------------------------------- */}
+          {/* NEW VOTING SECTION - SINGLE GOOGLE FORM STRATEGY (Option 1)          */}
+          {/* ---------------------------------------------------------------------- */}
           {currentSection === "votes" && (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">how_to_vote</span>
-                社區投票
-              </h2>
-              <div className="space-y-4">
-                {votes.length > 0 ? (
-                  votes.map((vote) => {
-                    const optionsArray = Array.isArray(vote.options) ? vote.options : JSON.parse(vote.options || "[]")
-                    const hasVoted = votedPolls.has(vote.id)
+            <div className="h-full flex flex-col items-center justify-center p-4">
+              <div className="bg-[rgba(45,45,45,0.95)] border-2 border-[#ffd700] rounded-2xl p-8 max-w-2xl w-full text-center shadow-[0_0_30px_rgba(255,215,0,0.1)]">
+                
+                <div className="w-20 h-20 bg-[#ffd700] rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                  <span className="material-icons text-[#222] text-4xl">how_to_vote</span>
+                </div>
 
-                    return (
-                      <div key={vote.id} className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-5">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h3 className="text-white font-bold text-lg mb-2">{vote.title}</h3>
-                            <p className="text-[#b0b0b0] mb-3">{vote.description}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            {hasVoted && (
-                              <div className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-bold">
-                                已投票
-                              </div>
-                            )}
-                            <div className="px-3 py-1 rounded-full bg-[#ffd700] text-[#222] text-sm font-bold">
-                              {vote.status === "active" ? "進行中" : "已結束"}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 flex-wrap mb-3">
-                          {optionsArray.map((option: string, idx: number) => (
-                            <button
-                              key={idx}
-                              onClick={() => handleVote(vote.id, idx)}
-                              disabled={vote.status !== "active" || hasVoted}
-                              className="px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg font-bold hover:brightness-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              投給 {option}
-                            </button>
-                          ))}
-                        </div>
-                        {hasVoted && <div className="text-green-400 text-sm mb-2">✓ 您已經投過票了，無法再次投票</div>}
-                        <div className="text-[#b0b0b0] text-sm">
-                          截止日期: {vote.ends_at ? new Date(vote.ends_at).toLocaleDateString("zh-TW") : "無期限"}
-                        </div>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="text-center text-[#b0b0b0] py-8">目前沒有進行中的投票</div>
-                )}
+                <h2 className="text-3xl font-bold text-white mb-4">
+                  社區事務中心
+                  <span className="block text-lg text-[#ffd700] mt-1">Community Action Center</span>
+                </h2>
+
+                <p className="text-[#b0b0b0] mb-8 leading-relaxed">
+                  您的意見對我們很重要！請點擊下方按鈕填寫本月的社區調查表。
+                  您可以針對設施升級進行投票，或在「許願池」中提出您對未來活動的建議。
+                  <br className="hidden sm:block"/>
+                  (Your voice matters! Please fill out the monthly survey below.)
+                </p>
+
+                <a 
+                  // 👇 PASTE YOUR GOOGLE FORM LINK HERE 👇
+                  href="https://forms.gle/A2SAQgnAB1W1eZ2n9" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-[#ffd700] text-[#222] rounded-xl font-bold text-lg hover:bg-[#ffed4e] hover:scale-105 transition-all shadow-lg"
+                >
+                  <span>前往投票與填寫建議</span>
+                  <span className="material-icons">open_in_new</span>
+                </a>
+
+                <div className="mt-6 text-xs text-[#666]">
+                  * 連結將開啟 Google 表單新視窗，請確認您已登入 Google 帳號以確保投票權益。
+                </div>
               </div>
             </div>
           )}
+          {/* ---------------------------------------------------------------------- */}
 
           {currentSection === "maintenance" && (
             <div className="space-y-4">
@@ -1369,7 +1252,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Add announcements section to main content */}
           {currentSection === "announcements" && (
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
               <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
@@ -1390,7 +1272,7 @@ export default function DashboardPage() {
             currentSection !== "meetings" &&
             currentSection !== "emergencies" &&
             currentSection !== "facilities" &&
-            currentSection !== "announcements" && ( // Added announcement to the condition
+            currentSection !== "announcements" && ( 
               <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
                 <h2 className="flex gap-2 items-center text-[#ffd700] mb-3 text-xl">
                   <span className="material-icons">{navItems.find((item) => item.id === currentSection)?.icon}</span>

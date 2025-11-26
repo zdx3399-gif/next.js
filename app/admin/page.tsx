@@ -1,12 +1,20 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from 'next/navigation'
-import { getSupabaseClient } from "@/lib/supabase"
-import { AnnouncementDetailsAdmin } from "@/components/announcement-details-admin" // Import the admin version
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
+import { VoteManagementAdmin } from "@/features/votes/ui/VoteManagementAdmin"
+import { PackageManagementAdmin } from "@/features/packages/ui/PackageManagementAdmin"
+import { MaintenanceManagementAdmin } from "@/features/maintenance/ui/MaintenanceManagementAdmin"
+import { FinanceManagementAdmin } from "@/features/finance/ui/FinanceManagementAdmin"
+import { VisitorManagementAdmin } from "@/features/visitors/ui/VisitorManagementAdmin"
+import { MeetingManagementAdmin } from "@/features/meetings/ui/MeetingManagementAdmin"
+import { EmergencyManagementAdmin } from "@/features/emergencies/ui/EmergencyManagementAdmin"
+import { FacilityManagementAdmin } from "@/features/facilities/ui/FacilityManagementAdmin"
+import { ResidentManagementAdmin } from "@/features/residents/ui/ResidentManagementAdmin"
+import { AnnouncementDetailsAdmin } from "@/features/announcements/ui/AnnouncementDetailsAdmin"
 import { canAccessSection, getRoleLabel, shouldUseBackend, type UserRole } from "@/lib/permissions"
-import { VisitorManagement } from "@/components/visitor-management"
-import { PackageManagement } from "@/components/package-management"
+import { ProfileDropdown } from "@/features/profile/ui/ProfileDropdown"
 import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
 import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCarousel"
 
@@ -23,25 +31,16 @@ type User = {
 type Section =
   | "dashboard"
   | "announcements"
+  | "announcement-details" // 新增 announcement-details 到 Section 類型
+  | "residents"
+  | "packages"
   | "votes"
   | "maintenance"
   | "finance"
-  | "residents"
-  | "packages"
   | "visitors"
   | "meetings"
   | "emergencies"
   | "facilities"
-  | "announcement-details" // Added new section for announcement details
-
-// Placeholder for AnnouncementDetails component (replace with actual component import if available)
-// const AnnouncementDetails = () => (
-//   <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-//     <h2 className="text-2xl font-bold text-[#ffd700] mb-4">公告詳情</h2>
-//     <p className="text-white">公告詳情內容將會在這裡顯示。</p>
-//     {/* Add logic to fetch and display announcement details */}
-//   </div>
-// )
 
 export default function AdminPage() {
   const router = useRouter()
@@ -51,7 +50,7 @@ export default function AdminPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
   const { announcements, loading: announcementsLoading, reload } = useAnnouncements(false)
-  
+
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [imageFiles, setImageFiles] = useState<{ [key: number]: File | null }>({})
@@ -76,39 +75,35 @@ export default function AdminPage() {
       localStorage.removeItem("currentUser")
       router.push("/auth")
     }
-
   }, [router])
 
-  
   useEffect(() => {
-    if (currentSection !== "dashboard") {
+    if (
+      currentSection !== "dashboard" &&
+      currentSection !== "votes" &&
+      currentSection !== "finance" &&
+      currentSection !== "maintenance" &&
+      currentSection !== "visitors" &&
+      currentSection !== "packages" &&
+      currentSection !== "meetings" &&
+      currentSection !== "emergencies" &&
+      currentSection !== "facilities"
+    ) {
       loadData()
     }
   }, [currentSection])
 
-
   const loadData = async () => {
     setLoading(true)
     try {
-      const tableMap: Record<Section, string> = {
-        dashboard: "",
+      const tableMap: Record<string, string> = {
         announcements: "announcements",
-        votes: "votes",
-        maintenance: "maintenance",
-        finance: "fees",
-        residents: "residents",
-        packages: "packages",
-        visitors: "visitors",
-        meetings: "meetings",
-        emergencies: "emergencies",
-        facilities: "facilities",
-        "announcement-details": "", // Should not be loaded directly via loadData
       }
 
       const table = tableMap[currentSection]
       if (!table) return
 
-      const supabase = getSupabaseClient()
+      const supabase = createClient()
       const { data: fetchedData, error } = await supabase
         .from(table)
         .select("*")
@@ -127,19 +122,8 @@ export default function AdminPage() {
 
   const handleSave = async (row: any, index: number) => {
     try {
-      const tableMap: Record<Section, string> = {
-        dashboard: "",
+      const tableMap: Record<string, string> = {
         announcements: "announcements",
-        votes: "votes",
-        maintenance: "maintenance",
-        finance: "fees",
-        residents: "residents",
-        packages: "packages",
-        visitors: "visitors",
-        meetings: "meetings",
-        emergencies: "emergencies",
-        facilities: "facilities",
-        "announcement-details": "", // Should not be saved directly
       }
 
       const table = tableMap[currentSection]
@@ -159,21 +143,7 @@ export default function AdminPage() {
         })
       }
 
-      if (currentSection === "facilities" && imageFiles[index]) {
-        const file = imageFiles[index]
-        const reader = new FileReader()
-
-        await new Promise((resolve, reject) => {
-          reader.onload = () => {
-            row.image_url = reader.result as string
-            resolve(null)
-          }
-          reader.onerror = reject
-          reader.readAsDataURL(file!)
-        })
-      }
-
-      const supabase = getSupabaseClient()
+      const supabase = createClient()
 
       if (row.id) {
         const { error } = await supabase.from(table).update(row).eq("id", row.id)
@@ -204,25 +174,14 @@ export default function AdminPage() {
     if (!confirm("確定要刪除此筆資料？")) return
 
     try {
-      const tableMap: Record<Section, string> = {
-        dashboard: "",
+      const tableMap: Record<string, string> = {
         announcements: "announcements",
-        votes: "votes",
-        maintenance: "maintenance",
-        finance: "fees",
-        residents: "residents",
-        packages: "packages",
-        visitors: "visitors",
-        meetings: "meetings",
-        emergencies: "emergencies",
-        facilities: "facilities",
-        "announcement-details": "", // Should not be deleted directly
       }
 
       const table = tableMap[currentSection]
       if (!table) return
 
-      const supabase = getSupabaseClient()
+      const supabase = createClient()
       const { error } = await supabase.from(table).delete().eq("id", id)
       if (error) throw error
 
@@ -235,79 +194,16 @@ export default function AdminPage() {
     }
   }
 
+  const defaultRowMap: Record<"announcements", () => Record<string, any>> = {
+    announcements: () => ({ title: "", content: "", image_url: "", author: currentUser?.name || "", status: "draft" }),
+  }
+
   const handleAdd = () => {
     const newRow: any = { id: null }
 
-    switch (currentSection) {
-      case "announcements":
-        newRow.title = ""
-        newRow.content = ""
-        newRow.image_url = ""
-        newRow.author = currentUser?.name || ""
-        newRow.status = "draft"
-        break
-      case "votes":
-        newRow.title = ""
-        newRow.description = ""
-        newRow.options = '["同意","反對","棄權"]'
-        newRow.author = currentUser?.name || ""
-        newRow.status = "active"
-        newRow.ends_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-        break
-      case "maintenance":
-        newRow.equipment = ""
-        newRow.item = ""
-        newRow.description = ""
-        newRow.photo_url = ""
-        newRow.reported_by = ""
-        newRow.status = "open"
-        newRow.handler = ""
-        newRow.assignee = ""
-        newRow.cost = 0
-        break
-      case "finance":
-        newRow.room = ""
-        newRow.amount = 0
-        newRow.due = ""
-        newRow.invoice = ""
-        newRow.paid = false
-        break
-      case "residents":
-        newRow.name = ""
-        newRow.room = ""
-        newRow.phone = ""
-        newRow.email = ""
-        newRow.role = "resident"
-        break
-      case "packages":
-        newRow.recipient_name = ""
-        newRow.recipient_room = ""
-        newRow.courier = ""
-        newRow.tracking_number = ""
-        newRow.arrived_at = new Date().toISOString()
-        newRow.status = "pending"
-        newRow.notes = ""
-        break
-      case "visitors":
-        newRow.name = ""
-        newRow.room = ""
-        newRow.in = new Date().toISOString()
-        newRow.out = null
-        break
-      case "meetings":
-        newRow.topic = ""
-        newRow.time = ""
-        newRow.location = ""
-        newRow.notes = ""
-        break
-      case "facilities":
-        newRow.name = ""
-        newRow.description = ""
-        newRow.location = ""
-        newRow.capacity = 1
-        newRow.available = true
-        newRow.image_url = ""
-        break
+    if (currentSection in defaultRowMap) {
+      const defaultRowGenerator = defaultRowMap[currentSection as keyof typeof defaultRowMap]
+      Object.assign(newRow, defaultRowGenerator())
     }
 
     setData([newRow, ...data])
@@ -321,36 +217,6 @@ export default function AdminPage() {
 
   const handleImageFileChange = (index: number, file: File | null) => {
     setImageFiles({ ...imageFiles, [index]: file })
-  }
-
-  const confirmEmergency = (type: string, note: string) => {
-    if (confirm(`確定要送出「${type}」事件嗎？`)) {
-      triggerEmergency(type, note)
-    }
-  }
-
-  const triggerEmergency = async (type: string, note: string) => {
-    if (!currentUser) {
-      alert("尚未登入")
-      return
-    }
-    try {
-      const supabase = getSupabaseClient()
-      const { error } = await supabase.from("emergencies").insert([
-        {
-          type: type,
-          note: note,
-          time: new Date().toISOString(),
-          by: currentUser.name || "未知",
-        },
-      ])
-
-      if (error) throw error
-      alert(`已送出緊急事件：${type}`)
-    } catch (e: any) {
-      console.error(e)
-      alert("送出失敗：" + e.message)
-    }
   }
 
   const logout = () => {
@@ -381,14 +247,13 @@ export default function AdminPage() {
   const allNavItems = [
     { id: "dashboard", icon: "dashboard", label: "首頁" },
     { id: "announcements", icon: "campaign", label: "公告管理" },
-    { id: "announcement-details", icon: "article", label: "公告詳情" },
     { id: "votes", icon: "how_to_vote", label: "投票管理" },
     { id: "maintenance", icon: "build", label: "設備/維護" },
     { id: "finance", icon: "account_balance", label: "管理費/收支" },
     { id: "residents", icon: "people", label: "住戶/人員" },
     { id: "packages", icon: "inventory_2", label: "包裹管理" },
     { id: "visitors", icon: "how_to_reg", label: "訪客管理" },
-    { id: "meetings", icon: "event", label: "會議/活動" },
+    { id: "meetings", icon: "event", label: "會議/活動" }, // Keep meetings here for navigation
     { id: "emergencies", icon: "emergency", label: "緊急事件" },
     { id: "facilities", icon: "meeting_room", label: "設施管理" },
   ]
@@ -411,17 +276,13 @@ export default function AdminPage() {
         } ${sidebarCollapsed ? "lg:w-0 lg:hidden" : "lg:w-[280px]"}`}
       >
         <div className={`p-8 pb-6 border-b border-[rgba(255,215,0,0.3)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-          <div className="text-[#ffd700] font-bold text-xl mb-4">社區管理系統</div>
+          <div className="text-[#ffd700] font-bold text-xl">社區管理系統</div>
           {currentUser && (
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#ffd700] text-[#222] flex items-center justify-center font-bold text-lg">
-                {currentUser.name.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <div className="text-white font-medium">{currentUser.name}</div>
-                <div className="text-[#b0b0b0] text-sm">{getRoleLabel(currentUser.role as UserRole)}</div>
-              </div>
-            </div>
+            <ProfileDropdown
+              currentUser={currentUser}
+              onUpdate={setCurrentUser}
+              getRoleLabel={(role) => getRoleLabel(role as UserRole)}
+            />
           )}
         </div>
 
@@ -463,7 +324,7 @@ export default function AdminPage() {
               {navItems.find((item) => item.id === currentSection)?.label || "首頁"}
             </span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             {currentUser?.role === "committee" && (
               <button
                 onClick={switchToResident}
@@ -496,10 +357,7 @@ export default function AdminPage() {
           ) : currentSection === "dashboard" ? (
             <div className="space-y-4">
               {announcements.length > 0 && (
-                <AnnouncementCarousel 
-                  announcements={announcements} 
-                  loading={announcementsLoading}
-                />
+                <AnnouncementCarousel announcements={announcements} loading={announcementsLoading} />
               )}
 
               <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-4 sm:p-6">
@@ -512,11 +370,10 @@ export default function AdminPage() {
                     { icon: "local_hospital", title: "救護車 119", type: "救護車119", note: "醫療緊急狀況" },
                     { icon: "report_problem", title: "報警 110", type: "報警110", note: "治安緊急狀況" },
                     { icon: "favorite", title: "AED", type: "AED", note: "需要AED急救設備" },
-                    { icon: "warning", title: "陌生人員闖入", type: "可疑人員", note: "陌生人員闖入警告" },
+                    { icon: "warning", title: "陌生人員闘入", type: "可疑人員", note: "陌生人員闖入警告" },
                   ].map((emergency) => (
                     <button
                       key={emergency.type}
-                      onClick={() => confirmEmergency(emergency.type, emergency.note)}
                       className="bg-[rgba(45,45,45,0.85)] border-2 border-[#f44336] rounded-xl p-2 text-center cursor-pointer font-bold text-[#f44336] hover:bg-[rgba(244,67,54,0.2)] transition-all"
                     >
                       <div className="material-icons text-2xl mb-1">{emergency.icon}</div>
@@ -532,7 +389,7 @@ export default function AdminPage() {
                 <span className="material-icons">how_to_reg</span>
                 訪客管理 (警衛)
               </h2>
-              <VisitorManagement currentUser={currentUser} isAdmin={true} />
+              <VisitorManagementAdmin currentUser={currentUser} />
             </div>
           ) : currentSection === "packages" ? (
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
@@ -540,25 +397,73 @@ export default function AdminPage() {
                 <span className="material-icons">inventory_2</span>
                 包裹管理 (警衛)
               </h2>
-              <PackageManagement currentUser={currentUser} isAdmin={true} />
+              <PackageManagementAdmin currentUser={currentUser} />
+            </div>
+          ) : currentSection === "finance" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">account_balance</span>
+                管理費/收支
+              </h2>
+              <FinanceManagementAdmin />
+            </div>
+          ) : currentSection === "maintenance" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">build</span>
+                設備/維護管理
+              </h2>
+              <MaintenanceManagementAdmin />
+            </div>
+          ) : currentSection === "votes" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">how_to_vote</span>
+                投票管理
+              </h2>
+              <VoteManagementAdmin currentUserName={currentUser?.name} />
             </div>
           ) : currentSection === "announcement-details" ? (
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
               <AnnouncementDetailsAdmin onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
             </div>
+          ) : currentSection === "meetings" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">event</span>
+                會議/活動管理
+              </h2>
+              <MeetingManagementAdmin />
+            </div>
+          ) : currentSection === "emergencies" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">emergency</span>
+                緊急事件管理
+              </h2>
+              <EmergencyManagementAdmin currentUserName={currentUser?.name} />
+            </div>
+          ) : currentSection === "facilities" ? (
+            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
+              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+                <span className="material-icons">meeting_room</span>
+                設施管理
+              </h2>
+              <FacilityManagementAdmin />
+            </div>
+          ) : currentSection === "residents" ? (
+            <ResidentManagementAdmin />
           ) : (
             <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
               <div className="flex gap-2 mb-4 flex-wrap">
-                {currentSection !== "emergencies" && (
-                  <button
-                    onClick={handleAdd}
-                    className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-[#ffd700] text-[#1a1a1a] rounded-lg hover:bg-[#ffed4e] transition-all text-xs sm:text-sm font-semibold"
-                  >
-                    <span className="material-icons text-base sm:text-xl">add</span>
-                    <span className="hidden sm:inline">新增一筆</span>
-                    <span className="sm:hidden">新增</span>
-                  </button>
-                )}
+                <button
+                  onClick={handleAdd}
+                  className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-[#ffd700] text-[#1a1a1a] rounded-lg hover:bg-[#ffed4e] transition-all text-xs sm:text-sm font-semibold"
+                >
+                  <span className="material-icons text-base sm:text-xl">add</span>
+                  <span className="hidden sm:inline">新增一筆</span>
+                  <span className="sm:hidden">新增</span>
+                </button>
                 <button
                   onClick={loadData}
                   className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 border-2 border-[#ffd700] text-[#ffd700] rounded-lg hover:bg-[#ffd700] hover:text-[#1a1a1a] transition-all text-xs sm:text-sm font-semibold"
@@ -577,17 +482,6 @@ export default function AdminPage() {
                     <table className="w-full border-collapse min-w-[800px]">
                       <thead>
                         <tr className="bg-white/5">
-                          {currentSection === "facilities" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10"> 設施名稱</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">說明</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">位置</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">容納人數</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">圖片</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">狀態</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-                            </>
-                          )}
                           {currentSection === "announcements" && (
                             <>
                               <th className="p-3 text-left text-[#ffd700] border-b border-white/10">標題</th>
@@ -598,178 +492,12 @@ export default function AdminPage() {
                               <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
                             </>
                           )}
-                          {currentSection === "votes" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">標題</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">說明</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">選項(JSON)</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">發起人</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">截止時間</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">狀態</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-                            </>
-                          )}
-                          {currentSection === "maintenance" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">設備</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">項目</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">描述</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">報修人</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">照片</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">狀態</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">處理人</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">費用</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-                            </>
-                          )}
-                          {currentSection === "finance" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">房號</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">金額</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">到期日</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">發票</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">已繳</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-                            </>
-                          )}
-                          {currentSection === "residents" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">姓名</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">房號</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">電話</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">Email</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">身分</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-                            </>
-                          )}
-                          {currentSection === "packages" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">收件人</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">房號</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">快遞公司</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">追蹤號碼</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">到達時間</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">狀態</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-                            </>
-                          )}
-                          {currentSection === "visitors" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">姓名</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">房號</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">進場時間</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">離場時間</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-                            </>
-                          )}
-                          {currentSection === "meetings" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">主題</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">時間</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">地點</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">備註</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-                            </>
-                          )}
-                          {currentSection === "emergencies" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">類型</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">時間</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">使用者</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">紀錄</th>
-                            </>
-                          )}
                         </tr>
                       </thead>
                       <tbody>
                         {data.length > 0 ? (
                           data.map((row, index) => (
                             <tr key={row.id || index} className="hover:bg-white/5 transition-colors">
-                              {currentSection === "facilities" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.name || ""}
-                                      onChange={(e) => updateRow(index, "name", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <textarea
-                                      value={row.description || ""}
-                                      onChange={(e) => updateRow(index, "description", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.location || ""}
-                                      onChange={(e) => updateRow(index, "location", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="number"
-                                      value={row.capacity || 1}
-                                      onChange={(e) => updateRow(index, "capacity", Number(e.target.value))}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="space-y-2">
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => handleImageFileChange(index, e.target.files?.[0] || null)}
-                                        className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white text-sm outline-none focus:border-[#ffd700]"
-                                      />
-                                      {imageFiles[index] && (
-                                        <div className="text-green-400 text-xs">已選擇: {imageFiles[index]!.name}</div>
-                                      )}
-                                      {row.image_url && !imageFiles[index] && (
-                                        <div className="text-[#b0b0b0] text-xs truncate">
-                                          目前: {row.image_url.substring(0, 30)}...
-                                        </div>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <select
-                                      value={String(row.available)}
-                                      onChange={(e) => updateRow(index, "available", e.target.value === "true")}
-                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
-                                    >
-                                      <option value="true" className="bg-[#2a2a2a] text-white">
-                                        可用
-                                      </option>
-                                      <option value="false" className="bg-[#2a2a2a] text-white">
-                                        不可用
-                                      </option>
-                                    </select>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                                      >
-                                        儲存
-                                      </button>
-                                      {row.id && (
-                                        <button
-                                          onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                                        >
-                                          刪除
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
                               {currentSection === "announcements" && (
                                 <>
                                   <td className="p-3 border-b border-white/5">
@@ -817,14 +545,10 @@ export default function AdminPage() {
                                     <select
                                       value={row.status || "draft"}
                                       onChange={(e) => updateRow(index, "status", e.target.value)}
-                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
+                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
                                     >
-                                      <option value="draft" className="bg-[#2a2a2a] text-white">
-                                        草稿
-                                      </option>
-                                      <option value="published" className="bg-[#2a2a2a] text-white">
-                                        已發布
-                                      </option>
+                                      <option value="draft">草稿</option>
+                                      <option value="published">已發布</option>
                                     </select>
                                   </td>
                                   <td className="p-3 border-b border-white/5">
@@ -845,528 +569,14 @@ export default function AdminPage() {
                                       )}
                                     </div>
                                   </td>
-                                </>
-                              )}
-                              {currentSection === "votes" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.title || ""}
-                                      onChange={(e) => updateRow(index, "title", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <textarea
-                                      value={row.description || ""}
-                                      onChange={(e) => updateRow(index, "description", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <textarea
-                                      value={
-                                        typeof row.options === "string" ? row.options : JSON.stringify(row.options)
-                                      }
-                                      onChange={(e) => updateRow(index, "options", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.author || ""}
-                                      onChange={(e) => updateRow(index, "author", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="date"
-                                      value={row.ends_at ? row.ends_at.split("T")[0] : ""}
-                                      onChange={(e) => updateRow(index, "ends_at", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <select
-                                      value={row.status || "active"}
-                                      onChange={(e) => updateRow(index, "status", e.target.value)}
-                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
-                                    >
-                                      <option value="active" className="bg-[#2a2a2a] text-white">
-                                        進行中
-                                      </option>
-                                      <option value="closed" className="bg-[#2a2a2a] text-white">
-                                        已結束
-                                      </option>
-                                    </select>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                                      >
-                                        儲存
-                                      </button>
-                                      {row.id && (
-                                        <button
-                                          onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                                        >
-                                          刪除
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                              {currentSection === "maintenance" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.equipment || ""}
-                                      onChange={(e) => updateRow(index, "equipment", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.item || ""}
-                                      onChange={(e) => updateRow(index, "item", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <textarea
-                                      value={row.description || ""}
-                                      onChange={(e) => updateRow(index, "description", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.reported_by || ""}
-                                      onChange={(e) => updateRow(index, "reported_by", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    {row.photo_url ? (
-                                      <img
-                                        src={row.photo_url || "/placeholder.svg"}
-                                        alt="維修照片"
-                                        className="max-w-[100px] h-auto rounded cursor-pointer hover:scale-150 transition-transform"
-                                        onClick={() => window.open(row.photo_url, "_blank")}
-                                      />
-                                    ) : (
-                                      <span className="text-[#b0b0b0] text-sm">無照片</span>
-                                    )}
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <select
-                                      value={row.status || "open"}
-                                      onChange={(e) => updateRow(index, "status", e.target.value)}
-                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
-                                    >
-                                      <option value="open" className="bg-[#2a2a2a] text-white">
-                                        待處理
-                                      </option>
-                                      <option value="progress" className="bg-[#2a2a2a] text-white">
-                                        處理中
-                                      </option>
-                                      <option value="closed" className="bg-[#2a2a2a] text-white">
-                                        已完成
-                                      </option>
-                                    </select>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.handler || ""}
-                                      onChange={(e) => updateRow(index, "handler", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="number"
-                                      value={row.cost || 0}
-                                      onChange={(e) => updateRow(index, "cost", Number(e.target.value))}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                                      >
-                                        儲存
-                                      </button>
-                                      {row.id && (
-                                        <button
-                                          onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                                        >
-                                          刪除
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                              {currentSection === "finance" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.room || ""}
-                                      onChange={(e) => updateRow(index, "room", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="number"
-                                      value={row.amount || 0}
-                                      onChange={(e) => updateRow(index, "amount", Number(e.target.value))}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="date"
-                                      value={row.due ? row.due.split("T")[0] : ""}
-                                      onChange={(e) => updateRow(index, "due", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.invoice || ""}
-                                      onChange={(e) => updateRow(index, "invoice", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <select
-                                      value={String(row.paid)}
-                                      onChange={(e) => updateRow(index, "paid", e.target.value === "true")}
-                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
-                                    >
-                                      <option value="false" className="bg-[#2a2a2a] text-white">
-                                        未繳
-                                      </option>
-                                      <option value="true" className="bg-[#2a2a2a] text-white">
-                                        已繳
-                                      </option>
-                                    </select>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                                      >
-                                        儲存
-                                      </button>
-                                      {row.id && (
-                                        <button
-                                          onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                                        >
-                                          刪除
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                              {currentSection === "residents" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.name || ""}
-                                      onChange={(e) => updateRow(index, "name", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.room || ""}
-                                      onChange={(e) => updateRow(index, "room", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="tel"
-                                      value={row.phone || ""}
-                                      onChange={(e) => updateRow(index, "phone", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="email"
-                                      value={row.email || ""}
-                                      onChange={(e) => updateRow(index, "email", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <select
-                                      value={row.role || "resident"}
-                                      onChange={(e) => updateRow(index, "role", e.target.value)}
-                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
-                                    >
-                                      <option value="resident" className="bg-[#2a2a2a] text-white">
-                                        住戶
-                                      </option>
-                                      <option value="committee" className="bg-[#2a2a2a] text-white">
-                                        委員會
-                                      </option>
-                                      <option value="vendor" className="bg-[#2a2a2a] text-white">
-                                        廠商
-                                      </option>
-                                      <option value="admin" className="bg-[#2a2a2a] text-white">
-                                        管理員
-                                      </option>
-                                    </select>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                                      >
-                                        儲存
-                                      </button>
-                                      {row.id && (
-                                        <button
-                                          onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                                        >
-                                          刪除
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                              {currentSection === "packages" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.recipient_name || ""}
-                                      onChange={(e) => updateRow(index, "recipient_name", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.recipient_room || ""}
-                                      onChange={(e) => updateRow(index, "recipient_room", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.courier || ""}
-                                      onChange={(e) => updateRow(index, "courier", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.tracking_number || ""}
-                                      onChange={(e) => updateRow(index, "tracking_number", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="datetime-local"
-                                      value={row.arrived_at ? row.arrived_at.slice(0, 16) : ""}
-                                      onChange={(e) => updateRow(index, "arrived_at", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <select
-                                      value={row.status || "pending"}
-                                      onChange={(e) => updateRow(index, "status", e.target.value)}
-                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-1"
-                                    >
-                                      <option value="pending" className="bg-[#2a2a2a] text-white">
-                                        待領取
-                                      </option>
-                                      <option value="picked-up" className="bg-[#2a2a2a] text-white">
-                                        已領取
-                                      </option>
-                                    </select>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                                      >
-                                        儲存
-                                      </button>
-                                      {row.id && (
-                                        <button
-                                          onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                                        >
-                                          刪除
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                              {currentSection === "visitors" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.name || ""}
-                                      onChange={(e) => updateRow(index, "name", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.room || ""}
-                                      onChange={(e) => updateRow(index, "room", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="text-[#b0b0b0] text-sm">
-                                      {row.in ? new Date(row.in).toLocaleString("zh-TW") : "-"}
-                                    </div>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="text-[#b0b0b0] text-sm">
-                                      {row.out ? new Date(row.out).toLocaleString("zh-TW") : "-"}
-                                    </div>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                                      >
-                                        儲存
-                                      </button>
-                                      {row.id && !row.out && (
-                                        <button
-                                          onClick={async () => {
-                                            updateRow(index, "out", new Date().toISOString())
-                                            await handleSave({ ...row, out: new Date().toISOString() }, index)
-                                          }}
-                                          className="px-3 py-1 bg-[#ff9800] text-white rounded hover:brightness-90 transition-all text-sm font-semibold"
-                                        >
-                                          簽出
-                                        </button>
-                                      )}
-                                      {row.id && (
-                                        <button
-                                          onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                                        >
-                                          刪除
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                              {currentSection === "meetings" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.topic || ""}
-                                      onChange={(e) => updateRow(index, "topic", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="datetime-local"
-                                      value={row.time ? row.time.slice(0, 16) : ""}
-                                      onChange={(e) => updateRow(index, "time", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.location || ""}
-                                      onChange={(e) => updateRow(index, "location", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <textarea
-                                      value={row.notes || ""}
-                                      onChange={(e) => updateRow(index, "notes", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                                      >
-                                        儲存
-                                      </button>
-                                      {row.id && (
-                                        <button
-                                          onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                                        >
-                                          刪除
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                              {currentSection === "emergencies" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5 text-[#f44336]">{row.type}</td>
-                                  <td className="p-3 border-b border-white/5 text-[#b0b0b0]">
-                                    {new Date(row.time).toLocaleString("zh-TW")}
-                                  </td>
-                                  <td className="p-3 border-b border-white/5 text-white">{row.by}</td>
-                                  <td className="p-3 border-b border-white/5 text-[#b0b0b0]">{row.note}</td>
                                 </>
                               )}
                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={20} className="p-8 text-center text-[#b0b0b0]">
-                              目前無資料
+                            <td colSpan={10} className="p-8 text-center text-[#b0b0b0]">
+                              目前沒有資料
                             </td>
                           </tr>
                         )}

@@ -1,31 +1,18 @@
 "use client"
-import { useState, useEffect } from "react"
-import { getSupabaseClient } from "@/lib/supabase"
 
-interface Package {
-  id: string
-  courier: string
-  recipient_name: string
-  recipient_room: string
-  tracking_number?: string
-  arrived_at: string
-  picked_up_at?: string
-  picked_up_by?: string
-  status: "pending" | "picked_up"
-}
+import { useState } from "react"
+import { usePackages } from "../hooks/usePackages"
+import type { Package } from "../api/packages"
 
-interface PackageManagementProps {
-  userRoom?: string
+interface PackageManagementAdminProps {
   currentUser?: any
-  isAdmin?: boolean
 }
 
-export function PackageManagement({ userRoom, currentUser, isAdmin = false }: PackageManagementProps) {
-  const [packages, setPackages] = useState<Package[]>([])
-  const [pendingPackages, setPendingPackages] = useState<Package[]>([])
-  const [pickedUpPackages, setPickedUpPackages] = useState<Package[]>([])
+export function PackageManagementAdmin({ currentUser }: PackageManagementAdminProps) {
+  const { pendingPackages, pickedUpPackages, loading, handleAddPackage, handleMarkAsPickedUp } = usePackages({
+    isAdmin: true,
+  })
   const [searchTerm, setSearchTerm] = useState("")
-  const [loading, setLoading] = useState(false)
   const [pickerNames, setPickerNames] = useState<{ [key: string]: string }>({})
   const [showAddForm, setShowAddForm] = useState(false)
   const [newPackage, setNewPackage] = useState({
@@ -36,133 +23,48 @@ export function PackageManagement({ userRoom, currentUser, isAdmin = false }: Pa
     arrived_at: new Date().toISOString().slice(0, 16),
   })
 
-  useEffect(() => {
-    loadPackages()
-  }, [userRoom, currentUser, isAdmin])
-
-  useEffect(() => {
-    filterPackages()
-  }, [packages, searchTerm])
-
-  const loadPackages = async () => {
-    if (!userRoom && !currentUser?.id && !isAdmin) return
-
-    setLoading(true)
-    try {
-      const supabase = getSupabaseClient()
-      let query = supabase.from("packages").select("*")
-
-      if (userRoom && !isAdmin) {
-        query = query.eq("recipient_room", userRoom)
-      }
-
-      const { data, error } = await query.order("arrived_at", { ascending: false })
-
-      if (error) {
-        console.error("[v0] Error loading packages:", error)
-        setPackages([])
-      } else {
-        setPackages(data || [])
-      }
-    } catch (e) {
-      console.error("[v0] Failed to load packages:", e)
-      setPackages([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const filterPackages = () => {
-    let pending = packages.filter((pkg) => pkg.status === "pending")
-    let pickedUp = packages.filter((pkg) => pkg.status === "picked_up")
-
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase()
-      const matchesTerm = (pkg: Package) =>
+  const filterPackages = (pkgs: Package[]) => {
+    if (!searchTerm) return pkgs
+    const term = searchTerm.toLowerCase()
+    return pkgs.filter(
+      (pkg) =>
         pkg.courier.toLowerCase().includes(term) ||
         pkg.recipient_name.toLowerCase().includes(term) ||
-        pkg.tracking_number?.toLowerCase().includes(term)
-
-      pending = pending.filter(matchesTerm)
-      pickedUp = pickedUp.filter(matchesTerm)
-    }
-
-    setPendingPackages(pending)
-    setPickedUpPackages(pickedUp)
+        pkg.tracking_number?.toLowerCase().includes(term),
+    )
   }
 
-  const markAsPickedUp = async (packageId: string) => {
-    try {
-      let pickedUpBy = currentUser?.name || "未知"
+  const filteredPending = filterPackages(pendingPackages)
+  const filteredPickedUp = filterPackages(pickedUpPackages)
 
-      if (isAdmin) {
-        const pickerName = pickerNames[packageId]?.trim()
-        if (!pickerName) {
-          alert("請輸入領取人姓名")
-          return
-        }
-        pickedUpBy = pickerName
-      }
+  const onMarkAsPickedUp = async (packageId: string) => {
+    const pickerName = pickerNames[packageId]?.trim()
+    if (!pickerName) {
+      alert("請輸入領取人姓名")
+      return
+    }
 
-      const supabase = getSupabaseClient()
-      const pickedUpTime = new Date().toISOString()
-
-      const { error } = await supabase
-        .from("packages")
-        .update({
-          status: "picked_up",
-          picked_up_at: pickedUpTime,
-          picked_up_by: pickedUpBy,
-        })
-        .eq("id", packageId)
-
-      if (error) throw error
-
-      setPackages(
-        packages.map((pkg) =>
-          pkg.id === packageId
-            ? { ...pkg, status: "picked_up" as const, picked_up_at: pickedUpTime, picked_up_by: pickedUpBy }
-            : pkg,
-        ),
-      )
-
+    const success = await handleMarkAsPickedUp(packageId, pickerName)
+    if (success) {
       setPickerNames((prev) => {
         const newState = { ...prev }
         delete newState[packageId]
         return newState
       })
-
       alert("包裹已標記為已領取")
-    } catch (e: any) {
-      console.error("[v0] Error marking package as picked up:", e)
-      alert("標記失敗：" + e.message)
+    } else {
+      alert("標記失敗")
     }
   }
 
-  const handleAddPackage = async () => {
-    try {
-      if (!newPackage.courier || !newPackage.recipient_name || !newPackage.recipient_room) {
-        alert("請填寫快遞公司、收件人和房號")
-        return
-      }
+  const onAddPackage = async () => {
+    if (!newPackage.courier || !newPackage.recipient_name || !newPackage.recipient_room) {
+      alert("請填寫快遞公司、收件人和房號")
+      return
+    }
 
-      const supabase = getSupabaseClient()
-      const { data, error } = await supabase
-        .from("packages")
-        .insert([
-          {
-            courier: newPackage.courier,
-            recipient_name: newPackage.recipient_name,
-            recipient_room: newPackage.recipient_room,
-            tracking_number: newPackage.tracking_number || null,
-            arrived_at: newPackage.arrived_at,
-            status: "pending",
-          },
-        ])
-        .select()
-
-      if (error) throw error
-
+    const success = await handleAddPackage(newPackage)
+    if (success) {
       alert("包裹新增成功")
       setShowAddForm(false)
       setNewPackage({
@@ -172,28 +74,24 @@ export function PackageManagement({ userRoom, currentUser, isAdmin = false }: Pa
         tracking_number: "",
         arrived_at: new Date().toISOString().slice(0, 16),
       })
-      await loadPackages()
-    } catch (e: any) {
-      console.error("[v0] Error adding package:", e)
-      alert("新增失敗：" + e.message)
+    } else {
+      alert("新增失敗")
     }
   }
 
   return (
     <div className="space-y-6">
-      {isAdmin && (
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg hover:brightness-90 transition-all font-bold"
-          >
-            <span className="material-icons text-xl">add</span>
-            新增包裹
-          </button>
-        </div>
-      )}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="flex items-center gap-2 px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg hover:brightness-90 transition-all font-bold"
+        >
+          <span className="material-icons text-xl">add</span>
+          新增包裹
+        </button>
+      </div>
 
-      {isAdmin && showAddForm && (
+      {showAddForm && (
         <div className="bg-white/5 border-2 border-[#ffd700] rounded-xl p-5">
           <h3 className="flex gap-2 items-center text-[#ffd700] font-bold text-lg mb-4">
             <span className="material-icons">add_box</span>
@@ -252,7 +150,7 @@ export function PackageManagement({ userRoom, currentUser, isAdmin = false }: Pa
           </div>
           <div className="flex gap-2 mt-4">
             <button
-              onClick={handleAddPackage}
+              onClick={onAddPackage}
               className="px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg font-bold hover:brightness-90 transition-all"
             >
               確認新增
@@ -291,11 +189,11 @@ export function PackageManagement({ userRoom, currentUser, isAdmin = false }: Pa
           <div className="bg-white/5 border-2 border-yellow-500/30 rounded-xl p-5">
             <h3 className="flex gap-2 items-center text-yellow-400 font-bold text-lg mb-4">
               <span className="material-icons">schedule</span>
-              待領取 ({pendingPackages.length})
+              待領取 ({filteredPending.length})
             </h3>
             <div className="space-y-3">
-              {pendingPackages.length > 0 ? (
-                pendingPackages.map((pkg) => (
+              {filteredPending.length > 0 ? (
+                filteredPending.map((pkg) => (
                   <div
                     key={pkg.id}
                     className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
@@ -318,40 +216,30 @@ export function PackageManagement({ userRoom, currentUser, isAdmin = false }: Pa
                     <div className="text-[#b0b0b0] text-sm mb-3">
                       到達: {new Date(pkg.arrived_at).toLocaleString("zh-TW")}
                     </div>
-                    {isAdmin && (
-                      <div className="flex gap-2 items-end">
-                        <div className="flex-1">
-                          <label className="text-[#ffd700] text-sm font-bold mb-1 block">領取人姓名</label>
-                          <input
-                            type="text"
-                            placeholder="請輸入領取人姓名"
-                            value={pickerNames[pkg.id] || ""}
-                            onChange={(e) =>
-                              setPickerNames((prev) => ({
-                                ...prev,
-                                [pkg.id]: e.target.value,
-                              }))
-                            }
-                            className="w-full px-3 py-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white placeholder-white/40 outline-none focus:border-[#ffd700]"
-                          />
-                        </div>
-                        <button
-                          onClick={() => markAsPickedUp(pkg.id)}
-                          disabled={!pickerNames[pkg.id]?.trim()}
-                          className="px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg text-sm font-bold hover:brightness-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          標記已領
-                        </button>
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <label className="text-[#ffd700] text-sm font-bold mb-1 block">領取人姓名</label>
+                        <input
+                          type="text"
+                          placeholder="請輸入領取人姓名"
+                          value={pickerNames[pkg.id] || ""}
+                          onChange={(e) =>
+                            setPickerNames((prev) => ({
+                              ...prev,
+                              [pkg.id]: e.target.value,
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white placeholder-white/40 outline-none focus:border-[#ffd700]"
+                        />
                       </div>
-                    )}
-                    {!isAdmin && (
                       <button
-                        onClick={() => markAsPickedUp(pkg.id)}
-                        className="w-full px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg text-sm font-bold hover:brightness-90 transition-all"
+                        onClick={() => onMarkAsPickedUp(pkg.id)}
+                        disabled={!pickerNames[pkg.id]?.trim()}
+                        className="px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg text-sm font-bold hover:brightness-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         標記已領
                       </button>
-                    )}
+                    </div>
                   </div>
                 ))
               ) : (
@@ -365,11 +253,11 @@ export function PackageManagement({ userRoom, currentUser, isAdmin = false }: Pa
           <div className="bg-white/5 border-2 border-green-500/30 rounded-xl p-5">
             <h3 className="flex gap-2 items-center text-green-400 font-bold text-lg mb-4">
               <span className="material-icons">check_circle</span>
-              已領取 ({pickedUpPackages.length})
+              已領取 ({filteredPickedUp.length})
             </h3>
             <div className="space-y-3">
-              {pickedUpPackages.length > 0 ? (
-                pickedUpPackages.map((pkg) => (
+              {filteredPickedUp.length > 0 ? (
+                filteredPickedUp.map((pkg) => (
                   <div
                     key={pkg.id}
                     className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all opacity-75"

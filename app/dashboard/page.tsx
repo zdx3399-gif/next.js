@@ -209,14 +209,14 @@ export default function DashboardPage() {
     : []
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f0f23] text-white flex">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d]">
       {/* Sidebar Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99] lg:hidden" onClick={toggleSidebar} />
       )}
       {/* Sidebar */}
       <nav
-        className={`fixed lg:static top-0 left-0 h-screen bg-[#1a1a2e] backdrop-blur-lg border-r-2 border-[#ffd700] overflow-y-auto overflow-x-hidden transition-all duration-300 z-[100] ${
+        className={`fixed lg:static top-0 left-0 h-screen bg-[rgba(45,45,45,0.95)] border-r-2 border-[#ffd700] overflow-y-auto overflow-x-hidden transition-all duration-300 z-[100] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${sidebarCollapsed ? "lg:w-0 lg:hidden" : "lg:w-[280px]"}`}
       >
@@ -246,7 +246,7 @@ export default function DashboardPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="flex justify-between items-center px-4 py-3 bg-[#1a1a1a] border-b border-[rgba(255,215,0,0.2)] flex-shrink-0">
+        <header className="flex justify-between items-center px-4 py-3 border-b border-[rgba(255,215,0,0.2)] flex-shrink-0">
           <div className="flex gap-2 items-center text-[#ffd700] font-bold">
             <button onClick={toggleSidebar} className="material-icons cursor-pointer">
               menu

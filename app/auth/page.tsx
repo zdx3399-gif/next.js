@@ -88,6 +88,7 @@ export default function AuthPage() {
     const phone = formData.get("phone") as string
     const unit = formData.get("unit") as string
     const role = formData.get("role") as UserRole
+    const relationship = formData.get("relationship") as string
     const tenantId = formData.get("tenant") as TenantId
 
     if (!tenantId) {
@@ -97,7 +98,7 @@ export default function AuthPage() {
     }
 
     try {
-      const result = await registerUser(tenantId, email, password, name, phone, unit, role)
+      const result = await registerUser(tenantId, email, password, name, phone, unit, role, relationship)
 
       if (!result.success) {
         throw new Error(result.error)
@@ -272,6 +273,27 @@ export default function AuthPage() {
                 </option>
                 <option value="vendor" className="bg-[#2a2a2a] text-white">
                   廠商
+                </option>
+              </select>
+            </div>
+            <div className="mb-6">
+              <label className="block mb-2 font-medium text-white">與戶主的關係</label>
+              <select
+                name="relationship"
+                required
+                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
+              >
+                <option value="" className="bg-[#2a2a2a] text-[#b0b0b0]">
+                  請選擇關係
+                </option>
+                <option value="owner" className="bg-[#2a2a2a] text-white">
+                  戶主
+                </option>
+                <option value="household_member" className="bg-[#2a2a2a] text-white">
+                  住戶成員
+                </option>
+                <option value="tenant" className="bg-[#2a2a2a] text-white">
+                  租客
                 </option>
               </select>
             </div>

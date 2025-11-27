@@ -1,11 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { usePackages } from "../hooks/usePackages"
+import { fetchResidentsByRoom } from "@/features/residents/api/residents"
 import type { Package } from "../api/packages"
+import type { Resident } from "@/features/residents/api/residents"
 
 interface PackageManagementAdminProps {
   currentUser?: any
+}
+
+const getRelationshipLabel = (relationship?: string): string => {
+  const labels: Record<string, string> = {
+    owner: "戶主",
+    household_member: "住戶成員",
+    tenant: "租客",
+  }
+  return labels[relationship || "household_member"] || "住戶成員"
 }
 
 export function PackageManagementAdmin({ currentUser }: PackageManagementAdminProps) {
@@ -13,7 +24,8 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
     isAdmin: true,
   })
   const [searchTerm, setSearchTerm] = useState("")
-  const [pickerNames, setPickerNames] = useState<{ [key: string]: string }>({})
+  const [selectedPickers, setSelectedPickers] = useState<{ [key: string]: Resident | null }>({})
+  const [roomResidents, setRoomResidents] = useState<{ [room: string]: Resident[] }>({})
   const [showAddForm, setShowAddForm] = useState(false)
   const [newPackage, setNewPackage] = useState({
     courier: "",
@@ -22,6 +34,12 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
     tracking_number: "",
     arrived_at: new Date().toISOString().slice(0, 16),
   })
+
+  useEffect(() => {
+    pendingPackages.forEach((pkg) => {
+      loadRoomResidents(pkg.recipient_room)
+    })
+  }, [pendingPackages])
 
   const filterPackages = (pkgs: Package[]) => {
     if (!searchTerm) return pkgs
@@ -37,16 +55,25 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
   const filteredPending = filterPackages(pendingPackages)
   const filteredPickedUp = filterPackages(pickedUpPackages)
 
+  const loadRoomResidents = async (room: string) => {
+    if (roomResidents[room]) return // Already cached
+    const residents = await fetchResidentsByRoom(room)
+    setRoomResidents((prev) => ({
+      ...prev,
+      [room]: residents,
+    }))
+  }
+
   const onMarkAsPickedUp = async (packageId: string) => {
-    const pickerName = pickerNames[packageId]?.trim()
-    if (!pickerName) {
-      alert("請輸入領取人姓名")
+    const selectedResident = selectedPickers[packageId]
+    if (!selectedResident || !selectedResident.name) {
+      alert("請選擇領取人")
       return
     }
 
-    const success = await handleMarkAsPickedUp(packageId, pickerName)
+    const success = await handleMarkAsPickedUp(packageId, selectedResident.name)
     if (success) {
-      setPickerNames((prev) => {
+      setSelectedPickers((prev) => {
         const newState = { ...prev }
         delete newState[packageId]
         return newState
@@ -193,55 +220,66 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
             </h3>
             <div className="space-y-3">
               {filteredPending.length > 0 ? (
-                filteredPending.map((pkg) => (
-                  <div
-                    key={pkg.id}
-                    className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <div className="text-white font-bold text-lg">{pkg.courier}</div>
-                        <div className="text-[#b0b0b0] text-sm mt-1">收件人: {pkg.recipient_name}</div>
-                        <div className="text-[#b0b0b0] text-sm">房號: {pkg.recipient_room}</div>
-                        {pkg.tracking_number && (
-                          <div className="text-[#b0b0b0] text-sm">
-                            追蹤號: <code className="bg-black/30 px-2 py-1 rounded">{pkg.tracking_number}</code>
-                          </div>
-                        )}
+                filteredPending.map((pkg) => {
+                  const residents = roomResidents[pkg.recipient_room] || []
+                  const selectedResident = selectedPickers[pkg.id]
+
+                  return (
+                    <div
+                      key={pkg.id}
+                      className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                          <div className="text-white font-bold text-lg">{pkg.courier}</div>
+                          <div className="text-[#b0b0b0] text-sm mt-1">收件人: {pkg.recipient_name}</div>
+                          <div className="text-[#b0b0b0] text-sm">房號: {pkg.recipient_room}</div>
+                          {pkg.tracking_number && (
+                            <div className="text-[#b0b0b0] text-sm">
+                              追蹤號: <code className="bg-black/30 px-2 py-1 rounded">{pkg.tracking_number}</code>
+                            </div>
+                          )}
+                        </div>
+                        <div className="px-3 py-1 rounded-full text-sm font-bold whitespace-nowrap ml-2 bg-yellow-500/20 text-yellow-400">
+                          待領取
+                        </div>
                       </div>
-                      <div className="px-3 py-1 rounded-full text-sm font-bold whitespace-nowrap ml-2 bg-yellow-500/20 text-yellow-400">
-                        待領取
+                      <div className="text-[#b0b0b0] text-sm mb-3">
+                        到達: {new Date(pkg.arrived_at).toLocaleString("zh-TW")}
+                      </div>
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-[#ffd700] text-sm font-bold mb-1 block">領取人</label>
+                          <select
+                            value={selectedResident?.id || ""}
+                            onChange={(e) => {
+                              const resident = residents.find((r) => r.id === e.target.value)
+                              setSelectedPickers((prev) => ({
+                                ...prev,
+                                [pkg.id]: resident || null,
+                              }))
+                            }}
+                            className="w-full px-3 py-2 rounded-lg bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700] cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white"
+                          >
+                            <option value="">-- 選擇領取人 --</option>
+                            {residents.map((resident) => (
+                              <option key={resident.id} value={resident.id}>
+                                {resident.name} ({getRelationshipLabel(resident.relationship)})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          onClick={() => onMarkAsPickedUp(pkg.id)}
+                          disabled={!selectedResident}
+                          className="px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg text-sm font-bold hover:brightness-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          標記已領
+                        </button>
                       </div>
                     </div>
-                    <div className="text-[#b0b0b0] text-sm mb-3">
-                      到達: {new Date(pkg.arrived_at).toLocaleString("zh-TW")}
-                    </div>
-                    <div className="flex gap-2 items-end">
-                      <div className="flex-1">
-                        <label className="text-[#ffd700] text-sm font-bold mb-1 block">領取人姓名</label>
-                        <input
-                          type="text"
-                          placeholder="請輸入領取人姓名"
-                          value={pickerNames[pkg.id] || ""}
-                          onChange={(e) =>
-                            setPickerNames((prev) => ({
-                              ...prev,
-                              [pkg.id]: e.target.value,
-                            }))
-                          }
-                          className="w-full px-3 py-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white placeholder-white/40 outline-none focus:border-[#ffd700]"
-                        />
-                      </div>
-                      <button
-                        onClick={() => onMarkAsPickedUp(pkg.id)}
-                        disabled={!pickerNames[pkg.id]?.trim()}
-                        className="px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg text-sm font-bold hover:brightness-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        標記已領
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="text-center text-[#b0b0b0] py-6">
                   {searchTerm ? "沒有符合條件的待領取包裹" : "沒有待領取的包裹"}

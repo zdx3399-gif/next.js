@@ -246,6 +246,7 @@ export default function AdminPage() {
 
   const allNavItems = [
     { id: "dashboard", icon: "dashboard", label: "首頁" },
+    { id: "announcement-details", icon: "article", label: "公告詳情" },
     { id: "announcements", icon: "campaign", label: "公告管理" },
     { id: "votes", icon: "how_to_vote", label: "投票管理" },
     { id: "maintenance", icon: "build", label: "設備/維護" },
@@ -253,8 +254,8 @@ export default function AdminPage() {
     { id: "residents", icon: "people", label: "住戶/人員" },
     { id: "packages", icon: "inventory_2", label: "包裹管理" },
     { id: "visitors", icon: "how_to_reg", label: "訪客管理" },
-    { id: "meetings", icon: "event", label: "會議/活動" }, // Keep meetings here for navigation
-    { id: "emergencies", icon: "emergency", label: "緊急事件" },
+    { id: "meetings", icon: "event", label: "會議/活動管理" },
+    { id: "emergencies", icon: "emergency", label: "緊急事件管理" },
     { id: "facilities", icon: "meeting_room", label: "設施管理" },
   ]
 

@@ -25,6 +25,7 @@ export function useResidents() {
       phone: "",
       email: "",
       role: "resident",
+      relationship: "household_member", // Set default relationship
     }
     setResidents((prev) => [newResident, ...prev])
   }
@@ -50,6 +51,7 @@ export function useResidents() {
         phone: resident.phone,
         email: resident.email,
         role: resident.role,
+        relationship: resident.relationship, // Include relationship in creation
       })
       if (result) {
         await loadResidents()
@@ -57,7 +59,7 @@ export function useResidents() {
     }
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (confirm("確定要刪除此住戶嗎？")) {
       const success = await deleteResident(id)
       if (success) {

@@ -126,6 +126,7 @@ export async function registerUser(
   phone: string,
   room: string,
   role: UserRole,
+  relationship: string,
 ) {
   try {
     console.log(`[v0] Registering user in ${tenantId}:`, email)
@@ -142,6 +143,7 @@ export async function registerUser(
           phone,
           room,
           role,
+          relationship,
           status: "active",
         },
       ])

@@ -71,7 +71,7 @@ export function ProfileDropdown({ currentUser, onUpdate, getRoleLabel }: Profile
       ? createPortal(
           <div
             ref={dropdownRef}
-            className="w-[90vw] sm:w-[400px] max-w-[400px] shadow-2xl"
+            className="w-[90vw] sm:w-[400px] max-w-[400px] shadow-2xl bg-zinc-900"
             style={{
               position: "fixed",
               top: dropdownPosition.top,

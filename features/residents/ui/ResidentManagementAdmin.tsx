@@ -3,6 +3,15 @@
 import { useResidents } from "../hooks/useResidents"
 import type { Resident } from "../api/residents"
 
+const getRelationshipLabel = (relationship?: string): string => {
+  const labels: Record<string, string> = {
+    owner: "戶主",
+    household_member: "住戶成員",
+    tenant: "租客",
+  }
+  return labels[relationship || "household_member"] || "住戶成員"
+}
+
 export function ResidentManagementAdmin() {
   const { residents, loading, addNewRow, updateRow, handleSave, handleDelete } = useResidents()
 
@@ -39,6 +48,7 @@ export function ResidentManagementAdmin() {
               <th className="p-3 text-left text-[#ffd700] border-b border-white/10">電話</th>
               <th className="p-3 text-left text-[#ffd700] border-b border-white/10">Email</th>
               <th className="p-3 text-left text-[#ffd700] border-b border-white/10">身分</th>
+              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">關係</th>
               <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
             </tr>
           </thead>
@@ -91,6 +101,17 @@ export function ResidentManagementAdmin() {
                     </select>
                   </td>
                   <td className="p-3 border-b border-white/5">
+                    <select
+                      value={row.relationship || "household_member"}
+                      onChange={(e) => updateRow(index, "relationship", e.target.value)}
+                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white"
+                    >
+                      <option value="owner">戶主</option>
+                      <option value="household_member">住戶成員</option>
+                      <option value="tenant">租客</option>
+                    </select>
+                  </td>
+                  <td className="p-3 border-b border-white/5">
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleSave(row, index)}
@@ -112,7 +133,7 @@ export function ResidentManagementAdmin() {
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-[#b0b0b0]">
+                <td colSpan={7} className="p-8 text-center text-[#b0b0b0]">
                   目前沒有資料
                 </td>
               </tr>

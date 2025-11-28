@@ -5,10 +5,13 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from "@/lib/supabase"
-import { canAccessSection, type UserRole } from "@/lib/permissions"
+import { canAccessSection, type UserRole, getRoleLabel } from "@/lib/permissions"
 import { AnnouncementDetails } from "@/components/announcement-details" 
 import { PackageManagement } from "@/components/package-management"
 import { VisitorManagement } from "@/components/visitor-management"
+
+// You can remove AnnouncementCarousel import if you don't have it, or keep it if you do
+// import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCarousel" 
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -19,8 +22,6 @@ export default function DashboardPage() {
   const [announcements, setAnnouncements] = useState<any[]>([])
   const [currentSlide, setCurrentSlide] = useState(0)
   const [announcementLikes, setAnnouncementLikes] = useState<any[]>([]) 
-
-  // --- CLEANUP: Removed 'votes' and 'votedPolls' state variables ---
   
   const [maintenance, setMaintenance] = useState<any[]>([])
   const [packages, setPackages] = useState<any[]>([])
@@ -93,6 +94,7 @@ export default function DashboardPage() {
       }
 
       const supabase = getSupabaseClient()
+      // Fetching updated profile to get the Fee info
       const { data: userDataArray, error } = await supabase.from("profiles").select("*").eq("id", user.id)
 
       if (error) {
@@ -111,6 +113,7 @@ export default function DashboardPage() {
           password: "",
         })
       } else {
+        // We use the DB data (userData) because it contains 'monthly_fee'
         const updatedUser = userData
         setCurrentUser(updatedUser)
         setProfileForm({
@@ -149,7 +152,6 @@ export default function DashboardPage() {
     const supabase = getSupabaseClient()
 
     switch (currentSection) {
-      // --- CLEANUP: Removed 'votes' case from database loading ---
       case "maintenance":
         const { data: maintenanceData } = await supabase
           .from("maintenance")
@@ -217,10 +219,6 @@ export default function DashboardPage() {
     }
   }
 
-  const toggleSidebarCollapse = () => {
-    setSidebarCollapsed(!sidebarCollapsed)
-  }
-
   const switchSection = (section: string) => {
     setCurrentSection(section)
     if (window.innerWidth <= 768) {
@@ -286,22 +284,14 @@ export default function DashboardPage() {
 
   const getAIResponse = (message: string) => {
     const msg = message.toLowerCase()
-
-    if (msg.includes("公告")) {
-      return "您可以在「公告」頁面查看最新公告。公告會以輪播方式顯示在首頁。"
-    }
-    if (msg.includes("投票")) {
-      return "您可以在「投票」頁面查看所有投票並參與投票。"
-    }
-    if (msg.includes("維修") || msg.includes("報修")) {
-      return "您可以在「設備/維護」頁面提交維修申請。"
-    }
-    return "抱歉,我還在學習中。您可以詢問關於公告、維修、繳費、包裹等問題，或使用「常用功能」快速導航。"
+    if (msg.includes("公告")) return "您可以在「公告」頁面查看最新公告。"
+    if (msg.includes("投票")) return "您可以在「投票」頁面查看所有投票並參與投票。"
+    if (msg.includes("維修")) return "您可以在「設備/維護」頁面提交維修申請。"
+    return "抱歉,我還在學習中。您可以詢問關於公告、維修、繳費等問題。"
   }
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
-
     try {
       const supabase = getSupabaseClient()
       const { error } = await supabase
@@ -324,7 +314,6 @@ export default function DashboardPage() {
         phone: profileForm.phone,
         email: profileForm.email,
       }
-
       localStorage.setItem("currentUser", JSON.stringify(updatedUser))
       setCurrentUser(updatedUser)
       alert("個人資料已更新！")
@@ -336,15 +325,12 @@ export default function DashboardPage() {
 
   const handleMaintenanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!currentUser?.id) {
       alert("錯誤：用戶資訊不完整，請重新登入")
       return
     }
-
     try {
       const supabase = getSupabaseClient()
-
       let photoUrl = ""
       if (maintenanceForm.image) {
         const reader = new FileReader()
@@ -354,7 +340,6 @@ export default function DashboardPage() {
           reader.readAsDataURL(maintenanceForm.image!)
         })
       }
-
       const { data, error } = await supabase
         .from("maintenance")
         .insert([
@@ -369,18 +354,9 @@ export default function DashboardPage() {
           },
         ])
         .select()
-
-      if (error) {
-        throw error
-      }
-
+      if (error) throw error
       alert("維修申請已提交！")
-      setMaintenanceForm({
-        type: "水電",
-        location: "",
-        description: "",
-        image: null,
-      })
+      setMaintenanceForm({ type: "水電", location: "", description: "", image: null })
       await loadSectionData()
     } catch (e: any) {
       console.error("[v0] Maintenance submission failed:", e)
@@ -388,20 +364,14 @@ export default function DashboardPage() {
     }
   }
 
-  // --- CLEANUP: Removed handleVote function entirely ---
-
   const handleFacilityBooking = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!currentUser?.id) {
       alert("請先登入")
       return
     }
-
     try {
       const supabase = getSupabaseClient()
-
-      // Check for conflicts
       const { data: conflicts } = await supabase
         .from("facility_bookings")
         .select("*")
@@ -415,20 +385,17 @@ export default function DashboardPage() {
           const existingEnd = booking.end_time
           const newStart = bookingForm.startTime
           const newEnd = bookingForm.endTime
-
           return (
             (newStart >= existingStart && newStart < existingEnd) ||
             (newEnd > existingStart && newEnd <= existingEnd) ||
             (newStart <= existingStart && newEnd >= existingEnd)
           )
         })
-
         if (hasConflict) {
           alert("此時段已被預約，請選擇其他時段")
           return
         }
       }
-
       const { error } = await supabase.from("facility_bookings").insert([
         {
           facility_id: bookingForm.facilityId,
@@ -442,17 +409,9 @@ export default function DashboardPage() {
           status: "confirmed",
         },
       ])
-
       if (error) throw error
-
       alert("預約成功！")
-      setBookingForm({
-        facilityId: "",
-        bookingDate: "",
-        startTime: "",
-        endTime: "",
-        notes: "",
-      })
+      setBookingForm({ facilityId: "", bookingDate: "", startTime: "", endTime: "", notes: "" })
       await loadSectionData()
     } catch (e: any) {
       console.error(e)
@@ -462,22 +421,16 @@ export default function DashboardPage() {
 
   const toggleAnnouncementLike = async (announcementId: string) => {
     if (!currentUser) return
-
     try {
       const likesStr = localStorage.getItem("announcement_likes")
       const likesObj = likesStr ? JSON.parse(likesStr) : {}
-
-      if (!likesObj[announcementId]) {
-        likesObj[announcementId] = []
-      }
-
+      if (!likesObj[announcementId]) likesObj[announcementId] = []
       const userLikeIndex = likesObj[announcementId].indexOf(currentUser.id)
       if (userLikeIndex > -1) {
         likesObj[announcementId].splice(userLikeIndex, 1)
       } else {
         likesObj[announcementId].push(currentUser.id)
       }
-
       localStorage.setItem("announcement_likes", JSON.stringify(likesObj))
       await loadAnnouncementLikes()
     } catch (e) {
@@ -489,7 +442,6 @@ export default function DashboardPage() {
     try {
       const likesStr = localStorage.getItem("announcement_likes")
       const likesObj = likesStr ? JSON.parse(likesStr) : {}
-
       const likesArray: any[] = []
       Object.keys(likesObj).forEach((announcementId) => {
         if (Array.isArray(likesObj[announcementId])) {
@@ -502,7 +454,6 @@ export default function DashboardPage() {
           })
         }
       })
-
       setAnnouncementLikes(likesArray)
     } catch (e) {
       console.error("[v0] Error loading likes:", e)
@@ -565,17 +516,11 @@ export default function DashboardPage() {
             <div>
               <div className="text-white font-medium">{currentUser?.name || "載入中..."}</div>
               <div className="text-[#b0b0b0] text-sm">
-                {currentUser?.role === "resident"
-                  ? "住戶"
-                  : currentUser?.role === "committee"
-                    ? "委員會"
-                    : currentUser?.role === "vendor"
-                      ? "廠商"
-                      : currentUser?.role === "admin"
-                        ? "管理員"
-                        : currentUser?.role === "guest"
-                          ? "訪客"
-                          : "住戶"}
+                {/* Use standard role label function if available, or fallback */}
+                {getRoleLabel ? getRoleLabel(currentUser?.role) : (
+                   currentUser?.role === "resident" ? "住戶" :
+                   currentUser?.role === "committee" ? "委員會" : "訪客"
+                )}
               </div>
             </div>
           </div>
@@ -725,6 +670,22 @@ export default function DashboardPage() {
                 <span className="material-icons">person</span>
                 個人資料
               </h2>
+              
+              {/* IDENTITY BADGE (Shows Fee Status) */}
+              <div className="mb-6 p-3 bg-white/5 rounded-lg border border-white/10 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#ffd700] text-[#222] flex items-center justify-center font-bold">
+                  {currentUser?.role === 'committee' ? 'C' : 'R'}
+                </div>
+                <div>
+                  <div className="text-white font-bold">
+                    目前身份: {currentUser?.role === 'committee' ? '管委會 (Committee)' : '住戶 (Resident)'}
+                  </div>
+                  <div className="text-[#b0b0b0] text-xs">
+                    {currentUser?.role === 'committee' ? '您目前無需繳交管理費 (免繳)。' : '您需依照房型繳交管理費。'}
+                  </div>
+                </div>
+              </div>
+
               <form onSubmit={handleProfileUpdate} className="space-y-4 max-w-2xl">
                 <div>
                   <label className="block text-white mb-2">姓名</label>
@@ -741,8 +702,10 @@ export default function DashboardPage() {
                   <input
                     type="text"
                     value={profileForm.unit}
+                    // Lock this field if they are Admin/Committee to prevent accidental edits to "STAFF"
+                    readOnly={currentUser?.role !== 'resident'}
                     onChange={(e) => setProfileForm({ ...profileForm, unit: e.target.value })}
-                    className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+                    className={`w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700] ${currentUser?.role !== 'resident' ? 'opacity-50 cursor-not-allowed' : ''}`}
                     required
                   />
                 </div>
@@ -797,7 +760,7 @@ export default function DashboardPage() {
           )}
 
           {/* ---------------------------------------------------------------------- */}
-          {/* NEW VOTING SECTION - SINGLE GOOGLE FORM STRATEGY (Option 1)          */}
+          {/* VOTING SECTION (Option 1 - Link Card) */}
           {/* ---------------------------------------------------------------------- */}
           {currentSection === "votes" && (
             <div className="h-full flex flex-col items-center justify-center p-4">
@@ -815,13 +778,11 @@ export default function DashboardPage() {
                 <p className="text-[#b0b0b0] mb-8 leading-relaxed">
                   您的意見對我們很重要！請點擊下方按鈕填寫本月的社區調查表。
                   您可以針對設施升級進行投票，或在「許願池」中提出您對未來活動的建議。
-                  <br className="hidden sm:block"/>
-                  (Your voice matters! Please fill out the monthly survey below.)
                 </p>
 
                 <a 
                   // 👇 PASTE YOUR GOOGLE FORM LINK HERE 👇
-                  href="https://forms.gle/A2SAQgnAB1W1eZ2n9" 
+                  href="https://forms.gle/bpCev1Mvgyi5n2cx9" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-8 py-4 bg-[#ffd700] text-[#222] rounded-xl font-bold text-lg hover:bg-[#ffed4e] hover:scale-105 transition-all shadow-lg"
@@ -836,173 +797,110 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+
           {/* ---------------------------------------------------------------------- */}
-
-          {currentSection === "maintenance" && (
+          {/* UPDATED FINANCE SECTION - FIXED LOGIC */}
+          {/* ---------------------------------------------------------------------- */}
+          {currentSection === "finance" && (
             <div className="space-y-4">
-              <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-                <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                  <span className="material-icons">build</span>
-                  提交維修申請
-                </h2>
-                <form onSubmit={handleMaintenanceSubmit} className="space-y-4 max-w-2xl">
-                  <div>
-                    <label className="block text-white mb-2">維修類型</label>
-                    <select
-                      value={maintenanceForm.type}
-                      onChange={(e) => setMaintenanceForm({ ...maintenanceForm, type: e.target.value })}
-                      className="w-full p-3 rounded-lg bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700] [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
-                    >
-                      <option value="水電" className="bg-[#2a2a2a] text-white">
-                        水電
-                      </option>
-                      <option value="門窗" className="bg-[#2a2a2a] text-white">
-                        門窗
-                      </option>
-                      <option value="公共設施" className="bg-[#2a2a2a] text-white">
-                        公共設施
-                      </option>
-                      <option value="其他" className="bg-[#2a2a2a] text-white">
-                        其他
-                      </option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-white mb-2">位置</label>
-                    <input
-                      type="text"
-                      value={maintenanceForm.location}
-                      onChange={(e) => setMaintenanceForm({ ...maintenanceForm, location: e.target.value })}
-                      className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
-                      placeholder="例如：A棟3樓、中庭"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-white mb-2">問題描述</label>
-                    <textarea
-                      value={maintenanceForm.description}
-                      onChange={(e) => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })}
-                      className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700] min-h-[100px]"
-                      placeholder="請詳細描述問題"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-white mb-2">上傳照片（選填）</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setMaintenanceForm({ ...maintenanceForm, image: e.target.files?.[0] || null })}
-                      className="w-full p-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
-                    />
-                    {maintenanceForm.image && (
-                      <div className="text-green-400 text-sm mt-2">已選擇: {maintenanceForm.image.name}</div>
-                    )}
-                  </div>
-                  <button
-                    type="submit"
-                    className="px-6 py-3 bg-[#ffd700] text-[#222] rounded-lg font-bold hover:brightness-90 transition-all"
-                  >
-                    提交申請
-                  </button>
-                </form>
-              </div>
+              
+              {/* 1. The "My Status" Card (Dynamic Calculation) */}
+              {(() => {
+                 // Calculate Unpaid Balance dynamically from the list below
+                 const unpaidAmount = finances
+                   .filter(f => !f.paid)
+                   .reduce((sum, item) => sum + (item.amount || 0), 0);
+                 
+                 const hasDebt = unpaidAmount > 0;
 
+                 return (
+                  <div className={`bg-gradient-to-r border rounded-2xl p-6 flex justify-between items-center shadow-lg ${
+                      hasDebt
+                        ? "from-red-900/30 to-red-800/30 border-[#f44336]" 
+                        : "from-green-900/30 to-green-800/30 border-green-500"
+                    }`}>
+                    <div>
+                      <h3 className={`text-sm font-bold uppercase tracking-wider mb-1 ${
+                          hasDebt ? "text-[#f44336]" : "text-green-400"
+                        }`}>
+                        {hasDebt ? "目前未繳金額 (Unpaid Balance)" : "財務狀態 (Status)"}
+                      </h3>
+                      
+                      <div className={`text-3xl font-bold ${
+                          hasDebt ? "text-white" : "text-white"
+                        }`}>
+                        {/* DYNAMIC DISPLAY */}
+                        {hasDebt 
+                          ? `$${unpaidAmount.toLocaleString()}` 
+                          : "無待繳費用 (All Paid)"}
+                      </div>
+
+                      <div className="text-xs text-white/60 mt-1">
+                        {currentUser?.unit_type 
+                          ? `房型: ${currentUser.unit_type}` 
+                          : "請定期查看下方帳單列表。"}
+                      </div>
+                    </div>
+                    
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                        hasDebt ? "bg-red-500/20" : "bg-green-500/20"
+                      }`}>
+                      <span className={`material-icons text-2xl ${
+                          hasDebt ? "text-[#f44336]" : "text-green-400"
+                        }`}>
+                        {hasDebt ? "priority_high" : "check_circle"}
+                      </span>
+                    </div>
+                  </div>
+                 );
+              })()}
+
+              {/* 2. The Actual Bill List (From Database) */}
               <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
                 <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                  <span className="material-icons">list</span>
-                  我的維修申請
+                  <span className="material-icons">history</span>
+                  繳費紀錄與帳單
                 </h2>
                 <div className="space-y-3">
-                  {maintenance.length > 0 ? (
-                    maintenance.map((item) => (
+                  {finances.length > 0 ? (
+                    finances.map((finance) => (
                       <div
-                        key={item.id}
+                        key={finance.id}
                         className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
                       >
-                        <div className="flex justify-between items-start mb-2">
+                        <div className="flex justify-between items-start">
                           <div>
-                            <div className="text-white font-bold">{item.equipment || "維修申請"}</div>
-                            <div className="text-[#b0b0b0] text-sm">位置: {item.item || "未指定"}</div>
-                            <div className="text-[#b0b0b0] text-sm">申請人: {item.reported_by || "未知"}</div>
+                            <div className="flex gap-2 items-center mb-1">
+                              <span className="text-white font-bold">房號: {finance.room}</span>
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-bold ${
+                                  finance.paid ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                                }`}
+                              >
+                                {finance.paid ? "已繳" : "未繳"}
+                              </span>
+                            </div>
+                            {finance.invoice && <div className="text-[#b0b0b0] text-sm">發票: {finance.invoice}</div>}
+                            {finance.note && <div className="text-[#b0b0b0] text-sm">{finance.note}</div>}
+                            <div className="text-[#b0b0b0] text-sm mt-1">
+                              到期日: {new Date(finance.due).toLocaleDateString("zh-TW")}
+                            </div>
                           </div>
-                          <div
-                            className={`px-3 py-1 rounded-full text-sm font-bold ${
-                              item.status === "open"
-                                ? "bg-yellow-500/20 text-yellow-400"
-                                : item.status === "progress"
-                                  ? "bg-blue-500/20 text-blue-400"
-                                  : "bg-green-500/20 text-green-400"
-                            }`}
-                          >
-                            {item.status === "open" ? "待處理" : item.status === "progress" ? "處理中" : "已完成"}
+                          <div className={`text-xl font-bold ${finance.paid ? "text-green-400" : "text-red-400"}`}>
+                            ${finance.amount.toLocaleString()}
                           </div>
                         </div>
-                        {item.description && <div className="text-white mb-2">{item.description}</div>}
-                        {item.photo_url && (
-                          <div className="mb-2">
-                            <img
-                              src={item.photo_url || "/placeholder.svg"}
-                              alt="維修照片"
-                              className="max-w-full h-auto rounded-lg max-h-[200px]"
-                            />
-                          </div>
-                        )}
-                        <div className="text-[#b0b0b0] text-sm">
-                          申請時間: {new Date(item.created_at).toLocaleString("zh-TW")}
-                        </div>
-                        {item.handler && <div className="text-[#b0b0b0] text-sm">處理人員: {item.handler}</div>}
                       </div>
                     ))
                   ) : (
-                    <div className="text-center text-[#b0b0b0] py-8">目前沒有維修申請</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {currentSection === "finance" && (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">account_balance</span>
-                管理費/收支
-              </h2>
-              <div className="space-y-3">
-                {finances.length > 0 ? (
-                  finances.map((finance) => (
-                    <div
-                      key={finance.id}
-                      className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex gap-2 items-center mb-1">
-                            <span className="text-white font-bold">房號: {finance.room}</span>
-                            <span
-                              className={`px-2 py-1 rounded text-xs font-bold ${
-                                finance.paid ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                              }`}
-                            >
-                              {finance.paid ? "已繳" : "未繳"}
-                            </span>
-                          </div>
-                          {finance.invoice && <div className="text-[#b0b0b0] text-sm">發票: {finance.invoice}</div>}
-                          {finance.note && <div className="text-[#b0b0b0] text-sm">{finance.note}</div>}
-                          <div className="text-[#b0b0b0] text-sm mt-1">
-                            到期日: {new Date(finance.due).toLocaleDateString("zh-TW")}
-                          </div>
-                        </div>
-                        <div className={`text-xl font-bold ${finance.paid ? "text-green-400" : "text-red-400"}`}>
-                          ${finance.amount.toLocaleString()}
-                        </div>
+                    <div className="text-center py-8">
+                      <div className="text-[#b0b0b0] mb-2">目前尚無正式帳單</div>
+                      <div className="text-xs text-[#666]">
+                        (系統會於每月 1 號自動產生本月帳單)
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center text-[#b0b0b0] py-8">目前沒有財務記錄</div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           )}

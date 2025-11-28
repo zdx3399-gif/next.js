@@ -17,13 +17,15 @@ export default function AuthPage() {
   const [successMessage, setSuccessMessage] = useState("")
   const [loading, setLoading] = useState(false)
 
+  // State for Role selection
+  const [selectedRole, setSelectedRole] = useState<UserRole>("resident")
+
   useEffect(() => {
     const mode = searchParams.get("mode")
     if (mode === "register") {
       setIsLoginMode(false)
     }
 
-    // Check if already logged in
     const currentUser = localStorage.getItem("currentUser")
     if (currentUser) {
       const user = JSON.parse(currentUser)
@@ -49,11 +51,9 @@ export default function AuthPage() {
         throw new Error(result.error || "登入失敗，請檢查您的帳號密碼")
       }
 
-      // Set the detected tenant and config
       setCurrentTenant(result.tenantId)
       setTenantConfig(result.tenantConfig)
 
-      // Store user in localStorage
       localStorage.setItem(
         "currentUser",
         JSON.stringify({
@@ -86,9 +86,24 @@ export default function AuthPage() {
     const password = formData.get("password") as string
     const name = formData.get("name") as string
     const phone = formData.get("phone") as string
-    const unit = formData.get("unit") as string
     const role = formData.get("role") as UserRole
     const tenantId = formData.get("tenant") as TenantId
+
+    // --- Logic for Address String ---
+    const needsRoom = role === "resident" 
+    
+    let fullUnitString = "STAFF"
+    // We default fee to 0 and let Admin set it later in the Finance Dashboard
+    let calculatedFee = 0 
+    let unitTypeName = "" 
+
+    if (needsRoom) {
+      // Construct Room ID
+      const building = formData.get("building") as string
+      const floor = formData.get("floor") as string
+      const unitNumber = formData.get("unit_number") as string
+      fullUnitString = `${building}棟-${floor}F-${unitNumber}`
+    }
 
     if (!tenantId) {
       setErrorMessage("請選擇要註冊的社區")
@@ -97,7 +112,18 @@ export default function AuthPage() {
     }
 
     try {
-      const result = await registerUser(tenantId, email, password, name, phone, unit, role)
+      // --- Send Data to Backend ---
+      const result = await registerUser(
+        tenantId, 
+        email, 
+        password, 
+        name, 
+        phone, 
+        fullUnitString, 
+        role,
+        unitTypeName,  // Sending empty string (to be set by Admin)
+        calculatedFee  // Sending 0 (to be set by Admin)
+      )
 
       if (!result.success) {
         throw new Error(result.error)
@@ -108,7 +134,6 @@ export default function AuthPage() {
       setTimeout(() => {
         setIsLoginMode(true)
         setSuccessMessage("")
-        // Pre-fill email in login form
         const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement
         if (emailInput) {
           emailInput.value = email
@@ -120,6 +145,8 @@ export default function AuthPage() {
       setLoading(false)
     }
   }
+
+  const needsRoomInfo = selectedRole === "resident"
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d] p-5">
@@ -151,6 +178,7 @@ export default function AuthPage() {
 
         {isLoginMode ? (
           <form onSubmit={handleLogin}>
+            {/* Login Inputs */}
             <div className="mb-6">
               <label className="block mb-2 font-medium text-white">電子郵件</label>
               <input
@@ -158,7 +186,7 @@ export default function AuthPage() {
                 name="email"
                 required
                 placeholder="請輸入電子郵件"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] outline-none transition-all"
               />
             </div>
             <div className="mb-6">
@@ -168,13 +196,13 @@ export default function AuthPage() {
                 name="password"
                 required
                 placeholder="請輸入密碼"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] outline-none transition-all"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-[#ffd700] text-[#1a1a1a] rounded-lg font-semibold hover:bg-[#ffed4e] hover:-translate-y-0.5 transition-all mb-4 disabled:opacity-70"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-[#ffd700] text-[#1a1a1a] rounded-lg font-semibold hover:bg-[#ffed4e] transition-all mb-4 disabled:opacity-70"
             >
               <span className="material-icons">login</span>
               {loading ? "登入中..." : "登入"}
@@ -182,35 +210,93 @@ export default function AuthPage() {
           </form>
         ) : (
           <form onSubmit={handleRegister}>
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block mb-2 font-medium text-white">選擇社區</label>
               <select
                 name="tenant"
                 required
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
+                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none"
               >
-                <option value="" className="bg-[#2a2a2a] text-[#b0b0b0]">
-                  請選擇要註冊的社區
-                </option>
-                <option value="tenant_a" className="bg-[#2a2a2a] text-white">
-                  社區 A
-                </option>
-                <option value="tenant_b" className="bg-[#2a2a2a] text-white">
-                  社區 B
-                </option>
+                <option value="">請選擇要註冊的社區</option>
+                <option value="tenant_a">社區 A (Community A)</option>
+                <option value="tenant_b">社區 B (Community B)</option>
               </select>
             </div>
+
             <div className="mb-6">
+              <label className="block mb-2 font-medium text-white">身份</label>
+              <select
+                name="role"
+                required
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value as UserRole)}
+                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none cursor-pointer"
+              >
+                <option value="resident">住戶 (需繳管理費)</option>
+                <option value="committee">管委會 (無需繳費)</option>
+                <option value="admin">管理員 (無需繳費)</option>
+                <option value="vendor">廠商 (無需繳費)</option>
+              </select>
+            </div>
+
+            {/* Conditional Room Info (Address Only, No Fee Calculation) */}
+            {needsRoomInfo && (
+              <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block mb-2 font-medium text-white">棟別</label>
+                    <select
+                      name="building"
+                      required
+                      className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none"
+                    >
+                      <option value="A">A 棟</option>
+                      <option value="B">B 棟</option>
+                      <option value="C">C 棟</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-2 font-medium text-white">樓層</label>
+                    <select
+                      name="floor"
+                      required
+                      className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none"
+                    >
+                      {[...Array(20)].map((_, i) => (
+                        <option key={i} value={i + 1}>{i + 1} F</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block mb-2 font-medium text-white">門牌號碼</label>
+                  <input
+                    type="text"
+                    name="unit_number"
+                    required
+                    placeholder="例如：01, 02"
+                    className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] outline-none"
+                  />
+                </div>
+                {/* Removed: 房型與管理費計算 section 
+                   Reason: Fees are now managed by Admin in Finance Dashboard.
+                */}
+              </div>
+            )}
+
+            {/* Standard Info */}
+            <div className="mb-4">
               <label className="block mb-2 font-medium text-white">電子郵件</label>
               <input
                 type="email"
                 name="email"
                 required
                 placeholder="請輸入電子郵件"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] outline-none"
               />
             </div>
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block mb-2 font-medium text-white">密碼</label>
               <input
                 type="password"
@@ -218,63 +304,32 @@ export default function AuthPage() {
                 required
                 minLength={6}
                 placeholder="請輸入密碼"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] outline-none"
               />
             </div>
-            <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">姓名</label>
-              <input
-                type="text"
-                name="name"
-                required
-                placeholder="請輸入姓名"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
-              />
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block mb-2 font-medium text-white">姓名</label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  placeholder="請輸入姓名"
+                  className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] outline-none"
+                />
+              </div>
+              <div>
+                <label className="block mb-2 font-medium text-white">電話</label>
+                <input
+                  type="tel"
+                  name="phone"
+                  required
+                  placeholder="請輸入電話"
+                  className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] outline-none"
+                />
+              </div>
             </div>
-            <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">電話</label>
-              <input
-                type="tel"
-                name="phone"
-                required
-                placeholder="請輸入電話號碼"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
-              />
-            </div>
-            <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">住戶單位</label>
-              <input
-                type="text"
-                name="unit"
-                required
-                placeholder="例：A棟12樓3號"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
-              />
-            </div>
-            <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">身份</label>
-              <select
-                name="role"
-                required
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
-              >
-                <option value="" className="bg-[#2a2a2a] text-[#b0b0b0]">
-                  請選擇身份
-                </option>
-                <option value="resident" className="bg-[#2a2a2a] text-white">
-                  住戶
-                </option>
-                <option value="guard" className="bg-[#2a2a2a] text-white">
-                  警衛
-                </option>
-                <option value="committee" className="bg-[#2a2a2a] text-white">
-                  管委會
-                </option>
-                <option value="vendor" className="bg-[#2a2a2a] text-white">
-                  廠商
-                </option>
-              </select>
-            </div>
+
             <button
               type="submit"
               disabled={loading}

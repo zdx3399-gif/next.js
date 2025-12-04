@@ -17,6 +17,7 @@ import { MeetingList } from "@/features/meetings/ui/MeetingList"
 import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
 import { FacilityList } from "@/features/facilities/ui/FacilityList"
 import { AiChat } from "@/features/support/ui/AiChat"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 // Define User and Section types for better type safety
 interface User {
@@ -209,19 +210,19 @@ export default function DashboardPage() {
     : []
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d]">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[var(--theme-gradient-from)] to-[var(--theme-gradient-to)]">
       {/* Sidebar Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99] lg:hidden" onClick={toggleSidebar} />
       )}
       {/* Sidebar */}
       <nav
-        className={`fixed lg:static top-0 left-0 h-screen bg-[rgba(45,45,45,0.95)] border-r-2 border-[#ffd700] overflow-y-auto overflow-x-hidden transition-all duration-300 z-[100] ${
+        className={`fixed lg:static top-0 left-0 h-screen bg-[var(--theme-bg-card)] border-r-2 border-[var(--theme-border-accent)] overflow-y-auto overflow-x-hidden transition-all duration-300 z-[100] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${sidebarCollapsed ? "lg:w-0 lg:hidden" : "lg:w-[280px]"}`}
       >
-        <div className={`p-8 pb-6 border-b border-[rgba(255,215,0,0.3)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-          <div className="text-[#ffd700] font-bold text-xl">社區管理系統</div>
+        <div className={`p-8 pb-6 border-b border-[var(--theme-border)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+          <div className="text-[var(--theme-accent)] font-bold text-xl">社區管理系統</div>
           {currentUser && <ProfileDropdown currentUser={currentUser as ProfileUser} onUpdate={handleProfileUpdate} />}
         </div>
 
@@ -230,10 +231,10 @@ export default function DashboardPage() {
             <li key={item.id}>
               <button
                 onClick={() => switchSection(item.id as Section)}
-                className={`w-full flex gap-3 items-center px-6 py-3 text-white border-l-4 transition-all ${
+                className={`w-full flex gap-3 items-center px-6 py-3 text-[var(--theme-text-primary)] border-l-4 transition-all ${
                   currentSection === item.id
-                    ? "bg-[rgba(255,215,0,0.1)] border-[#ffd700] text-[#ffd700]"
-                    : "border-transparent hover:bg-[rgba(255,215,0,0.1)] hover:border-[#ffd700] hover:text-[#ffd700]"
+                    ? "bg-[var(--theme-accent-light)] border-[var(--theme-border-accent)] text-[var(--theme-accent)]"
+                    : "border-transparent hover:bg-[var(--theme-accent-light)] hover:border-[var(--theme-border-accent)] hover:text-[var(--theme-accent)]"
                 }`}
               >
                 <span className="material-icons text-xl">{item.icon}</span>
@@ -246,18 +247,19 @@ export default function DashboardPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="flex justify-between items-center px-4 py-3 border-b border-[rgba(255,215,0,0.2)] flex-shrink-0">
-          <div className="flex gap-2 items-center text-[#ffd700] font-bold">
+        <header className="flex justify-between items-center px-4 py-3 border-b border-[var(--theme-border)] flex-shrink-0">
+          <div className="flex gap-2 items-center text-[var(--theme-accent)] font-bold">
             <button onClick={toggleSidebar} className="material-icons cursor-pointer">
               menu
             </button>
             <span>{sectionTitles[currentSection]}</span>
           </div>
           <div className="flex gap-2 items-center">
+            <ThemeToggle />
             {currentUser?.role === "committee" && (
               <button
                 onClick={switchToAdmin}
-                className="flex gap-2 items-center border-2 border-[#ffd700] rounded-lg px-3 py-2 bg-transparent text-[#ffd700] cursor-pointer font-semibold hover:bg-[#ffd700] hover:text-[#222] transition-all"
+                className="flex gap-2 items-center border-2 border-[var(--theme-border-accent)] rounded-lg px-3 py-2 bg-transparent text-[var(--theme-accent)] cursor-pointer font-semibold hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all"
               >
                 <span className="material-icons text-lg">admin_panel_settings</span>
                 <span className="hidden sm:inline">管委會功能</span>
@@ -265,7 +267,7 @@ export default function DashboardPage() {
             )}
             <button
               onClick={logout}
-              className="flex gap-2 items-center border-none rounded-lg px-3 py-2 bg-[#ffd700] text-[#222] cursor-pointer font-semibold hover:brightness-95"
+              className="flex gap-2 items-center border-none rounded-lg px-3 py-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] cursor-pointer font-semibold hover:opacity-90"
             >
               <span className="material-icons text-lg">logout</span>
               <span className="hidden sm:inline">登出</span>
@@ -290,18 +292,18 @@ export default function DashboardPage() {
               )}
 
               {/* Emergency Actions */}
-              <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.3)] rounded-xl p-3">
-                <h3 className="flex items-center gap-1 text-white/90 text-sm font-bold mb-2">
+              <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-xl p-3">
+                <h3 className="flex items-center gap-1 text-[var(--theme-text-primary)]/90 text-sm font-bold mb-2">
                   <span className="material-icons">emergency</span>
-                  <span className="text-[#f44336] font-bold">緊急事件</span>
+                  <span className="text-[var(--theme-danger)] font-bold">緊急事件</span>
                 </h3>
                 <EmergencyButtons userName={currentUser?.name} onTrigger={() => {}} variant="sidebar" />
               </div>
             </section>
           )}
           {currentSection === "packages" && (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
                 <span className="material-icons">inventory_2</span>
                 我的包裹
               </h2>
@@ -309,8 +311,8 @@ export default function DashboardPage() {
             </div>
           )}
           {currentSection === "votes" && (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
                 <span className="material-icons">how_to_vote</span>
                 社區投票
               </h2>
@@ -321,8 +323,8 @@ export default function DashboardPage() {
             <MaintenanceList userId={currentUser?.id} userName={currentUser?.name} />
           )}
           {currentSection === "finance" && (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
                 <span className="material-icons">account_balance</span>
                 管理費/收支
               </h2>
@@ -336,8 +338,8 @@ export default function DashboardPage() {
             <FacilityList userId={currentUser?.id} userName={currentUser?.name} userRoom={currentUser?.room} />
           )}
           {currentSection === "announcements" && (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
                 <span className="material-icons">campaign</span>
                 公告詳情
               </h2>

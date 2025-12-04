@@ -7,42 +7,86 @@
 @import url("https://fonts.googleapis.com/icon?family=Material+Icons");
 @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap");
 
+/* Light mode: white-blue color scheme */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.98 0 0);
+  --foreground: oklch(0.2 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.2 0 0);
+  --primary: oklch(0.55 0.2 250);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.02 250);
+  --secondary-foreground: oklch(0.3 0 0);
+  --muted: oklch(0.95 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.55 0.2 250);
+  --accent-foreground: oklch(1 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.88 0.02 250);
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.55 0.2 250);
+  --chart-1: oklch(0.55 0.2 250);
+  --chart-2: oklch(0.6 0.15 200);
+  --chart-3: oklch(0.5 0.15 280);
+  --chart-4: oklch(0.65 0.18 230);
+  --chart-5: oklch(0.7 0.12 210);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.97 0.01 250);
+  --sidebar-foreground: oklch(0.2 0 0);
+  --sidebar-primary: oklch(0.55 0.2 250);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.92 0.03 250);
+  --sidebar-accent-foreground: oklch(0.2 0 0);
+  --sidebar-border: oklch(0.88 0.02 250);
+  --sidebar-ring: oklch(0.55 0.2 250);
+
+  /* Custom theme colors for components - light mode (white-blue) */
+  --theme-bg-primary: #f8fafc;
+  --theme-bg-secondary: rgba(59, 130, 246, 0.05);
+  --theme-bg-card: rgba(255, 255, 255, 0.95);
+  --theme-border: rgba(59, 130, 246, 0.2);
+  --theme-border-accent: #3b82f6;
+  --theme-text-primary: #1e293b;
+  --theme-text-secondary: #64748b;
+  --theme-text-muted: #94a3b8;
+  --theme-accent: #3b82f6;
+  --theme-accent-hover: #2563eb;
+  --theme-accent-light: rgba(59, 130, 246, 0.1);
+  --theme-accent-glow: 0 15px 40px rgba(59, 130, 246, 0.3);
+  --theme-danger: #ef4444;
+  --theme-gradient-from: #f1f5f9;
+  --theme-gradient-to: #e2e8f0;
+
+  /* 新增 landing page 和 auth page 使用的變數 */
+  --theme-bg-gradient: linear-gradient(to bottom right, #f1f5f9, #e2e8f0);
+  --theme-header-bg: rgba(255, 255, 255, 0.9);
+  --theme-hero-overlay-start: rgba(241, 245, 249, 0.95);
+  --theme-hero-overlay-end: rgba(226, 232, 240, 0.85);
+
+  /* Added input/select themed colors for light mode */
+  --theme-input-bg: rgba(59, 130, 246, 0.08);
+  --theme-input-border: rgba(59, 130, 246, 0.3);
+  --theme-input-focus: #3b82f6;
+  --theme-select-bg: #ffffff;
+  --theme-select-option-bg: #ffffff;
+  --theme-placeholder: #94a3b8;
+
+  /* Button colors for light mode */
+  --theme-btn-save-border: #3b82f6;
+  --theme-btn-save-text: #3b82f6;
+  --theme-btn-save-hover: rgba(59, 130, 246, 0.15);
+  --theme-btn-delete-border: #ef4444;
+  --theme-btn-delete-text: #ef4444;
+  --theme-btn-delete-hover: rgba(239, 68, 68, 0.15);
+  --theme-btn-add-border: #22c55e;
+  --theme-btn-add-text: #22c55e;
+  --theme-btn-add-hover: rgba(34, 197, 94, 0.15);
 }
 
+/* Dark mode: black-yellow color scheme (original) */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -50,32 +94,74 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.145 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.85 0.2 85);
+  --primary-foreground: oklch(0.15 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --accent: oklch(0.85 0.2 85);
+  --accent-foreground: oklch(0.15 0 0);
   --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
+  --border: oklch(0.35 0.05 85);
   --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
+  --ring: oklch(0.85 0.2 85);
+  --chart-1: oklch(0.85 0.2 85);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: oklch(0.18 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.85 0.2 85);
+  --sidebar-primary-foreground: oklch(0.15 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --sidebar-border: oklch(0.35 0.05 85);
+  --sidebar-ring: oklch(0.85 0.2 85);
+
+  /* Custom theme colors for components - dark mode (black-yellow) */
+  --theme-bg-primary: #1a1a1a;
+  --theme-bg-secondary: rgba(255, 215, 0, 0.05);
+  --theme-bg-card: rgba(45, 45, 45, 0.85);
+  --theme-border: rgba(255, 215, 0, 0.25);
+  --theme-border-accent: #ffd700;
+  --theme-text-primary: #ffffff;
+  --theme-text-secondary: #b0b0b0;
+  --theme-text-muted: #b0b0b0;
+  --theme-accent: #ffd700;
+  --theme-accent-hover: #ffed4e;
+  --theme-accent-light: rgba(255, 215, 0, 0.1);
+  --theme-accent-glow: 0 15px 40px rgba(255, 215, 0, 0.3);
+  --theme-danger: #f44336;
+  --theme-gradient-from: #1a1a1a;
+  --theme-gradient-to: #2d2d2d;
+
+  /* 新增 landing page 和 auth page 使用的變數 */
+  --theme-bg-gradient: linear-gradient(to bottom right, #1a1a1a, #2d2d2d);
+  --theme-header-bg: rgba(45, 45, 45, 0.9);
+  --theme-hero-overlay-start: rgba(0, 0, 0, 0.8);
+  --theme-hero-overlay-end: rgba(0, 0, 0, 0.6);
+
+  /* Added input/select themed colors for dark mode */
+  --theme-input-bg: rgba(255, 255, 255, 0.1);
+  --theme-input-border: rgba(255, 215, 0, 0.3);
+  --theme-input-focus: #ffd700;
+  --theme-select-bg: #2a2a2a;
+  --theme-select-option-bg: #2a2a2a;
+  --theme-placeholder: #b0b0b0;
+
+  /* Button colors for dark mode */
+  --theme-btn-save-border: #facc15;
+  --theme-btn-save-text: #fde047;
+  --theme-btn-save-hover: rgba(250, 204, 21, 0.15);
+  --theme-btn-delete-border: #fb7185;
+  --theme-btn-delete-text: #fda4af;
+  --theme-btn-delete-hover: rgba(251, 113, 133, 0.15);
+  --theme-btn-add-border: #4ade80;
+  --theme-btn-add-text: #86efac;
+  --theme-btn-add-hover: rgba(74, 222, 128, 0.15);
 }
 
 @theme inline {
@@ -128,21 +214,64 @@
   }
 }
 
-/* Added custom scrollbar styles */
+/* Updated scrollbar for theme support */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(45, 45, 45, 0.5);
+  background: var(--theme-bg-card);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 215, 0, 0.3);
+  background: var(--theme-accent-light);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-accent);
+  opacity: 0.5;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(45, 45, 45, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 215, 0, 0.3);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 215, 0, 0.5);
+}
+
+/* Themed input and select styles */
+.theme-input {
+  background: var(--theme-input-bg);
+  border: 1px solid var(--theme-input-border);
+  color: var(--theme-text-primary);
+}
+
+.theme-input:focus {
+  border-color: var(--theme-input-focus);
+}
+
+.theme-input::placeholder {
+  color: var(--theme-placeholder);
+}
+
+.theme-select {
+  background: var(--theme-select-bg);
+  border: 1px solid var(--theme-input-border);
+  color: var(--theme-text-primary);
+}
+
+.theme-select:focus {
+  border-color: var(--theme-input-focus);
+}
+
+.theme-select option {
+  background: var(--theme-select-option-bg);
+  color: var(--theme-text-primary);
 }

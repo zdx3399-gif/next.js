@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { useResidents } from "../hooks/useResidents"
 import type { Resident } from "../api/residents"
 
@@ -12,27 +13,224 @@ const getRelationshipLabel = (relationship?: string): string => {
   return labels[relationship || "household_member"] || "住戶成員"
 }
 
+const getRoleLabel = (role?: string): string => {
+  const labels: Record<string, string> = {
+    resident: "住戶",
+    committee: "管委會",
+    guard: "警衛",
+    admin: "管理員",
+  }
+  return labels[role || "resident"] || "住戶"
+}
+
+function ResidentFormModal({
+  isOpen,
+  onClose,
+  resident,
+  onSave,
+  onChange,
+  isEditing,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  resident: Partial<Resident>
+  onSave: () => void
+  onChange: (field: keyof Resident, value: string) => void
+  isEditing: boolean
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+      <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
+          <h3 className="text-lg font-bold text-[var(--theme-accent)]">{isEditing ? "編輯住戶資料" : "新增住戶"}</h3>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors">
+            <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
+          </button>
+        </div>
+
+        {/* Form Content */}
+        <div className="p-4 space-y-4">
+          {/* 姓名 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">姓名</label>
+            <input
+              type="text"
+              value={resident.name || ""}
+              onChange={(e) => onChange("name", e.target.value)}
+              placeholder="請輸入姓名"
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+
+          {/* 房號 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">位置</label>
+            <input
+              type="text"
+              value={resident.room || ""}
+              onChange={(e) => onChange("room", e.target.value)}
+              placeholder="例：A棟 10樓 1001室"
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+
+          {/* 電話 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">電話</label>
+            <input
+              type="text"
+              value={resident.phone || ""}
+              onChange={(e) => onChange("phone", e.target.value)}
+              placeholder="請輸入電話號碼"
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">Email</label>
+            <input
+              type="email"
+              value={resident.email || ""}
+              onChange={(e) => onChange("email", e.target.value)}
+              placeholder="請輸入電子郵件"
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+
+          {/* 身分 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">身分</label>
+            <select
+              value={resident.role || "resident"}
+              onChange={(e) => onChange("role", e.target.value)}
+              className="w-full p-3 rounded-xl theme-select outline-none cursor-pointer"
+            >
+              <option value="resident">住戶</option>
+              <option value="committee">管委會</option>
+              <option value="guard">警衛</option>
+            </select>
+          </div>
+
+          {/* 關係 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">關係</label>
+            <select
+              value={resident.relationship || "household_member"}
+              onChange={(e) => onChange("relationship", e.target.value)}
+              className="w-full p-3 rounded-xl theme-select outline-none cursor-pointer"
+            >
+              <option value="owner">戶主</option>
+              <option value="household_member">住戶成員</option>
+              <option value="tenant">租客</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Footer Buttons */}
+        <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all"
+          >
+            取消
+          </button>
+          <button
+            onClick={onSave}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all"
+          >
+            {isEditing ? "儲存變更" : "新增"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function ResidentManagementAdmin() {
   const { residents, loading, addNewRow, updateRow, handleSave, handleDelete } = useResidents()
+
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [formData, setFormData] = useState<Partial<Resident>>({})
+
+  const handleOpenAddModal = () => {
+    setFormData({
+      name: "",
+      room: "",
+      phone: "",
+      email: "",
+      role: "resident",
+      relationship: "household_member",
+    })
+    setEditingIndex(null)
+    setIsModalOpen(true)
+  }
+
+  const handleOpenEditModal = (resident: Resident, index: number) => {
+    setFormData({ ...resident })
+    setEditingIndex(index)
+    setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setEditingIndex(null)
+    setFormData({})
+  }
+
+  const handleFormChange = (field: keyof Resident, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleFormSave = async () => {
+    if (editingIndex !== null) {
+      // Update existing row
+      const keys = Object.keys(formData) as Array<keyof Resident>
+      keys.forEach((key) => {
+        const value = formData[key]
+        if (value !== undefined) {
+          updateRow(editingIndex, key, value)
+        }
+      })
+      await handleSave(formData as Resident, editingIndex)
+    } else {
+      // Add new row
+      addNewRow()
+      const newIndex = 0 // New row is added at the beginning
+      const keys = Object.keys(formData) as Array<keyof Resident>
+      keys.forEach((key) => {
+        const value = formData[key]
+        if (value !== undefined) {
+          updateRow(newIndex, key, value)
+        }
+      })
+      await handleSave(formData as Resident, newIndex)
+    }
+    handleCloseModal()
+  }
 
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ffd700]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--theme-accent)]"></div>
       </div>
     )
   }
 
   return (
-    <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
+    <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="flex gap-2 items-center text-[#ffd700] text-xl">
+        <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
           <span className="material-icons">people</span>
           住戶/人員管理
         </h2>
         <button
-          onClick={addNewRow}
-          className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold border border-green-400 text-green-300 bg-transparent hover:bg-green-400/15 transition-all"
+          onClick={handleOpenAddModal}
+          className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold border border-[var(--theme-btn-add-border)] text-[var(--theme-btn-add-text)] bg-transparent hover:bg-[var(--theme-btn-add-hover)] transition-all"
         >
           <span className="material-icons text-sm">add</span>
           新增一筆
@@ -42,98 +240,65 @@ export function ResidentManagementAdmin() {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="bg-white/5">
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">姓名</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">房號</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">電話</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">Email</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">身分</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">關係</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
+            <tr className="bg-[var(--theme-accent-light)]">
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">姓名</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">房號</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">電話</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">Email</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">身分</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">關係</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
             </tr>
           </thead>
           <tbody>
             {residents.length > 0 ? (
-              residents.map((row: Resident, index: number) => (
-                <tr key={row.id || `new-${index}`} className="hover:bg-white/5 transition-colors">
-                  <td className="p-3 border-b border-white/5">
-                    <input
-                      type="text"
-                      value={row.name || ""}
-                      onChange={(e) => updateRow(index, "name", e.target.value)}
-                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                    />
-                  </td>
-                  <td className="p-3 border-b border-white/5">
-                    <input
-                      type="text"
-                      value={row.room || ""}
-                      onChange={(e) => updateRow(index, "room", e.target.value)}
-                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                    />
-                  </td>
-                  <td className="p-3 border-b border-white/5">
-                    <input
-                      type="text"
-                      value={row.phone || ""}
-                      onChange={(e) => updateRow(index, "phone", e.target.value)}
-                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                    />
-                  </td>
-                  <td className="p-3 border-b border-white/5">
-                    <input
-                      type="email"
-                      value={row.email || ""}
-                      onChange={(e) => updateRow(index, "email", e.target.value)}
-                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                    />
-                  </td>
-                  <td className="p-3 border-b border-white/5">
-                    <select
-                      value={row.role || "resident"}
-                      onChange={(e) => updateRow(index, "role", e.target.value)}
-                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                    >
-                      <option value="resident">住戶</option>
-                      <option value="committee">管委會</option>
-                      <option value="guard">警衛</option>
-                      <option value="admin">管理員</option>
-                    </select>
-                  </td>
-                  <td className="p-3 border-b border-white/5">
-                    <select
-                      value={row.relationship || "household_member"}
-                      onChange={(e) => updateRow(index, "relationship", e.target.value)}
-                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white"
-                    >
-                      <option value="owner">戶主</option>
-                      <option value="household_member">住戶成員</option>
-                      <option value="tenant">租客</option>
-                    </select>
-                  </td>
-                  <td className="p-3 border-b border-white/5">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleSave(row, index)}
-                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                      >
-                        儲存
-                      </button>
-                      {row.id && (
+              residents
+                .filter((r) => r.id)
+                .map((row: Resident, index: number) => (
+                  <tr key={row.id || `new-${index}`} className="hover:bg-[var(--theme-accent-light)] transition-colors">
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                      {row.name || "-"}
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                      {row.room || "-"}
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                      {row.phone || "-"}
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                      {row.email || "-"}
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                      {getRoleLabel(row.role)}
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                      {getRelationshipLabel(row.relationship)}
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)]">
+                      <div className="flex gap-2">
                         <button
-                          onClick={() => handleDelete(row.id!)}
-                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
+                          onClick={() => handleOpenEditModal(row, index)}
+                          className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
+                          title="編輯"
                         >
-                          刪除
+                          <span className="material-icons text-lg">edit</span>
                         </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
+                        {row.id && (
+                          <button
+                            onClick={() => handleDelete(row.id!)}
+                            className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
+                            title="刪除"
+                          >
+                            <span className="material-icons text-lg">delete</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
             ) : (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-[#b0b0b0]">
+                <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
                   目前沒有資料
                 </td>
               </tr>
@@ -141,6 +306,15 @@ export function ResidentManagementAdmin() {
           </tbody>
         </table>
       </div>
+
+      <ResidentFormModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        resident={formData}
+        onSave={handleFormSave}
+        onChange={handleFormChange}
+        isEditing={editingIndex !== null}
+      />
     </div>
   )
 }

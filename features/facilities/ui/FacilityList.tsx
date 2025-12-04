@@ -31,7 +31,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-[#ffd700]">載入中...</div>
+        <div className="text-[var(--theme-accent)]">載入中...</div>
       </div>
     )
   }
@@ -45,8 +45,8 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
         onSubmit={onSubmit}
       />
 
-      <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-        <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+      <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+        <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
           <span className="material-icons">list</span>
           我的預約記錄
         </h2>
@@ -55,23 +55,27 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
             myBookings.map((booking) => (
               <div
                 key={booking.id}
-                className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
+                className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] rounded-lg p-4 hover:bg-[var(--theme-accent-light)] transition-all"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <div className="text-white font-bold">{booking.facilities?.name || "設施"}</div>
-                    <div className="text-[#b0b0b0] text-sm">
+                    <div className="text-[var(--theme-text-primary)] font-bold">
+                      {booking.facilities?.name || "設施"}
+                    </div>
+                    <div className="text-[var(--theme-text-muted)] text-sm">
                       日期: {new Date(booking.booking_date).toLocaleDateString("zh-TW")}
                     </div>
-                    <div className="text-[#b0b0b0] text-sm">
+                    <div className="text-[var(--theme-text-muted)] text-sm">
                       時間: {booking.start_time} - {booking.end_time}
                     </div>
-                    {booking.notes && <div className="text-[#b0b0b0] text-sm">備註: {booking.notes}</div>}
+                    {booking.notes && (
+                      <div className="text-[var(--theme-text-muted)] text-sm">備註: {booking.notes}</div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <div
                       className={`px-3 py-1 rounded-full text-sm font-bold ${
-                        booking.status === "confirmed" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                        booking.status === "confirmed" ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"
                       }`}
                     >
                       {booking.status === "confirmed" ? "已確認" : "已取消"}
@@ -79,26 +83,26 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
                     {booking.status === "confirmed" && (
                       <button
                         onClick={() => onCancel(booking.id)}
-                        className="px-3 py-1 rounded-lg text-xs font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
+                        className="px-3 py-1 rounded-lg text-xs font-semibold border border-rose-400 text-rose-400 bg-transparent hover:bg-rose-400/15 transition-all"
                       >
                         取消
                       </button>
                     )}
                   </div>
                 </div>
-                <div className="text-[#b0b0b0] text-sm">
+                <div className="text-[var(--theme-text-muted)] text-sm">
                   預約時間: {new Date(booking.created_at || "").toLocaleString("zh-TW")}
                 </div>
               </div>
             ))
           ) : (
-            <div className="text-center text-[#b0b0b0] py-8">目前沒有預約記錄</div>
+            <div className="text-center text-[var(--theme-text-muted)] py-8">目前沒有預約記錄</div>
           )}
         </div>
       </div>
 
-      <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-5">
-        <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
+      <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+        <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
           <span className="material-icons">info</span>
           可用設施
         </h2>
@@ -106,7 +110,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
           {facilities.map((facility) => (
             <div
               key={facility.id}
-              className="bg-white/5 border border-[rgba(255,215,0,0.2)] rounded-lg p-4 hover:bg-white/8 transition-all"
+              className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] rounded-lg p-4 hover:bg-[var(--theme-accent-light)] transition-all"
             >
               {facility.image_url && (
                 <img
@@ -115,16 +119,18 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
                   className="w-full h-40 object-cover rounded-lg mb-3"
                 />
               )}
-              <div className="text-white font-bold text-lg mb-2">{facility.name}</div>
-              {facility.description && <div className="text-[#b0b0b0] text-sm mb-2">{facility.description}</div>}
+              <div className="text-[var(--theme-text-primary)] font-bold text-lg mb-2">{facility.name}</div>
+              {facility.description && (
+                <div className="text-[var(--theme-text-muted)] text-sm mb-2">{facility.description}</div>
+              )}
               {facility.location && (
-                <div className="text-[#b0b0b0] text-sm flex items-center gap-1">
+                <div className="text-[var(--theme-text-muted)] text-sm flex items-center gap-1">
                   <span className="material-icons text-sm">place</span>
                   {facility.location}
                 </div>
               )}
               {facility.capacity && (
-                <div className="text-[#b0b0b0] text-sm flex items-center gap-1">
+                <div className="text-[var(--theme-text-muted)] text-sm flex items-center gap-1">
                   <span className="material-icons text-sm">people</span>
                   容納人數: {facility.capacity}
                 </div>
@@ -132,7 +138,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
             </div>
           ))}
           {facilities.length === 0 && (
-            <div className="col-span-2 text-center text-[#b0b0b0] py-8">目前沒有可用設施</div>
+            <div className="col-span-2 text-center text-[var(--theme-text-muted)] py-8">目前沒有可用設施</div>
           )}
         </div>
       </div>

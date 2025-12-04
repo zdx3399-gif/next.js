@@ -28,49 +28,49 @@ export function VisitorReservationForm({ onSubmit, onCancel }: VisitorReservatio
   }
 
   return (
-    <div className="bg-white/5 border-2 border-[#ffd700]/30 rounded-xl p-5">
-      <h3 className="flex gap-2 items-center text-[#ffd700] font-bold text-lg mb-4">
+    <div className="bg-[var(--theme-bg-secondary)] border-2 border-[var(--theme-border-accent)] rounded-xl p-5">
+      <h3 className="flex gap-2 items-center text-[var(--theme-accent)] font-bold text-lg mb-4">
         <span className="material-icons">person_add</span>
         預約訪客
       </h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-white mb-2">訪客姓名</label>
+          <label className="block text-[var(--theme-text-primary)] mb-2">訪客姓名</label>
           <input
             type="text"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="w-full px-4 py-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+            className="theme-input w-full px-4 py-3 rounded-lg"
             required
           />
         </div>
         <div>
-          <label className="block text-white mb-2">訪客電話</label>
+          <label className="block text-[var(--theme-text-primary)] mb-2">訪客電話</label>
           <input
             type="tel"
             value={form.phone}
             onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            className="w-full px-4 py-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+            className="theme-input w-full px-4 py-3 rounded-lg"
           />
         </div>
         <div>
-          <label className="block text-white mb-2">來訪目的</label>
+          <label className="block text-[var(--theme-text-primary)] mb-2">來訪目的</label>
           <input
             type="text"
             value={form.purpose}
             onChange={(e) => setForm({ ...form, purpose: e.target.value })}
-            className="w-full px-4 py-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+            className="theme-input w-full px-4 py-3 rounded-lg"
             placeholder="例如：親友拜訪、送貨等"
           />
         </div>
         <div>
-          <label className="block text-white mb-2">預約時間</label>
+          <label className="block text-[var(--theme-text-primary)] mb-2">預約時間</label>
           <input
             type="datetime-local"
             value={form.reservation_time}
             onChange={(e) => setForm({ ...form, reservation_time: e.target.value })}
             min={new Date().toISOString().slice(0, 16)}
-            className="w-full px-4 py-3 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+            className="theme-input w-full px-4 py-3 rounded-lg"
             required
           />
         </div>
@@ -78,13 +78,13 @@ export function VisitorReservationForm({ onSubmit, onCancel }: VisitorReservatio
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 px-4 py-3 bg-white/10 text-white rounded-lg font-bold hover:bg-white/20 transition-all"
+            className="flex-1 px-4 py-3 bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] rounded-lg font-bold hover:bg-[var(--theme-accent-light)] transition-all"
           >
             取消
           </button>
           <button
             type="submit"
-            className="flex-1 px-4 py-3 bg-[#ffd700] text-[#222] rounded-lg font-bold hover:brightness-90 transition-all"
+            className="flex-1 px-4 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg font-bold hover:opacity-90 transition-all"
           >
             確認預約
           </button>

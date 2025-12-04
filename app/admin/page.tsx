@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 import { VoteManagementAdmin } from "@/features/votes/ui/VoteManagementAdmin"
 import { PackageManagementAdmin } from "@/features/packages/ui/PackageManagementAdmin"
 import { MaintenanceManagementAdmin } from "@/features/maintenance/ui/MaintenanceManagementAdmin"
@@ -13,10 +12,12 @@ import { EmergencyManagementAdmin } from "@/features/emergencies/ui/EmergencyMan
 import { FacilityManagementAdmin } from "@/features/facilities/ui/FacilityManagementAdmin"
 import { ResidentManagementAdmin } from "@/features/residents/ui/ResidentManagementAdmin"
 import { AnnouncementDetailsAdmin } from "@/features/announcements/ui/AnnouncementDetailsAdmin"
+import { AnnouncementManagementAdmin } from "@/features/announcements/ui/AnnouncementManagementAdmin"
 import { canAccessSection, getRoleLabel, shouldUseBackend, type UserRole } from "@/lib/permissions"
 import { ProfileDropdown } from "@/features/profile/ui/ProfileDropdown"
 import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
 import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCarousel"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 type User = {
   id: string
@@ -51,10 +52,6 @@ export default function AdminPage() {
   const [currentSlide, setCurrentSlide] = useState(0)
   const { announcements, loading: announcementsLoading, reload } = useAnnouncements(false)
 
-  const [data, setData] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [imageFiles, setImageFiles] = useState<{ [key: number]: File | null }>({})
-
   useEffect(() => {
     const storedUser = localStorage.getItem("currentUser")
     if (!storedUser) {
@@ -76,148 +73,6 @@ export default function AdminPage() {
       router.push("/auth")
     }
   }, [router])
-
-  useEffect(() => {
-    if (
-      currentSection !== "dashboard" &&
-      currentSection !== "votes" &&
-      currentSection !== "finance" &&
-      currentSection !== "maintenance" &&
-      currentSection !== "visitors" &&
-      currentSection !== "packages" &&
-      currentSection !== "meetings" &&
-      currentSection !== "emergencies" &&
-      currentSection !== "facilities"
-    ) {
-      loadData()
-    }
-  }, [currentSection])
-
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      const tableMap: Record<string, string> = {
-        announcements: "announcements",
-      }
-
-      const table = tableMap[currentSection]
-      if (!table) return
-
-      const supabase = createClient()
-      const { data: fetchedData, error } = await supabase
-        .from(table)
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100)
-
-      if (error) throw error
-      setData(fetchedData || [])
-    } catch (e) {
-      console.error(e)
-      setData([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSave = async (row: any, index: number) => {
-    try {
-      const tableMap: Record<string, string> = {
-        announcements: "announcements",
-      }
-
-      const table = tableMap[currentSection]
-      if (!table) return
-
-      if (currentSection === "announcements" && imageFiles[index]) {
-        const file = imageFiles[index]
-        const reader = new FileReader()
-
-        await new Promise((resolve, reject) => {
-          reader.onload = () => {
-            row.image_url = reader.result as string
-            resolve(null)
-          }
-          reader.onerror = reject
-          reader.readAsDataURL(file!)
-        })
-      }
-
-      const supabase = createClient()
-
-      if (row.id) {
-        const { error } = await supabase.from(table).update(row).eq("id", row.id)
-        if (error) throw error
-        alert("儲存成功！")
-      } else {
-        const { id, ...rowWithoutId } = row
-        const { error } = await supabase.from(table).insert([rowWithoutId])
-        if (error) throw error
-        alert("新增成功！")
-      }
-
-      if (imageFiles[index]) {
-        const newImageFiles = { ...imageFiles }
-        delete newImageFiles[index]
-        setImageFiles(newImageFiles)
-      }
-
-      await loadData()
-      if (currentSection === "announcements") await reload()
-    } catch (e: any) {
-      console.error(e)
-      alert("操作失敗：" + e.message)
-    }
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("確定要刪除此筆資料？")) return
-
-    try {
-      const tableMap: Record<string, string> = {
-        announcements: "announcements",
-      }
-
-      const table = tableMap[currentSection]
-      if (!table) return
-
-      const supabase = createClient()
-      const { error } = await supabase.from(table).delete().eq("id", id)
-      if (error) throw error
-
-      alert("刪除成功！")
-      await loadData()
-      if (currentSection === "announcements") await reload()
-    } catch (e: any) {
-      console.error(e)
-      alert("刪除失敗：" + e.message)
-    }
-  }
-
-  const defaultRowMap: Record<"announcements", () => Record<string, any>> = {
-    announcements: () => ({ title: "", content: "", image_url: "", author: currentUser?.name || "", status: "draft" }),
-  }
-
-  const handleAdd = () => {
-    const newRow: any = { id: null }
-
-    if (currentSection in defaultRowMap) {
-      const defaultRowGenerator = defaultRowMap[currentSection as keyof typeof defaultRowMap]
-      Object.assign(newRow, defaultRowGenerator())
-    }
-
-    setData([newRow, ...data])
-  }
-
-  const updateRow = (index: number, field: string, value: any) => {
-    const newData = [...data]
-    newData[index] = { ...newData[index], [field]: value }
-    setData(newData)
-  }
-
-  const handleImageFileChange = (index: number, file: File | null) => {
-    setImageFiles({ ...imageFiles, [index]: file })
-  }
 
   const logout = () => {
     localStorage.removeItem("currentUser")
@@ -266,18 +121,18 @@ export default function AdminPage() {
   const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection, false) : false
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d]">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[var(--theme-gradient-from)] to-[var(--theme-gradient-to)]">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99] lg:hidden" onClick={toggleSidebar} />
       )}
 
       <nav
-        className={`fixed lg:static top-0 left-0 h-screen bg-[rgba(45,45,45,0.95)] backdrop-blur-lg border-r-2 border-[#ffd700] overflow-y-auto overflow-x-hidden transition-all duration-300 z-[100] ${
+        className={`fixed lg:static top-0 left-0 h-screen bg-[var(--theme-bg-card)] backdrop-blur-lg border-r-2 border-[var(--theme-border-accent)] overflow-y-auto overflow-x-hidden transition-all duration-300 z-[100] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${sidebarCollapsed ? "lg:w-0 lg:hidden" : "lg:w-[280px]"}`}
       >
-        <div className={`p-8 pb-6 border-b border-[rgba(255,215,0,0.3)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-          <div className="text-[#ffd700] font-bold text-xl">社區管理系統</div>
+        <div className={`p-8 pb-6 border-b border-[var(--theme-border)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+          <div className="text-[var(--theme-accent)] font-bold text-xl">社區管理系統</div>
           {currentUser && (
             <ProfileDropdown
               currentUser={currentUser}
@@ -298,10 +153,10 @@ export default function AdminPage() {
                     document.body.style.overflow = ""
                   }
                 }}
-                className={`w-full flex items-center gap-3 px-6 py-3 text-white border-l-4 transition-all ${
+                className={`w-full flex items-center gap-3 px-6 py-3 text-[var(--theme-text-primary)] border-l-4 transition-all ${
                   currentSection === item.id
-                    ? "bg-[rgba(255,215,0,0.1)] border-[#ffd700] text-[#ffd700]"
-                    : "border-transparent hover:bg-[rgba(255,215,0,0.1)] hover:border-[#ffd700] hover:text-[#ffd700]"
+                    ? "bg-[var(--theme-accent-light)] border-[var(--theme-border-accent)] text-[var(--theme-accent)]"
+                    : "border-transparent hover:bg-[var(--theme-accent-light)] hover:border-[var(--theme-border-accent)] hover:text-[var(--theme-accent)]"
                 }`}
               >
                 <span className="material-icons text-xl">{item.icon}</span>
@@ -313,11 +168,11 @@ export default function AdminPage() {
       </nav>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="flex justify-between items-center px-4 py-3 bg-[#1a1a1a] border-b border-[rgba(255,215,0,0.2)] flex-shrink-0">
-          <div className="flex items-center gap-2 text-[#ffd700] font-bold">
+        <header className="flex justify-between items-center px-4 py-3 bg-[var(--theme-bg-primary)] border-b border-[var(--theme-border)] flex-shrink-0">
+          <div className="flex items-center gap-2 text-[var(--theme-accent)] font-bold">
             <button
               onClick={toggleSidebar}
-              className="material-icons p-1 rounded hover:bg-[rgba(255,215,0,0.2)] transition-all lg:hidden"
+              className="material-icons p-1 rounded hover:bg-[var(--theme-accent-light)] transition-all lg:hidden"
             >
               menu
             </button>
@@ -326,10 +181,11 @@ export default function AdminPage() {
             </span>
           </div>
           <div className="flex gap-2 items-center">
+            <ThemeToggle />
             {currentUser?.role === "committee" && (
               <button
                 onClick={switchToResident}
-                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-2 border-[#ffd700] rounded-lg text-[#ffd700] hover:bg-[#ffd700] hover:text-[#1a1a1a] transition-all font-semibold text-xs sm:text-sm"
+                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-2 border-[var(--theme-border-accent)] rounded-lg text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all font-semibold text-xs sm:text-sm"
               >
                 <span className="material-icons text-base sm:text-lg">home</span>
                 <span className="hidden sm:inline">住戶功能</span>
@@ -337,7 +193,7 @@ export default function AdminPage() {
             )}
             <button
               onClick={logout}
-              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 bg-[#ffd700] text-[#1a1a1a] rounded-lg hover:bg-[#ffed4e] transition-all font-semibold text-xs sm:text-sm"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg hover:opacity-90 transition-all font-semibold text-xs sm:text-sm"
             >
               <span className="material-icons text-base sm:text-lg">logout</span>
               <span className="hidden sm:inline">登出</span>
@@ -348,11 +204,13 @@ export default function AdminPage() {
         <div className="flex-1 overflow-y-auto p-2 sm:p-4">
           {!hasAccess && currentSection !== "dashboard" && currentSection !== "announcement-details" ? (
             <div className="flex items-center justify-center h-full">
-              <div className="bg-[rgba(45,45,45,0.85)] border-2 border-[#f44336] rounded-2xl p-8 text-center max-w-md">
-                <span className="material-icons text-6xl text-[#f44336] mb-4">block</span>
-                <h2 className="text-2xl font-bold text-[#f44336] mb-2">沒有權限</h2>
-                <p className="text-white mb-4">您的身份無法訪問此功能</p>
-                <p className="text-[#b0b0b0] text-sm">您的身份：{getRoleLabel(currentUser?.role as UserRole)}</p>
+              <div className="bg-[var(--theme-bg-card)] border-2 border-[var(--theme-danger)] rounded-2xl p-8 text-center max-w-md">
+                <span className="material-icons text-6xl text-[var(--theme-danger)] mb-4">block</span>
+                <h2 className="text-2xl font-bold text-[var(--theme-danger)] mb-2">沒有權限</h2>
+                <p className="text-[var(--theme-text-primary)] mb-4">您的身份無法訪問此功能</p>
+                <p className="text-[var(--theme-text-secondary)] text-sm">
+                  您的身份：{getRoleLabel(currentUser?.role as UserRole)}
+                </p>
               </div>
             </div>
           ) : currentSection === "dashboard" ? (
@@ -361,8 +219,8 @@ export default function AdminPage() {
                 <AnnouncementCarousel announcements={announcements} loading={announcementsLoading} />
               )}
 
-              <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-4 sm:p-6">
-                <h2 className="flex items-center gap-2 text-lg sm:text-xl font-bold text-[#f44336] mb-4">
+              <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-4 sm:p-6">
+                <h2 className="flex items-center gap-2 text-lg sm:text-xl font-bold text-[var(--theme-danger)] mb-4">
                   <span className="material-icons">emergency</span>
                   緊急事件
                 </h2>
@@ -371,11 +229,11 @@ export default function AdminPage() {
                     { icon: "local_hospital", title: "救護車 119", type: "救護車119", note: "醫療緊急狀況" },
                     { icon: "report_problem", title: "報警 110", type: "報警110", note: "治安緊急狀況" },
                     { icon: "favorite", title: "AED", type: "AED", note: "需要AED急救設備" },
-                    { icon: "warning", title: "陌生人員闘入", type: "可疑人員", note: "陌生人員闖入警告" },
+                    { icon: "warning", title: "陌生人員闘入", type: "可疑人員", note: "陌生人員闘入警告" },
                   ].map((emergency) => (
                     <button
                       key={emergency.type}
-                      className="bg-[rgba(45,45,45,0.85)] border-2 border-[#f44336] rounded-xl p-2 text-center cursor-pointer font-bold text-[#f44336] hover:bg-[rgba(244,67,54,0.2)] transition-all"
+                      className="bg-[var(--theme-bg-card)] border-2 border-[var(--theme-danger)] rounded-xl p-2 text-center cursor-pointer font-bold text-xs sm:text-sm text-[var(--theme-danger)] hover:bg-[rgba(244,67,54,0.2)] transition-all"
                     >
                       <div className="material-icons text-2xl mb-1">{emergency.icon}</div>
                       <h3 className="font-bold text-xs">{emergency.title}</h3>
@@ -385,209 +243,28 @@ export default function AdminPage() {
               </div>
             </div>
           ) : currentSection === "visitors" ? (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">how_to_reg</span>
-                訪客管理 (警衛)
-              </h2>
-              <VisitorManagementAdmin currentUser={currentUser} />
-            </div>
+            <VisitorManagementAdmin currentUser={currentUser} />
           ) : currentSection === "packages" ? (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">inventory_2</span>
-                包裹管理 (警衛)
-              </h2>
-              <PackageManagementAdmin currentUser={currentUser} />
-            </div>
+            <PackageManagementAdmin currentUser={currentUser} />
           ) : currentSection === "finance" ? (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">account_balance</span>
-                管理費/收支
-              </h2>
-              <FinanceManagementAdmin />
-            </div>
+            <FinanceManagementAdmin />
           ) : currentSection === "maintenance" ? (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">build</span>
-                設備/維護管理
-              </h2>
-              <MaintenanceManagementAdmin />
-            </div>
+            <MaintenanceManagementAdmin />
           ) : currentSection === "votes" ? (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">how_to_vote</span>
-                投票管理
-              </h2>
-              <VoteManagementAdmin currentUserName={currentUser?.name} />
-            </div>
+            <VoteManagementAdmin currentUserName={currentUser?.name} />
           ) : currentSection === "announcement-details" ? (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <AnnouncementDetailsAdmin onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
-            </div>
+            <AnnouncementDetailsAdmin onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
           ) : currentSection === "meetings" ? (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">event</span>
-                會議/活動管理
-              </h2>
-              <MeetingManagementAdmin />
-            </div>
+            <MeetingManagementAdmin />
           ) : currentSection === "emergencies" ? (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">emergency</span>
-                緊急事件管理
-              </h2>
-              <EmergencyManagementAdmin currentUserName={currentUser?.name} />
-            </div>
+            <EmergencyManagementAdmin currentUserName={currentUser?.name} />
           ) : currentSection === "facilities" ? (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <h2 className="flex gap-2 items-center text-[#ffd700] mb-5 text-xl">
-                <span className="material-icons">meeting_room</span>
-                設施管理
-              </h2>
-              <FacilityManagementAdmin />
-            </div>
+            <FacilityManagementAdmin />
           ) : currentSection === "residents" ? (
             <ResidentManagementAdmin />
-          ) : (
-            <div className="bg-[rgba(45,45,45,0.85)] border border-[rgba(255,215,0,0.25)] rounded-2xl p-3 sm:p-6">
-              <div className="flex gap-2 mb-4 flex-wrap">
-                <button
-                  onClick={handleAdd}
-                  className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 bg-[#ffd700] text-[#1a1a1a] rounded-lg hover:bg-[#ffed4e] transition-all text-xs sm:text-sm font-semibold"
-                >
-                  <span className="material-icons text-base sm:text-xl">add</span>
-                  <span className="hidden sm:inline">新增一筆</span>
-                  <span className="sm:hidden">新增</span>
-                </button>
-                <button
-                  onClick={loadData}
-                  className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 border-2 border-[#ffd700] text-[#ffd700] rounded-lg hover:bg-[#ffd700] hover:text-[#1a1a1a] transition-all text-xs sm:text-sm font-semibold"
-                >
-                  <span className="material-icons text-base sm:text-xl">sync</span>
-                  <span className="hidden sm:inline">重新整理</span>
-                  <span className="sm:hidden">重整</span>
-                </button>
-              </div>
-
-              {loading ? (
-                <div className="text-center text-[#b0b0b0] py-12">載入中...</div>
-              ) : (
-                <div className="overflow-x-auto -mx-3 sm:mx-0">
-                  <div className="inline-block min-w-full align-middle">
-                    <table className="w-full border-collapse min-w-[800px]">
-                      <thead>
-                        <tr className="bg-white/5">
-                          {currentSection === "announcements" && (
-                            <>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">標題</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">內容</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">圖片URL</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">作者</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">狀態</th>
-                              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-                            </>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.length > 0 ? (
-                          data.map((row, index) => (
-                            <tr key={row.id || index} className="hover:bg-white/5 transition-colors">
-                              {currentSection === "announcements" && (
-                                <>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.title || ""}
-                                      onChange={(e) => updateRow(index, "title", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <textarea
-                                      value={row.content || ""}
-                                      onChange={(e) => updateRow(index, "content", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700] min-h-[80px]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="space-y-2">
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => handleImageFileChange(index, e.target.files?.[0] || null)}
-                                        className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white text-sm outline-none focus:border-[#ffd700]"
-                                      />
-                                      {imageFiles[index] && (
-                                        <div className="text-green-400 text-xs">已選擇: {imageFiles[index]!.name}</div>
-                                      )}
-                                      {row.image_url && !imageFiles[index] && (
-                                        <div className="text-[#b0b0b0] text-xs truncate">
-                                          目前: {row.image_url.substring(0, 30)}...
-                                        </div>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <input
-                                      type="text"
-                                      value={row.author || ""}
-                                      onChange={(e) => updateRow(index, "author", e.target.value)}
-                                      className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    />
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <select
-                                      value={row.status || "draft"}
-                                      onChange={(e) => updateRow(index, "status", e.target.value)}
-                                      className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                                    >
-                                      <option value="draft">草稿</option>
-                                      <option value="published">已發布</option>
-                                    </select>
-                                  </td>
-                                  <td className="p-3 border-b border-white/5">
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleSave(row, index)}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                                      >
-                                        儲存
-                                      </button>
-                                      {row.id && (
-                                        <button
-                                          onClick={() => handleDelete(row.id)}
-                                          className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                                        >
-                                          刪除
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={10} className="p-8 text-center text-[#b0b0b0]">
-                              目前沒有資料
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          ) : currentSection === "announcements" ? (
+            <AnnouncementManagementAdmin />
+          ) : null}
         </div>
       </main>
     </div>

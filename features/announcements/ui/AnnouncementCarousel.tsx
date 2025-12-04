@@ -34,8 +34,8 @@ export function AnnouncementCarousel({
   if (loading) {
     return (
       <section className="mb-6 sm:mb-8">
-        <div className="relative w-full h-[350px] sm:h-[600px] overflow-hidden rounded-2xl shadow-2xl flex items-center justify-center bg-[rgba(45,45,45,0.85)]">
-          <div className="text-[#ffd700] text-lg">載入中...</div>
+        <div className="relative w-full h-[350px] sm:h-[600px] overflow-hidden rounded-2xl shadow-2xl flex items-center justify-center bg-[var(--theme-bg-card)]">
+          <div className="text-[var(--theme-accent)] text-lg">載入中...</div>
         </div>
       </section>
     )
@@ -49,9 +49,7 @@ export function AnnouncementCarousel({
         {announcements.map((announcement, idx) => {
           const announcementLikesArray = likes.filter((like) => like.announcement_id === announcement.id)
           const likesCount = announcementLikesArray.length
-          const hasLiked = currentUserId
-            ? announcementLikesArray.some((like) => like.user_id === currentUserId)
-            : false
+          const hasLiked = currentUserId ? announcementLikesArray.some((like) => like.user_id === currentUserId) : false
 
           return (
             <div
@@ -63,7 +61,7 @@ export function AnnouncementCarousel({
             >
               <div className="bg-black/40 backdrop-blur-md p-4 sm:p-6 md:p-8 rounded-xl w-full">
                 <div
-                  className="text-xl sm:text-2xl md:text-3xl font-bold text-[#ffd700] mb-2 sm:mb-4 cursor-pointer hover:opacity-80 transition-opacity"
+                  className="text-xl sm:text-2xl md:text-3xl font-bold text-[var(--theme-accent)] mb-2 sm:mb-4 cursor-pointer hover:opacity-80 transition-opacity"
                   onClick={() => onSelect?.(announcement.id)}
                 >
                   {announcement.title}
@@ -72,14 +70,16 @@ export function AnnouncementCarousel({
                   {announcement.content.slice(0, 200)}
                   {announcement.content.length > 200 ? "..." : ""}
                 </div>
-                <div className="text-[#b0b0b0] text-xs sm:text-sm mb-3 sm:mb-4">
+                <div className="text-[var(--theme-text-muted)] text-xs sm:text-sm mb-3 sm:mb-4">
                   發布者: {announcement.author} | {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
                 </div>
                 {onLike && (
                   <button
                     onClick={() => onLike(announcement.id)}
                     className={`flex items-center gap-1 px-3 py-1 rounded-lg text-sm transition-all ${
-                      hasLiked ? "bg-[#ffd700] text-[#222]" : "bg-white/20 text-[#ffd700] hover:bg-white/30"
+                      hasLiked
+                        ? "bg-[var(--theme-accent)] text-[var(--theme-bg-primary)]"
+                        : "bg-white/20 text-[var(--theme-accent)] hover:bg-white/30"
                     }`}
                   >
                     <span className="material-icons text-base">favorite</span>
@@ -96,7 +96,9 @@ export function AnnouncementCarousel({
               key={idx}
               onClick={() => setCurrentSlide(idx)}
               className={`h-2 sm:h-3 rounded-full cursor-pointer transition-all ${
-                idx === currentSlide ? "w-6 sm:w-8 bg-[#ffd700]" : "w-2 sm:w-3 bg-white/50 hover:bg-white/70"
+                idx === currentSlide
+                  ? "w-6 sm:w-8 bg-[var(--theme-accent)]"
+                  : "w-2 sm:w-3 bg-white/50 hover:bg-white/70"
               }`}
             />
           ))}

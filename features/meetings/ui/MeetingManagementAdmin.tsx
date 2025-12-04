@@ -4,52 +4,139 @@ import { useState } from "react"
 import { useMeetings } from "../hooks/useMeetings"
 import type { Meeting } from "../api/meetings"
 
+interface MeetingFormModalProps {
+  isOpen: boolean
+  onClose: () => void
+  formData: Omit<Meeting, "id" | "created_at">
+  onChange: (field: keyof Meeting, value: string) => void
+  onSave: () => void
+  isEditing: boolean
+}
+
+function MeetingFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing }: MeetingFormModalProps) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+      <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
+          <h3 className="text-lg font-bold text-[var(--theme-accent)]">
+            {isEditing ? "編輯會議/活動" : "新增會議/活動"}
+          </h3>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors">
+            <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
+          </button>
+        </div>
+
+        {/* Form Content */}
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">會議主題</label>
+            <input
+              type="text"
+              value={formData.topic || ""}
+              onChange={(e) => onChange("topic", e.target.value)}
+              placeholder="請輸入會議主題"
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">時間</label>
+            <input
+              type="datetime-local"
+              value={formData.time || ""}
+              onChange={(e) => onChange("time", e.target.value)}
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">地點</label>
+            <input
+              type="text"
+              value={formData.location || ""}
+              onChange={(e) => onChange("location", e.target.value)}
+              placeholder="例：A棟 1樓 會議室"
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">備註</label>
+            <textarea
+              value={formData.notes || ""}
+              onChange={(e) => onChange("notes", e.target.value)}
+              placeholder="請輸入備註事項"
+              rows={3}
+              className="w-full p-3 rounded-xl theme-input outline-none resize-none"
+            />
+          </div>
+        </div>
+
+        {/* Footer Buttons */}
+        <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all"
+          >
+            取消
+          </button>
+          <button
+            onClick={onSave}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all"
+          >
+            {isEditing ? "儲存變更" : "新增"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function MeetingManagementAdmin() {
-  const { meetings, loading, addMeeting, editMeeting, removeMeeting, reload } = useMeetings()
-  const [editingRows, setEditingRows] = useState<Record<string, Meeting>>({})
-  const [newRow, setNewRow] = useState<Omit<Meeting, "id" | "created_at"> | null>(null)
+  const { meetings, loading, addMeeting, editMeeting, removeMeeting } = useMeetings()
 
-  const handleAddNew = () => {
-    setNewRow({ topic: "", time: "", location: "", notes: "" })
-  }
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [formData, setFormData] = useState<Omit<Meeting, "id" | "created_at">>({
+    topic: "",
+    time: "",
+    location: "",
+    notes: "",
+  })
 
-  const handleSaveNew = async () => {
-    if (!newRow || !newRow.topic || !newRow.time) return
-    const success = await addMeeting(newRow)
-    if (success) {
-      setNewRow(null)
-    }
-  }
-
-  const handleCancelNew = () => {
-    setNewRow(null)
+  const handleAdd = () => {
+    setFormData({ topic: "", time: "", location: "", notes: "" })
+    setEditingId(null)
+    setIsModalOpen(true)
   }
 
   const handleEdit = (meeting: Meeting) => {
-    if (meeting.id) {
-      setEditingRows((prev) => ({ ...prev, [meeting.id!]: { ...meeting } }))
-    }
-  }
-
-  const handleSaveEdit = async (id: string) => {
-    const editedMeeting = editingRows[id]
-    if (!editedMeeting) return
-    const success = await editMeeting(id, editedMeeting)
-    if (success) {
-      setEditingRows((prev) => {
-        const newState = { ...prev }
-        delete newState[id]
-        return newState
-      })
-    }
-  }
-
-  const handleCancelEdit = (id: string) => {
-    setEditingRows((prev) => {
-      const newState = { ...prev }
-      delete newState[id]
-      return newState
+    setFormData({
+      topic: meeting.topic,
+      time: meeting.time ? meeting.time.slice(0, 16) : "",
+      location: meeting.location,
+      notes: meeting.notes || "",
     })
+    setEditingId(meeting.id || null)
+    setIsModalOpen(true)
+  }
+
+  const handleFormChange = (field: keyof Meeting, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSave = async () => {
+    if (!formData.topic || !formData.time) {
+      alert("請填寫主題和時間")
+      return
+    }
+
+    if (editingId) {
+      await editMeeting(editingId, formData)
+    } else {
+      await addMeeting(formData)
+    }
+    setIsModalOpen(false)
   }
 
   const handleDelete = async (id: string) => {
@@ -58,194 +145,80 @@ export function MeetingManagementAdmin() {
     }
   }
 
-  const updateEditingRow = (id: string, field: keyof Meeting, value: string) => {
-    setEditingRows((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], [field]: value },
-    }))
-  }
-
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ffd700]"></div>
+      <div className="flex justify-center items-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--theme-accent)]"></div>
       </div>
     )
   }
 
   return (
-    <div className="bg-[rgba(30,30,30,0.95)] border border-[rgba(255,215,0,0.15)] rounded-2xl overflow-hidden">
-      <div className="p-4 border-b border-white/10 flex justify-between items-center">
-        <h3 className="text-[#ffd700] font-bold">會議/活動管理</h3>
+    <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
+          <span className="material-icons">event</span>
+          會議/活動管理
+        </h2>
         <button
-          onClick={handleAddNew}
-          className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#ffd700] text-black hover:bg-[#ffed4a] transition-all"
+          onClick={handleAdd}
+          className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold border border-[var(--theme-btn-add-border)] text-[var(--theme-btn-add-text)] bg-transparent hover:bg-[var(--theme-btn-add-hover)] transition-all"
         >
-          新增會議
+          <span className="material-icons text-sm">add</span>
+          新增一筆
         </button>
       </div>
+
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full border-collapse">
           <thead>
-            <tr className="bg-white/5">
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">主題</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">時間</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">地點</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">備註</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
+            <tr className="bg-[var(--theme-accent-light)]">
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">主題</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">時間</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">地點</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">備註</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
             </tr>
           </thead>
           <tbody>
-            {newRow && (
-              <tr className="bg-[#ffd700]/10">
-                <td className="p-3 border-b border-white/5">
-                  <input
-                    type="text"
-                    value={newRow.topic}
-                    onChange={(e) => setNewRow({ ...newRow, topic: e.target.value })}
-                    placeholder="會議主題"
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  />
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <input
-                    type="datetime-local"
-                    value={newRow.time}
-                    onChange={(e) => setNewRow({ ...newRow, time: e.target.value })}
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  />
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <input
-                    type="text"
-                    value={newRow.location}
-                    onChange={(e) => setNewRow({ ...newRow, location: e.target.value })}
-                    placeholder="地點"
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  />
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <textarea
-                    value={newRow.notes || ""}
-                    onChange={(e) => setNewRow({ ...newRow, notes: e.target.value })}
-                    placeholder="備註"
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  />
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSaveNew}
-                      className="px-3 py-1 rounded-lg text-xs font-semibold border border-green-400 text-green-300 hover:bg-green-400/15 transition-all"
-                    >
-                      儲存
-                    </button>
-                    <button
-                      onClick={handleCancelNew}
-                      className="px-3 py-1 rounded-lg text-xs font-semibold border border-gray-400 text-gray-300 hover:bg-gray-400/15 transition-all"
-                    >
-                      取消
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )}
             {meetings.length > 0 ? (
-              meetings.map((meeting) => {
-                const isEditing = meeting.id && editingRows[meeting.id]
-                const row = isEditing ? editingRows[meeting.id!] : meeting
-                return (
-                  <tr key={meeting.id} className="hover:bg-white/5 transition-colors">
-                    <td className="p-3 border-b border-white/5">
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={row.topic || ""}
-                          onChange={(e) => updateEditingRow(meeting.id!, "topic", e.target.value)}
-                          className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                        />
-                      ) : (
-                        <span className="text-white">{meeting.topic}</span>
-                      )}
-                    </td>
-                    <td className="p-3 border-b border-white/5">
-                      {isEditing ? (
-                        <input
-                          type="datetime-local"
-                          value={row.time ? row.time.slice(0, 16) : ""}
-                          onChange={(e) => updateEditingRow(meeting.id!, "time", e.target.value)}
-                          className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                        />
-                      ) : (
-                        <span className="text-white">
-                          {meeting.time ? new Date(meeting.time).toLocaleString("zh-TW") : ""}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 border-b border-white/5">
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={row.location || ""}
-                          onChange={(e) => updateEditingRow(meeting.id!, "location", e.target.value)}
-                          className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                        />
-                      ) : (
-                        <span className="text-white">{meeting.location}</span>
-                      )}
-                    </td>
-                    <td className="p-3 border-b border-white/5">
-                      {isEditing ? (
-                        <textarea
-                          value={row.notes || ""}
-                          onChange={(e) => updateEditingRow(meeting.id!, "notes", e.target.value)}
-                          className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                        />
-                      ) : (
-                        <span className="text-white">{meeting.notes}</span>
-                      )}
-                    </td>
-                    <td className="p-3 border-b border-white/5">
-                      <div className="flex gap-2">
-                        {isEditing ? (
-                          <>
-                            <button
-                              onClick={() => handleSaveEdit(meeting.id!)}
-                              className="px-3 py-1 rounded-lg text-xs font-semibold border border-green-400 text-green-300 hover:bg-green-400/15 transition-all"
-                            >
-                              儲存
-                            </button>
-                            <button
-                              onClick={() => handleCancelEdit(meeting.id!)}
-                              className="px-3 py-1 rounded-lg text-xs font-semibold border border-gray-400 text-gray-300 hover:bg-gray-400/15 transition-all"
-                            >
-                              取消
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => handleEdit(meeting)}
-                              className="px-3 py-1 rounded-lg text-xs font-semibold border border-yellow-400 text-yellow-300 hover:bg-yellow-400/15 transition-all"
-                            >
-                              編輯
-                            </button>
-                            <button
-                              onClick={() => handleDelete(meeting.id!)}
-                              className="px-3 py-1 rounded-lg text-xs font-semibold border border-rose-400 text-rose-300 hover:bg-rose-400/15 transition-all"
-                            >
-                              刪除
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
+              meetings.map((meeting) => (
+                <tr key={meeting.id} className="hover:bg-[var(--theme-accent-light)] transition-colors">
+                  <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                    {meeting.topic || "-"}
+                  </td>
+                  <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                    {meeting.time ? new Date(meeting.time).toLocaleString("zh-TW") : "-"}
+                  </td>
+                  <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                    {meeting.location || "-"}
+                  </td>
+                  <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                    {meeting.notes || "-"}
+                  </td>
+                  <td className="p-3 border-b border-[var(--theme-border)]">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(meeting)}
+                        className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
+                        title="編輯"
+                      >
+                        <span className="material-icons text-lg">edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(meeting.id!)}
+                        className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
+                        title="刪除"
+                      >
+                        <span className="material-icons text-lg">delete</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
             ) : (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-[#b0b0b0]">
+                <td colSpan={5} className="p-8 text-center text-[var(--theme-text-secondary)]">
                   目前沒有會議/活動
                 </td>
               </tr>
@@ -253,6 +226,15 @@ export function MeetingManagementAdmin() {
           </tbody>
         </table>
       </div>
+
+      <MeetingFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        formData={formData}
+        onChange={handleFormChange}
+        onSave={handleSave}
+        isEditing={editingId !== null}
+      />
     </div>
   )
 }

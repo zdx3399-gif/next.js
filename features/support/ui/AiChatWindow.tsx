@@ -41,13 +41,13 @@ export function AiChatWindow({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-[#2d2d2d] border-l-2 border-[#ffd700] shadow-2xl flex flex-col z-[999] transition-all duration-500">
-      <div className="flex items-center justify-between p-4 bg-[#1a1a1a] border-b border-[rgba(255,215,0,0.2)]">
-        <div className="flex gap-2 items-center text-[#ffd700] font-bold">
+    <div className="fixed inset-y-0 right-0 w-96 bg-[var(--theme-bg-card)] border-l-2 border-[var(--theme-border-accent)] shadow-2xl flex flex-col z-[999] transition-all duration-500">
+      <div className="flex items-center justify-between p-4 bg-[var(--theme-bg-primary)] border-b border-[var(--theme-border)]">
+        <div className="flex gap-2 items-center text-[var(--theme-accent)] font-bold">
           <span className="material-icons">smart_toy</span>
           AI 助理
         </div>
-        <button onClick={onClose} className="material-icons text-white cursor-pointer">
+        <button onClick={onClose} className="material-icons text-[var(--theme-text-primary)] cursor-pointer">
           close
         </button>
       </div>
@@ -56,7 +56,9 @@ export function AiChatWindow({
           <div key={index} className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
             <div
               className={`max-w-xs p-3 rounded-lg ${
-                msg.type === "user" ? "bg-[#ffd700] text-[#222]" : "bg-[#4a4a4a] text-white"
+                msg.type === "user"
+                  ? "bg-[var(--theme-accent)] text-[var(--theme-bg-primary)]"
+                  : "bg-[var(--theme-bg-secondary)] text-[var(--theme-text-primary)]"
               }`}
             >
               {msg.text}
@@ -64,7 +66,7 @@ export function AiChatWindow({
           </div>
         ))}
       </div>
-      <div className="p-4 bg-[#1a1a1a] border-t border-[rgba(255,215,0,0.2)]">
+      <div className="p-4 bg-[var(--theme-bg-primary)] border-t border-[var(--theme-border)]">
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -74,11 +76,11 @@ export function AiChatWindow({
               if (e.key === "Enter") sendMessage()
             }}
             placeholder="輸入訊息..."
-            className="flex-1 p-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700]"
+            className="theme-input flex-1 p-2 rounded-lg"
           />
           <button
             onClick={sendMessage}
-            className="p-2 bg-[#ffd700] text-[#222] rounded-lg font-bold hover:brightness-90 transition-all disabled:opacity-500 disabled:cursor-not-allowed"
+            className="p-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg font-bold hover:opacity-90 transition-all disabled:opacity-500 disabled:cursor-not-allowed"
           >
             <span className="material-icons">send</span>
           </button>
@@ -87,7 +89,9 @@ export function AiChatWindow({
           <button
             onClick={() => setActiveTab("functions")}
             className={`text-sm font-medium transition-colors ${
-              activeTab === "functions" ? "text-[#ffd700]" : "text-white/70 hover:text-white"
+              activeTab === "functions"
+                ? "text-[var(--theme-accent)]"
+                : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]"
             }`}
           >
             常用功能
@@ -95,7 +99,9 @@ export function AiChatWindow({
           <button
             onClick={() => setActiveTab("resident")}
             className={`text-sm font-medium transition-colors ${
-              activeTab === "resident" ? "text-[#ffd700]" : "text-white/70 hover:text-white"
+              activeTab === "resident"
+                ? "text-[var(--theme-accent)]"
+                : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]"
             }`}
           >
             住戶資訊
@@ -103,7 +109,9 @@ export function AiChatWindow({
           <button
             onClick={() => setActiveTab("emergency")}
             className={`text-sm font-medium transition-colors ${
-              activeTab === "emergency" ? "text-[#ffd700]" : "text-white/70 hover:text-white"
+              activeTab === "emergency"
+                ? "text-[var(--theme-accent)]"
+                : "text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]"
             }`}
           >
             緊急協助
@@ -113,44 +121,44 @@ export function AiChatWindow({
           <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
             <button
               onClick={() => setInput("查詢公告")}
-              className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+              className="p-2 rounded-md bg-[var(--theme-bg-secondary)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-accent-light)] hover:text-[var(--theme-text-primary)]"
             >
               查詢公告
             </button>
             <button
               onClick={() => setInput("我要報修")}
-              className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+              className="p-2 rounded-md bg-[var(--theme-bg-secondary)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-accent-light)] hover:text-[var(--theme-text-primary)]"
             >
               我要報修
             </button>
             <button
               onClick={() => setInput("我的包裹在哪裡？")}
-              className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+              className="p-2 rounded-md bg-[var(--theme-bg-secondary)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-accent-light)] hover:text-[var(--theme-text-primary)]"
             >
               我的包裹在哪裡？
             </button>
             <button
               onClick={() => setInput("查詢管理費")}
-              className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+              className="p-2 rounded-md bg-[var(--theme-bg-secondary)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-accent-light)] hover:text-[var(--theme-text-primary)]"
             >
               查詢管理費
             </button>
             <button
               onClick={() => setInput("預約設施")}
-              className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+              className="p-2 rounded-md bg-[var(--theme-bg-secondary)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-accent-light)] hover:text-[var(--theme-text-primary)]"
             >
               預約設施
             </button>
             <button
               onClick={() => setInput("修改個人資料")}
-              className="p-2 rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+              className="p-2 rounded-md bg-[var(--theme-bg-secondary)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-accent-light)] hover:text-[var(--theme-text-primary)]"
             >
               修改個人資料
             </button>
           </div>
         )}
         {activeTab === "resident" && (
-          <div className="mt-3 text-xs text-white/70">
+          <div className="mt-3 text-xs text-[var(--theme-text-muted)]">
             <p>您的姓名：{currentUser?.name}</p>
             <p>您的房號：{currentUser?.room}</p>
             <p>您的電話：{currentUser?.phone}</p>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useFinanceAdmin } from "../hooks/useFinance"
 
 interface FinanceRecord {
@@ -22,6 +22,24 @@ interface FinanceFormModalProps {
 }
 
 function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing }: FinanceFormModalProps) {
+  // Local state for the calculator
+  const [calc, setCalc] = useState({ parking: 0, car: 0, ping: 0 })
+
+  // Reset calculator when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      setCalc({ parking: 0, car: 0, ping: 0 })
+    }
+  }, [isOpen])
+
+  // Auto-calculate amount when calculator inputs change
+  useEffect(() => {
+    const total = (calc.parking * 500) + (calc.car * 100) + (calc.ping * 90)
+    if (total > 0) {
+      onChange("amount", total)
+    }
+  }, [calc]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!isOpen) return null
 
   return (
@@ -49,14 +67,58 @@ function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
               className="w-full p-3 rounded-xl theme-input outline-none"
             />
           </div>
+
+          {/* New Calculator Section */}
+          <div className="bg-[var(--theme-accent-light)] p-3 rounded-xl space-y-2 border border-[var(--theme-border)]">
+            <label className="block text-[var(--theme-accent)] font-bold text-sm mb-2">
+              <span className="material-icons text-sm align-middle mr-1">calculate</span>
+              費用試算 (自動填入金額)
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-[var(--theme-text-secondary)] block mb-1">停車場 ($500)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={calc.parking || ""}
+                  onChange={(e) => setCalc(prev => ({ ...prev, parking: Number(e.target.value) }))}
+                  placeholder="數量"
+                  className="w-full p-2 text-sm rounded-lg theme-input outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--theme-text-secondary)] block mb-1">汽車 ($100)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={calc.car || ""}
+                  onChange={(e) => setCalc(prev => ({ ...prev, car: Number(e.target.value) }))}
+                  placeholder="數量"
+                  className="w-full p-2 text-sm rounded-lg theme-input outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[var(--theme-text-secondary)] block mb-1">坪數 ($90/坪)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={calc.ping || ""}
+                  onChange={(e) => setCalc(prev => ({ ...prev, ping: Number(e.target.value) }))}
+                  placeholder="坪數"
+                  className="w-full p-2 text-sm rounded-lg theme-input outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">金額</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">總金額</label>
             <input
               type="number"
               value={formData.amount || 0}
               onChange={(e) => onChange("amount", Number(e.target.value))}
               placeholder="請輸入金額"
-              className="w-full p-3 rounded-xl theme-input outline-none"
+              className="w-full p-3 rounded-xl theme-input outline-none font-bold text-lg"
             />
           </div>
           <div>

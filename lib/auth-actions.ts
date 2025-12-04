@@ -6,16 +6,18 @@ export type TenantId = "tenant_a" | "tenant_b"
 
 export type UserRole = "resident" | "guard" | "committee" | "vendor" | "admin"
 
-// Server-side tenant configuration (can access non-public env vars)
+// Server-side tenant configuration
 const TENANT_CONFIG = {
   tenant_a: {
-    url: process.env.TENANT_A_SUPABASE_URL || "",
-    anonKey: process.env.TENANT_A_SUPABASE_ANON_KEY || "",
+    // 修改這裡：加上 NEXT_PUBLIC_
+    url: process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || "", 
+    anonKey: process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || "",
     name: "社區 A",
   },
   tenant_b: {
-    url: process.env.TENANT_B_SUPABASE_URL || "",
-    anonKey: process.env.TENANT_B_SUPABASE_ANON_KEY || "",
+    // 修改這裡：加上 NEXT_PUBLIC_
+    url: process.env.NEXT_PUBLIC_TENANT_B_SUPABASE_URL || "",
+    anonKey: process.env.NEXT_PUBLIC_TENANT_B_SUPABASE_ANON_KEY || "",
     name: "社區 B",
   },
 }

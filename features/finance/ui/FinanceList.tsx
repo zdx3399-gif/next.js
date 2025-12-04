@@ -19,6 +19,7 @@ export function FinanceList({ userRoom }: FinanceListProps) {
 
   return (
     <div className="space-y-3">
+      
       {records.length > 0 ? (
         records.map((finance) => (
           <div

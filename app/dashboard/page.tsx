@@ -322,15 +322,7 @@ export default function DashboardPage() {
           {currentSection === "maintenance" && (
             <MaintenanceList userId={currentUser?.id} userName={currentUser?.name} />
           )}
-          {currentSection === "finance" && (
-            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
-              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
-                <span className="material-icons">account_balance</span>
-                管理費/收支
-              </h2>
-              <FinanceList userRoom={currentUser?.room} />
-            </div>
-          )}
+          {currentSection === "finance" && <FinanceList userRoom={currentUser?.room} />}
           {currentSection === "visitors" && <VisitorList userRoom={currentUser?.room} currentUser={currentUser} />}
           {currentSection === "meetings" && <MeetingList />}
           {currentSection === "emergencies" && <EmergencyButtons userName={currentUser?.name} variant="full" />}

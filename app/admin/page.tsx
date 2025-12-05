@@ -251,7 +251,7 @@ export default function AdminPage() {
           ) : currentSection === "maintenance" ? (
             <MaintenanceManagementAdmin />
           ) : currentSection === "votes" ? (
-            <VoteManagementAdmin currentUserName={currentUser?.name} />
+            <VoteManagementAdmin />
           ) : currentSection === "announcement-details" ? (
             <AnnouncementDetailsAdmin onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
           ) : currentSection === "meetings" ? (

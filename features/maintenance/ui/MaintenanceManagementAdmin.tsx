@@ -8,7 +8,8 @@ interface MaintenanceRow {
   equipment: string
   item: string
   description: string
-  reported_by: string
+  reported_by_name: string
+  reported_by_id: string | null
   photo_url: string | null
   status: string
   handler: string
@@ -76,8 +77,8 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
             <label className="block text-[var(--theme-text-primary)] font-medium mb-2">報修人</label>
             <input
               type="text"
-              value={formData.reported_by || ""}
-              onChange={(e) => onChange("reported_by", e.target.value)}
+              value={formData.reported_by_name || ""}
+              onChange={(e) => onChange("reported_by_name", e.target.value)}
               placeholder="報修人姓名"
               className="w-full p-3 rounded-xl theme-input outline-none"
             />
@@ -147,7 +148,8 @@ export function MaintenanceManagementAdmin() {
     equipment: "",
     item: "",
     description: "",
-    reported_by: "",
+    reported_by_name: "",
+    reported_by_id: null,
     photo_url: null,
     status: "open",
     handler: "",
@@ -157,6 +159,7 @@ export function MaintenanceManagementAdmin() {
   const loadData = async () => {
     setLoading(true)
     const supabase = getSupabaseClient()
+
     const { data: maintenanceData, error } = await supabase
       .from("maintenance")
       .select("*")
@@ -164,9 +167,40 @@ export function MaintenanceManagementAdmin() {
 
     if (error) {
       console.error("Error loading maintenance:", error)
-    } else {
-      setData(maintenanceData || [])
+      setData([])
+      setLoading(false)
+      return
     }
+
+    // 收集所有 reported_by_id
+    const reporterIds = [
+      ...new Set((maintenanceData || []).filter((m: any) => m.reported_by_id).map((m: any) => m.reported_by_id)),
+    ]
+
+    // 批量查詢 profiles 取得名字
+    let profilesMap: Record<string, string> = {}
+    if (reporterIds.length > 0) {
+      const { data: profiles } = await supabase.from("profiles").select("id, name").in("id", reporterIds)
+
+      if (profiles) {
+        profilesMap = Object.fromEntries(profiles.map((p: any) => [p.id, p.name || "未知"]))
+      }
+    }
+
+    setData(
+      (maintenanceData || []).map((row: any) => ({
+        id: row.id,
+        equipment: row.equipment || "",
+        item: row.item || "",
+        description: row.description || "",
+        reported_by_name: row.reported_by_name || (row.reported_by_id ? profilesMap[row.reported_by_id] : "") || "",
+        reported_by_id: row.reported_by_id || null,
+        photo_url: row.photo_url || row.image_url || null,
+        status: row.status || "open",
+        handler: row.handler || row.handler_name || "",
+        cost: row.cost || 0,
+      })),
+    )
     setLoading(false)
   }
 
@@ -180,7 +214,8 @@ export function MaintenanceManagementAdmin() {
       equipment: "",
       item: "",
       description: "",
-      reported_by: "",
+      reported_by_name: "",
+      reported_by_id: null,
       photo_url: null,
       status: "open",
       handler: "",
@@ -207,9 +242,10 @@ export function MaintenanceManagementAdmin() {
         equipment: formData.equipment,
         item: formData.item,
         description: formData.description,
-        reported_by: formData.reported_by,
+        reported_by_name: formData.reported_by_name,
+        reported_by_id: formData.reported_by_id,
         status: formData.status,
-        handler: formData.handler,
+        handler_name: formData.handler,
         cost: formData.cost,
       }
 
@@ -310,7 +346,7 @@ export function MaintenanceManagementAdmin() {
                       {row.description || "-"}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {row.reported_by || "-"}
+                      {row.reported_by_name || "-"}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)]">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${statusInfo.class}`}>

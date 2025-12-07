@@ -66,12 +66,13 @@ export function AnnouncementCarousel({
                 >
                   {announcement.title}
                 </div>
-                <div className="text-white text-sm sm:text-base md:text-lg mb-2 sm:mb-4 leading-relaxed line-clamp-2 sm:line-clamp-3">
-                  {announcement.content.slice(0, 200)}
+                <div className="text-white text-sm sm:text-base md:text-lg mb-2 sm:mb-4 leading-relaxed line-clamp-2 sm:line-clamp-3 whitespace-pre-wrap">
+                  {announcement.content.slice(0, 200).split("\\n").join("\n")}
                   {announcement.content.length > 200 ? "..." : ""}
                 </div>
                 <div className="text-[var(--theme-text-muted)] text-xs sm:text-sm mb-3 sm:mb-4">
-                  發布者: {announcement.author} | {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
+                  發布者: {announcement.author_name || "管理員"} |{" "}
+                  {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
                 </div>
                 {onLike && (
                   <button

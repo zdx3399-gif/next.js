@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useFinanceAdmin } from "../hooks/useFinance"
+import { getSupabaseClient } from "@/lib/supabase"
 
 // --- Types ---
 interface FinanceRecord {
@@ -11,6 +12,7 @@ interface FinanceRecord {
   due: string
   invoice: string
   paid: boolean
+  unit_id?: string
 }
 
 interface ExpenseRecord {
@@ -21,6 +23,14 @@ interface ExpenseRecord {
   amount: number
   vendor: string
   note?: string
+}
+
+interface UnitOption {
+  id: string
+  unit_code: string
+  ping_size: number
+  car_spots: number
+  moto_spots: number
 }
 
 type TabType = "income" | "expense" | "report"
@@ -45,10 +55,43 @@ interface FinanceFormModalProps {
 
 function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing }: FinanceFormModalProps) {
   const [calc, setCalc] = useState({ parking: 0, car: 0, ping: 0 })
+  const [units, setUnits] = useState<UnitOption[]>([])
+  const [loadingUnits, setLoadingUnits] = useState(false)
 
   useEffect(() => {
-    if (isOpen) setCalc({ parking: 0, car: 0, ping: 0 })
+    if (isOpen) {
+      setCalc({ parking: 0, car: 0, ping: 0 })
+      loadUnits()
+    }
   }, [isOpen])
+
+  const loadUnits = async () => {
+    setLoadingUnits(true)
+    const supabase = getSupabaseClient()
+    if (supabase) {
+      const { data } = await supabase
+        .from("units")
+        .select("id, unit_code, ping_size, car_spots, moto_spots")
+        .order("unit_code")
+      if (data) {
+        setUnits(data)
+      }
+    }
+    setLoadingUnits(false)
+  }
+
+  const handleUnitSelect = (unitId: string) => {
+    const unit = units.find((u) => u.id === unitId)
+    if (unit) {
+      onChange("unit_id", unit.id)
+      onChange("room", unit.unit_code)
+      setCalc({
+        parking: unit.car_spots > 0 ? 1 : 0,
+        car: unit.car_spots || 0,
+        ping: unit.ping_size || 0,
+      })
+    }
+  }
 
   useEffect(() => {
     const total = calc.parking * 500 + calc.car * 100 + calc.ping * 90
@@ -72,16 +115,24 @@ function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
         <div className="p-4 space-y-4">
           <div>
             <label className="block text-[var(--theme-text-primary)] font-medium mb-2">房號</label>
-            <input
-              type="text"
-              value={formData.room || ""}
-              onChange={(e) => onChange("room", e.target.value)}
-              placeholder="例：A棟 10樓 1001室"
-              className="w-full p-3 rounded-xl theme-input outline-none"
-            />
+            {loadingUnits ? (
+              <div className="w-full p-3 rounded-xl theme-input text-center">載入中...</div>
+            ) : (
+              <select
+                value={formData.unit_id || ""}
+                onChange={(e) => handleUnitSelect(e.target.value)}
+                className="w-full p-3 rounded-xl theme-select outline-none cursor-pointer"
+              >
+                <option value="">-- 選擇房號 --</option>
+                {units.map((unit) => (
+                  <option key={unit.id} value={unit.id}>
+                    {unit.unit_code}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          {/* Calculator Section */}
           <div className="bg-[var(--theme-accent-light)] p-3 rounded-xl space-y-2 border border-[var(--theme-border)]">
             <label className="block text-[var(--theme-accent)] font-bold text-sm mb-2">
               <span className="material-icons text-sm align-middle mr-1">calculate</span>
@@ -89,7 +140,7 @@ function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
             </label>
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="text-xs text-[var(--theme-text-secondary)] block mb-1">停車場 ($500)</label>
+                <label className="text-xs text-[var(--theme-text-secondary)] block mb-1">汽車 ($500)</label>
                 <input
                   type="number"
                   min="0"
@@ -99,7 +150,7 @@ function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
                 />
               </div>
               <div>
-                <label className="text-xs text-[var(--theme-text-secondary)] block mb-1">汽車 ($100)</label>
+                <label className="text-xs text-[var(--theme-text-secondary)] block mb-1">機車 ($100)</label>
                 <input
                   type="number"
                   min="0"
@@ -279,7 +330,7 @@ function ExpenseFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
 
 // --- Main Component ---
 export function FinanceManagementAdmin() {
-  const { records, loading, updateRow, addRow, saveRecord, removeRecord } = useFinanceAdmin()
+  const { records, loading, updateRow, addRow, saveRecord, removeRecord, refresh } = useFinanceAdmin()
   const [activeTab, setActiveTab] = useState<TabType>("income")
 
   // Income State
@@ -291,6 +342,7 @@ export function FinanceManagementAdmin() {
     due: "",
     invoice: "",
     paid: false,
+    unit_id: "",
   })
 
   // Expense State
@@ -331,7 +383,7 @@ export function FinanceManagementAdmin() {
 
   // --- Handlers: Income ---
   const handleAddIncome = () => {
-    setIncomeFormData({ room: "", amount: 0, due: "", invoice: "", paid: false })
+    setIncomeFormData({ room: "", amount: 0, due: "", invoice: "", paid: false, unit_id: "" })
     setIncomeEditingIndex(null)
     setIsIncomeModalOpen(true)
   }
@@ -345,6 +397,7 @@ export function FinanceManagementAdmin() {
       due: record.due || "",
       invoice: record.invoice || "",
       paid: record.paid || false,
+      unit_id: record.unit_id || "",
     })
     setIncomeEditingIndex(index)
     setIsIncomeModalOpen(true)
@@ -356,10 +409,16 @@ export function FinanceManagementAdmin() {
       keys.forEach((key) => {
         if (incomeFormData[key] !== undefined) updateRow(incomeEditingIndex, key as any, incomeFormData[key] as any)
       })
-      await saveRecord(records[incomeEditingIndex], incomeEditingIndex)
+      const success = await saveRecord(records[incomeEditingIndex], incomeEditingIndex)
+      if (success) {
+        await refresh()
+      }
     } else {
       addRow()
-      await saveRecord({ ...incomeFormData, id: undefined } as any, records.length)
+      const success = await saveRecord({ ...incomeFormData, id: undefined } as any, records.length)
+      if (success) {
+        await refresh()
+      }
     }
     setIsIncomeModalOpen(false)
   }

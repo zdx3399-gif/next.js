@@ -4,6 +4,9 @@ import { createPortal } from "react-dom"
 import { ProfileForm } from "./ProfileForm"
 import type { User } from "../api/profile"
 
+export type { User }
+export type ProfileUser = User
+
 interface ProfileDropdownProps {
   currentUser: User | null
   onUpdate?: (user: User | null) => void
@@ -80,8 +83,8 @@ export function ProfileDropdown({ currentUser, onUpdate, getRoleLabel }: Profile
           >
             <ProfileForm
               currentUser={currentUser}
-              onUpdate={(user) => {
-                onUpdate?.(user)
+              onUpdate={(updatedUser: User | null) => {
+                onUpdate?.(updatedUser)
                 setIsOpen(false)
               }}
               onClose={() => setIsOpen(false)}

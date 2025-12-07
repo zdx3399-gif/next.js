@@ -9,6 +9,7 @@ import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCa
 import { AnnouncementDetails } from "@/features/announcements/ui/AnnouncementDetails"
 import { PackageList } from "@/features/packages/ui/PackageList"
 import { ProfileDropdown } from "@/features/profile/ui/ProfileDropdown"
+import type { User } from "@/features/profile/api/profile"
 import { VoteList } from "@/features/votes/ui/VoteList"
 import { VisitorList } from "@/features/visitors/ui/VisitorList"
 import { MaintenanceList } from "@/features/maintenance/ui/MaintenanceList"
@@ -18,27 +19,6 @@ import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
 import { FacilityList } from "@/features/facilities/ui/FacilityList"
 import { AiChat } from "@/features/support/ui/AiChat"
 import { ThemeToggle } from "@/components/theme-toggle"
-
-// Define User and Section types for better type safety
-interface User {
-  id: string
-  name: string
-  email: string
-  role: UserRole
-  room: string
-  phone: string
-  status: string
-}
-
-interface ProfileUser {
-  id: string
-  name: string
-  email: string
-  phone: string
-  room: string
-  role: string
-  status: string
-}
 
 type Section =
   | "dashboard"
@@ -52,6 +32,14 @@ type Section =
   | "emergencies"
   | "facilities"
 
+function getNameString(name: unknown): string {
+  if (typeof name === "string") return name
+  if (name && typeof name === "object" && "name" in name) {
+    return String((name as { name: unknown }).name)
+  }
+  return ""
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [currentUser, setCurrentUser] = useState<User | null>(null)
@@ -60,15 +48,8 @@ export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const handleProfileUpdate = (user: ProfileUser | null) => {
-    if (user) {
-      setCurrentUser({
-        ...user,
-        role: user.role as UserRole,
-      })
-    } else {
-      setCurrentUser(null)
-    }
+  const handleProfileUpdate = (user: User | null) => {
+    setCurrentUser(user)
   }
 
   const {
@@ -105,7 +86,13 @@ export default function DashboardPage() {
       }
 
       const supabase = getSupabaseClient()
-      const { data: userDataArray, error } = await supabase.from("profiles").select("*").eq("id", user.id)
+      const { data: userDataArray, error } = await supabase
+        .from("profiles")
+        .select(`
+          *,
+          units ( id, unit_code, building, floor, room_number, ping_size, car_spots, moto_spots, monthly_fee )
+        `)
+        .eq("id", user.id)
 
       if (error) {
         console.error("[v0] Error fetching user profile:", error)
@@ -114,9 +101,28 @@ export default function DashboardPage() {
       const userData = userDataArray && userDataArray.length > 0 ? userDataArray[0] : null
 
       if (!userData) {
-        setCurrentUser(user)
+        const updatedUser: User = {
+          id: user.id,
+          name: getNameString(user.name),
+          email: user.email || "",
+          phone: user.phone || "",
+          role: user.role || "resident",
+          status: user.status || "active",
+          unit_id: user.unit_id || "",
+          room: user.room || "",
+        }
+        setCurrentUser(updatedUser)
       } else {
-        const updatedUser = userData
+        const updatedUser: User = {
+          id: userData.id,
+          name: getNameString(userData.name),
+          email: userData.email || "",
+          phone: userData.phone || "",
+          role: userData.role || "resident",
+          status: userData.status || "active",
+          unit_id: userData.unit_id || "",
+          room: userData.units?.unit_code || "",
+        }
         setCurrentUser(updatedUser)
       }
     } catch (e: any) {
@@ -223,7 +229,7 @@ export default function DashboardPage() {
       >
         <div className={`p-8 pb-6 border-b border-[var(--theme-border)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
           <div className="text-[var(--theme-accent)] font-bold text-xl">社區管理系統</div>
-          {currentUser && <ProfileDropdown currentUser={currentUser as ProfileUser} onUpdate={handleProfileUpdate} />}
+          {currentUser && <ProfileDropdown currentUser={currentUser} onUpdate={handleProfileUpdate} />}
         </div>
 
         <ul className="py-4">
@@ -290,7 +296,7 @@ export default function DashboardPage() {
                   />
                 </section>
               )}
-
+              
               {/* Emergency Actions */}
               <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-xl p-3">
                 <h3 className="flex items-center gap-1 text-[var(--theme-text-primary)]/90 text-sm font-bold mb-2">
@@ -316,18 +322,24 @@ export default function DashboardPage() {
                 <span className="material-icons">how_to_vote</span>
                 社區投票
               </h2>
-              <VoteList userId={currentUser?.id} userName={currentUser?.name} />
+              <VoteList userId={currentUser?.id} userName={getNameString(currentUser?.name)} />
             </div>
           )}
           {currentSection === "maintenance" && (
-            <MaintenanceList userId={currentUser?.id} userName={currentUser?.name} />
+            <MaintenanceList userId={currentUser?.id} userName={getNameString(currentUser?.name)} />
           )}
           {currentSection === "finance" && <FinanceList userRoom={currentUser?.room} />}
           {currentSection === "visitors" && <VisitorList userRoom={currentUser?.room} currentUser={currentUser} />}
           {currentSection === "meetings" && <MeetingList />}
-          {currentSection === "emergencies" && <EmergencyButtons userName={currentUser?.name} variant="full" />}
+          {currentSection === "emergencies" && (
+            <EmergencyButtons userName={getNameString(currentUser?.name)} variant="full" />
+          )}
           {currentSection === "facilities" && (
-            <FacilityList userId={currentUser?.id} userName={currentUser?.name} userRoom={currentUser?.room} />
+            <FacilityList
+              userId={currentUser?.id}
+              userName={getNameString(currentUser?.name)}
+              userRoom={currentUser?.room}
+            />
           )}
           {currentSection === "announcements" && (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">

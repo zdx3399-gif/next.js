@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from "react"
 import type { Announcement } from "../api/announcements"
-import { fetchAllAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from "../api/announcements"
+import {
+  fetchAllAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+  uploadAnnouncementImage,
+} from "../api/announcements"
 
 interface AnnouncementFormModalProps {
   isOpen: boolean
@@ -79,10 +85,9 @@ function AnnouncementFormModal({
             <label className="block text-[var(--theme-text-primary)] font-medium mb-2">作者</label>
             <input
               type="text"
-              value={formData.author || ""}
-              onChange={(e) => onChange("author", e.target.value)}
-              placeholder="請輸入作者名稱"
-              className="w-full p-3 rounded-xl theme-input outline-none focus:border-[var(--theme-accent)]"
+              value={formData.author_name || "管理員"}
+              readOnly
+              className="w-full p-3 rounded-xl theme-input outline-none bg-[var(--theme-bg-secondary)]"
             />
           </div>
           <div>
@@ -159,14 +164,15 @@ export function AnnouncementManagementAdmin() {
     try {
       const finalData = { ...formData }
 
-      // Handle image upload if file selected
       if (imageFile) {
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader()
-          reader.onloadend = () => resolve(reader.result as string)
-          reader.readAsDataURL(imageFile)
-        })
-        finalData.image_url = base64
+        try {
+          const imageUrl = await uploadAnnouncementImage(imageFile)
+          finalData.image_url = imageUrl
+        } catch (uploadError) {
+          console.error("Error uploading image:", uploadError)
+          alert("圖片上傳失敗，請稍後再試")
+          return
+        }
       }
 
       if (editingAnnouncement) {
@@ -232,7 +238,7 @@ export function AnnouncementManagementAdmin() {
                       <div className="line-clamp-2">{announcement.content}</div>
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {announcement.author}
+                      {announcement.author_name || "管理員"}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)]">
                       <span

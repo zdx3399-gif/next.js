@@ -61,7 +61,8 @@
     "tw-animate-css": "latest",
     "url": "latest",
     "vaul": "^1.1.2",
-    "react-hook-form": "7.65.0"
+    "react-hook-form": "7.65.0",
+    "@vercel/blob": "2.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

@@ -6,13 +6,14 @@ import type { Package } from "../api/packages"
 
 interface PackageListProps {
   userRoom?: string | null
-  currentUser?: any
+  currentUser?: { unit_id?: string } | null
 }
 
 export function PackageList({ userRoom, currentUser }: PackageListProps) {
   const { pendingPackages, pickedUpPackages, loading } = usePackages({
     userRoom: userRoom || undefined,
     isAdmin: false,
+    userUnitId: currentUser?.unit_id,
   })
   const [searchTerm, setSearchTerm] = useState("")
 
@@ -22,7 +23,7 @@ export function PackageList({ userRoom, currentUser }: PackageListProps) {
     return pkgs.filter(
       (pkg) =>
         pkg.courier.toLowerCase().includes(term) ||
-        pkg.recipient_name.toLowerCase().includes(term) ||
+        (pkg.recipient_name || "").toLowerCase().includes(term) ||
         pkg.tracking_number?.toLowerCase().includes(term),
     )
   }

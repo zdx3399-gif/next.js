@@ -65,14 +65,25 @@ export function useFinanceAdmin() {
 
   const saveRecord = async (record: FinanceRecord, index: number) => {
     if (record.id) {
-      const result = await updateFinanceRecord(record.id, record)
+      const result = await updateFinanceRecord(record.id, {
+        amount: record.amount,
+        due: record.due,
+        invoice: record.invoice,
+        paid: record.paid,
+        unit_id: record.unit_id,
+      })
       if (!result.success) {
         alert("儲存失敗: " + result.error)
         return false
       }
     } else {
-      const { id, ...newRecord } = record
-      const result = await createFinanceRecord(newRecord)
+      const result = await createFinanceRecord({
+        amount: record.amount,
+        due: record.due,
+        invoice: record.invoice,
+        paid: record.paid,
+        unit_id: record.unit_id,
+      })
       if (!result.success) {
         alert("新增失敗: " + result.error)
         return false
@@ -85,6 +96,7 @@ export function useFinanceAdmin() {
         })
       }
     }
+    await loadRecords()
     return true
   }
 

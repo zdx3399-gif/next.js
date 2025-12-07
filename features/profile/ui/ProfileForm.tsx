@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-
-import { useProfile } from "../hooks/useProfile"
-import type { User } from "../api/profile"
+import { useState, useEffect } from "react"
+import { updateProfile, type ProfileData, type User } from "../api/profile"
 
 interface ProfileFormProps {
   currentUser: User | null
@@ -12,12 +11,50 @@ interface ProfileFormProps {
 }
 
 export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps) {
-  const { profileForm, setProfileForm, handleProfileUpdate, isUpdating } = useProfile(currentUser)
+  const [profileForm, setProfileForm] = useState<ProfileData & { room: string }>({
+    name: "",
+    unit_id: "",
+    room: "",
+    phone: "",
+    email: "",
+    password: "",
+  })
+  const [isUpdating, setIsUpdating] = useState(false)
 
-  const onSubmit = async (e: React.FormEvent) => {
-    const updatedUser = await handleProfileUpdate(e)
-    if (updatedUser && onUpdate) {
-      onUpdate(updatedUser)
+  useEffect(() => {
+    if (currentUser) {
+      setProfileForm({
+        name: currentUser.name || "",
+        unit_id: currentUser.unit_id || "",
+        room: currentUser.room || "",
+        phone: currentUser.phone || "",
+        email: currentUser.email || "",
+        password: "",
+      })
+    }
+  }, [currentUser])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!currentUser?.id) {
+      alert("錯誤：用戶資訊不完整，請重新登入")
+      return
+    }
+
+    setIsUpdating(true)
+
+    try {
+      const updatedUser = await updateProfile(currentUser.id, profileForm)
+      localStorage.setItem("currentUser", JSON.stringify(updatedUser))
+      alert("個人資料已更新！")
+      if (onUpdate) onUpdate(updatedUser)
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : "未知錯誤"
+      console.error(e)
+      alert("更新失敗：" + errorMessage)
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -37,7 +74,7 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
           </button>
         )}
       </div>
-      <form onSubmit={onSubmit} className="space-y-4 max-w-2xl">
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
         <div>
           <label className="block text-[var(--theme-text-primary)] mb-2">姓名</label>
           <input
@@ -52,10 +89,9 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
           <label className="block text-[var(--theme-text-primary)] mb-2">房號</label>
           <input
             type="text"
-            value={profileForm.room}
-            onChange={(e) => setProfileForm({ ...profileForm, room: e.target.value })}
-            className="w-full p-3 rounded-lg theme-input outline-none"
-            required
+            value={profileForm.room || "未設定"}
+            disabled
+            className="w-full p-3 rounded-lg theme-input outline-none bg-[var(--theme-bg-secondary)] text-[var(--theme-text-secondary)] cursor-not-allowed"
           />
         </div>
         <div>

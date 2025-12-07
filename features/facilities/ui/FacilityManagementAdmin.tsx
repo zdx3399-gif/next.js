@@ -198,41 +198,28 @@ export function FacilityManagementAdmin() {
 
   const onSave = async () => {
     if (editingIndex !== null) {
-      const keys = Object.keys(formData) as Array<keyof Facility>
-      keys.forEach((key) => {
-        if (formData[key] !== undefined) {
-          updateRow(editingIndex, key as any, formData[key] as any)
-        }
-      })
-      if (currentImageFile) {
-        handleImageFileChange(editingIndex, currentImageFile)
+      const facilityToSave = {
+        ...facilities[editingIndex],
+        ...formData,
       }
-      const result = await handleSave(facilities[editingIndex], editingIndex)
+      const result = await handleSave(facilityToSave as any, editingIndex, currentImageFile)
       alert(result.message)
     } else {
-      addNewFacility()
       const newIndex = facilities.length
-      const keys = Object.keys(formData) as Array<keyof Facility>
-      keys.forEach((key) => {
-        if (formData[key] !== undefined) {
-          updateRow(newIndex, key as any, formData[key] as any)
-        }
-      })
-      if (currentImageFile) {
-        handleImageFileChange(newIndex, currentImageFile)
-      }
-      const result = await handleSave({ ...formData } as any, newIndex)
+      addNewFacility()
+      const result = await handleSave({ ...formData, id: "" } as any, newIndex, currentImageFile)
       alert(result.message)
     }
     setIsModalOpen(false)
+    setCurrentImageFile(null)
   }
 
   const onDelete = async (id: string) => {
-    if (confirm("確定要刪除此設施嗎？")) {
-      const result = await handleDelete(id)
-      if (result.success) {
-        alert(result.message)
-      }
+    const result = await handleDelete(id)
+    if (result.success) {
+      alert(result.message)
+    } else if (result.message !== "已取消") {
+      alert(result.message)
     }
   }
 

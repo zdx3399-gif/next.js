@@ -39,7 +39,9 @@ export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
                   <div>
                     <div className="text-[var(--theme-text-primary)] font-bold">{item.equipment || "維修申請"}</div>
                     <div className="text-[var(--theme-text-muted)] text-sm">位置: {item.item || "未指定"}</div>
-                    <div className="text-[var(--theme-text-muted)] text-sm">申請人: {item.reported_by || "未知"}</div>
+                    <div className="text-[var(--theme-text-muted)] text-sm">
+                      申請人: {item.reported_by_name || "未知"}
+                    </div>
                   </div>
                   <div
                     className={`px-3 py-1 rounded-full text-sm font-bold ${
@@ -54,10 +56,10 @@ export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
                   </div>
                 </div>
                 {item.description && <div className="text-[var(--theme-text-primary)] mb-2">{item.description}</div>}
-                {item.photo_url && (
+                {item.image_url && (
                   <div className="mb-2">
                     <img
-                      src={item.photo_url || "/placeholder.svg"}
+                      src={item.image_url || "/placeholder.svg"}
                       alt="維修照片"
                       className="max-w-full h-auto rounded-lg max-h-[200px]"
                     />
@@ -66,7 +68,9 @@ export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
                 <div className="text-[var(--theme-text-muted)] text-sm">
                   申請時間: {item.created_at ? new Date(item.created_at).toLocaleString("zh-TW") : "未知"}
                 </div>
-                {item.handler && <div className="text-[var(--theme-text-muted)] text-sm">處理人員: {item.handler}</div>}
+                {item.handler_name && item.handler_name !== "未指派" && (
+                  <div className="text-[var(--theme-text-muted)] text-sm">處理人員: {item.handler_name}</div>
+                )}
               </div>
             ))
           ) : (

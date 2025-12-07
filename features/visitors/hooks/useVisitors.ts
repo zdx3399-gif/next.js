@@ -12,11 +12,12 @@ import {
 
 interface UseVisitorsOptions {
   userRoom?: string | null
+  userUnitId?: string // 新增 userUnitId 參數
   currentUser?: any
   isAdmin?: boolean
 }
 
-export function useVisitors({ userRoom, currentUser, isAdmin = false }: UseVisitorsOptions) {
+export function useVisitors({ userRoom, userUnitId, currentUser, isAdmin = false }: UseVisitorsOptions) {
   const [visitors, setVisitors] = useState<Visitor[]>([])
   const [reservedVisitors, setReservedVisitors] = useState<Visitor[]>([])
   const [checkedInVisitors, setCheckedInVisitors] = useState<Visitor[]>([])
@@ -25,11 +26,11 @@ export function useVisitors({ userRoom, currentUser, isAdmin = false }: UseVisit
   const [loading, setLoading] = useState(false)
 
   const loadVisitors = useCallback(async () => {
-    if (!userRoom && !currentUser?.id && !isAdmin) return
+    if (!userRoom && !userUnitId && !currentUser?.id && !isAdmin) return
 
     setLoading(true)
     try {
-      const data = await fetchVisitors(userRoom, isAdmin)
+      const data = await fetchVisitors(userRoom, isAdmin, userUnitId)
       setVisitors(data)
     } catch (e) {
       console.error("Failed to load visitors:", e)
@@ -37,7 +38,7 @@ export function useVisitors({ userRoom, currentUser, isAdmin = false }: UseVisit
     } finally {
       setLoading(false)
     }
-  }, [userRoom, currentUser?.id, isAdmin])
+  }, [userRoom, userUnitId, currentUser?.id, isAdmin])
 
   // 根據搜尋條件過濾訪客
   const filterVisitors = useCallback(() => {
@@ -49,7 +50,7 @@ export function useVisitors({ userRoom, currentUser, isAdmin = false }: UseVisit
       const term = searchTerm.toLowerCase()
       const matchesTerm = (visitor: Visitor) =>
         visitor.name.toLowerCase().includes(term) ||
-        visitor.room.toLowerCase().includes(term) ||
+        (visitor.room || "").toLowerCase().includes(term) ||
         visitor.phone?.toLowerCase().includes(term)
 
       reserved = reserved.filter(matchesTerm)
@@ -70,7 +71,6 @@ export function useVisitors({ userRoom, currentUser, isAdmin = false }: UseVisit
     filterVisitors()
   }, [filterVisitors])
 
-  // 預約訪客
   const handleReservation = async (reservation: VisitorReservation): Promise<boolean> => {
     if (!currentUser) {
       alert("請先登入")
@@ -79,7 +79,8 @@ export function useVisitors({ userRoom, currentUser, isAdmin = false }: UseVisit
 
     try {
       const room = currentUser.room || userRoom
-      await createVisitorReservation(reservation, room, currentUser.name)
+      const unitId = currentUser.unit_id || userUnitId
+      await createVisitorReservation(reservation, room, currentUser.name, unitId, currentUser.id)
       alert("訪客預約成功！")
       await loadVisitors()
       return true
@@ -89,7 +90,6 @@ export function useVisitors({ userRoom, currentUser, isAdmin = false }: UseVisit
     }
   }
 
-  // 訪客簽到
   const handleCheckIn = async (visitorId: string): Promise<void> => {
     try {
       await checkInVisitor(visitorId)
@@ -100,7 +100,6 @@ export function useVisitors({ userRoom, currentUser, isAdmin = false }: UseVisit
     }
   }
 
-  // 訪客簽退
   const handleCheckOut = async (visitorId: string): Promise<void> => {
     try {
       await checkOutVisitor(visitorId)

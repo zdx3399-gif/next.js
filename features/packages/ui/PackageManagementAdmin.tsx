@@ -151,7 +151,7 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
     return pkgs.filter(
       (pkg) =>
         pkg.courier.toLowerCase().includes(term) ||
-        pkg.recipient_name.toLowerCase().includes(term) ||
+        (pkg.recipient_name || "").toLowerCase().includes(term) ||
         pkg.tracking_number?.toLowerCase().includes(term),
     )
   }
@@ -160,7 +160,7 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
   const filteredPickedUp = filterPackages(pickedUpPackages)
 
   const loadRoomResidents = async (room: string) => {
-    if (roomResidents[room]) return
+    if (!room || roomResidents[room]) return
     const residents = await fetchResidentsByRoom(room)
     setRoomResidents((prev) => ({
       ...prev,

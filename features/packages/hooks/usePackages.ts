@@ -1,34 +1,36 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { type Package, fetchPackages, addPackage, markPackageAsPickedUp } from "../api/packages"
+import { type Package, type AddPackageData, fetchPackages, addPackage, markPackageAsPickedUp } from "../api/packages"
 
 interface UsePackagesOptions {
   userRoom?: string
   isAdmin?: boolean
+  userUnitId?: string
 }
 
-export function usePackages({ userRoom, isAdmin = false }: UsePackagesOptions) {
+export function usePackages(options: UsePackagesOptions = {}) {
+  const { userRoom, isAdmin = false, userUnitId } = options
+
   const [packages, setPackages] = useState<Package[]>([])
-  const [loading, setLoading] = useState(true) // 初始為 true
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const loadPackages = useCallback(async () => {
-    console.log("[v0] Loading packages, userRoom:", userRoom, "isAdmin:", isAdmin)
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchPackages(userRoom, isAdmin)
-      console.log("[v0] Loaded packages:", data.length)
+      const data = await fetchPackages(userRoom, isAdmin, userUnitId)
       setPackages(data)
-    } catch (e: any) {
-      console.error("[v0] Error loading packages:", e)
-      setError(e.message)
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error"
+      console.error("Error loading packages:", e)
+      setError(errorMessage)
       setPackages([])
     } finally {
       setLoading(false)
     }
-  }, [userRoom, isAdmin])
+  }, [userRoom, userUnitId, isAdmin])
 
   useEffect(() => {
     loadPackages()
@@ -39,14 +41,15 @@ export function usePackages({ userRoom, isAdmin = false }: UsePackagesOptions) {
     recipient_name: string
     recipient_room: string
     tracking_number?: string
-    arrived_at: string
+    arrived_at?: string
   }) => {
     try {
-      await addPackage(packageData)
+      await addPackage(packageData as AddPackageData)
       await loadPackages()
       return true
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error"
+      setError(errorMessage)
       return false
     }
   }
@@ -58,8 +61,9 @@ export function usePackages({ userRoom, isAdmin = false }: UsePackagesOptions) {
         setPackages((prev) => prev.map((pkg) => (pkg.id === packageId ? updatedPackage : pkg)))
       }
       return true
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error"
+      setError(errorMessage)
       return false
     }
   }
@@ -73,7 +77,7 @@ export function usePackages({ userRoom, isAdmin = false }: UsePackagesOptions) {
     pickedUpPackages,
     loading,
     error,
-    loadPackages,
+    reload: loadPackages,
     handleAddPackage,
     handleMarkAsPickedUp,
   }

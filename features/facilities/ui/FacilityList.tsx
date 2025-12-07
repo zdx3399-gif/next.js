@@ -110,31 +110,39 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
           {facilities.map((facility) => (
             <div
               key={facility.id}
-              className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] rounded-lg p-4 hover:bg-[var(--theme-accent-light)] transition-all"
+              className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] rounded-lg overflow-hidden hover:bg-[var(--theme-accent-light)] transition-all"
             >
-              {facility.image_url && (
-                <img
-                  src={facility.image_url || "/placeholder.svg"}
-                  alt={facility.name}
-                  className="w-full h-40 object-cover rounded-lg mb-3"
-                />
-              )}
-              <div className="text-[var(--theme-text-primary)] font-bold text-lg mb-2">{facility.name}</div>
-              {facility.description && (
-                <div className="text-[var(--theme-text-muted)] text-sm mb-2">{facility.description}</div>
-              )}
-              {facility.location && (
-                <div className="text-[var(--theme-text-muted)] text-sm flex items-center gap-1">
-                  <span className="material-icons text-sm">place</span>
-                  {facility.location}
-                </div>
-              )}
-              {facility.capacity && (
-                <div className="text-[var(--theme-text-muted)] text-sm flex items-center gap-1">
-                  <span className="material-icons text-sm">people</span>
-                  容納人數: {facility.capacity}
-                </div>
-              )}
+              <div className="w-full h-40 bg-[var(--theme-bg-card)]">
+                {facility.image_url ? (
+                  <img
+                    src={facility.image_url || "/placeholder.svg"}
+                    alt={facility.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="material-icons text-6xl text-[var(--theme-text-muted)]">meeting_room</span>
+                  </div>
+                )}
+              </div>
+              <div className="p-4">
+                <div className="text-[var(--theme-text-primary)] font-bold text-lg mb-2">{facility.name}</div>
+                {facility.description && (
+                  <div className="text-[var(--theme-text-muted)] text-sm mb-2">{facility.description}</div>
+                )}
+                {facility.location && (
+                  <div className="text-[var(--theme-text-muted)] text-sm flex items-center gap-1">
+                    <span className="material-icons text-sm">place</span>
+                    {facility.location}
+                  </div>
+                )}
+                {facility.capacity && (
+                  <div className="text-[var(--theme-text-muted)] text-sm flex items-center gap-1">
+                    <span className="material-icons text-sm">people</span>
+                    容納人數: {facility.capacity}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
           {facilities.length === 0 && (

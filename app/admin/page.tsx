@@ -18,16 +18,8 @@ import { ProfileDropdown } from "@/features/profile/ui/ProfileDropdown"
 import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
 import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCarousel"
 import { ThemeToggle } from "@/components/theme-toggle"
-
-type User = {
-  id: string
-  email: string
-  name: string
-  role: string
-  phone: string
-  room: string
-  status: string
-}
+import { getSupabaseClient } from "@/lib/supabase"
+import type { User } from "@/features/profile/api/profile"
 
 type Section =
   | "dashboard"
@@ -53,25 +45,60 @@ export default function AdminPage() {
   const { announcements, loading: announcementsLoading, reload } = useAnnouncements(false)
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("currentUser")
-    if (!storedUser) {
-      router.push("/auth")
-      return
-    }
-
-    try {
-      const user = JSON.parse(storedUser)
-
-      if (!shouldUseBackend(user.role as UserRole)) {
-        router.push("/dashboard")
+    const initAuth = async () => {
+      const storedUser = localStorage.getItem("currentUser")
+      if (!storedUser) {
+        router.push("/auth")
         return
       }
 
-      setCurrentUser(user)
-    } catch (e) {
-      localStorage.removeItem("currentUser")
-      router.push("/auth")
+      try {
+        const user = JSON.parse(storedUser)
+
+        if (!shouldUseBackend(user.role as UserRole)) {
+          router.push("/dashboard")
+          return
+        }
+
+        const supabase = getSupabaseClient()
+        const { data: userDataArray, error } = await supabase
+          .from("profiles")
+          .select(`
+            *,
+            units ( id, unit_code, building, floor, room_number )
+          `)
+          .eq("id", user.id)
+
+        if (error) {
+          console.error("[v0] Error fetching user profile:", error)
+          setCurrentUser(user)
+          return
+        }
+
+        const userData = userDataArray && userDataArray.length > 0 ? userDataArray[0] : null
+
+        if (!userData) {
+          setCurrentUser(user)
+        } else {
+          const updatedUser: User = {
+            id: userData.id,
+            name: userData.name,
+            email: userData.email,
+            phone: userData.phone,
+            role: userData.role,
+            status: userData.status,
+            unit_id: userData.unit_id,
+            room: userData.units?.unit_code || "",
+          }
+          setCurrentUser(updatedUser)
+        }
+      } catch (e) {
+        localStorage.removeItem("currentUser")
+        router.push("/auth")
+      }
     }
+
+    initAuth()
   }, [router])
 
   const logout = () => {
@@ -245,7 +272,7 @@ export default function AdminPage() {
           ) : currentSection === "visitors" ? (
             <VisitorManagementAdmin currentUser={currentUser} />
           ) : currentSection === "packages" ? (
-            <PackageManagementAdmin currentUser={currentUser} />
+            <PackageManagementAdmin />
           ) : currentSection === "finance" ? (
             <FinanceManagementAdmin />
           ) : currentSection === "maintenance" ? (

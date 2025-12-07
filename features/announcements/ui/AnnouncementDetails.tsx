@@ -242,7 +242,7 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
               )}
 
               <div className="text-[var(--theme-text-primary)] mb-6 whitespace-pre-wrap">
-                {selectedAnnouncement.content}
+                {selectedAnnouncement.content.split("\\n").join("\n")}
               </div>
 
               <div className="mb-6 pb-4 border-b border-[var(--theme-border)]">

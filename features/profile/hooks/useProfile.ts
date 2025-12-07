@@ -8,7 +8,7 @@ import { updateProfile, type ProfileData, type User } from "../api/profile"
 export function useProfile(currentUser: User | null) {
   const [profileForm, setProfileForm] = useState<ProfileData>({
     name: "",
-    room: "",
+    unit_id: "", // 改用 unit_id
     phone: "",
     email: "",
     password: "",
@@ -20,7 +20,7 @@ export function useProfile(currentUser: User | null) {
     if (currentUser) {
       setProfileForm({
         name: currentUser.name || "",
-        room: currentUser.room || "",
+        unit_id: currentUser.unit_id || "", // 改用 unit_id
         phone: currentUser.phone || "",
         email: currentUser.email || "",
         password: "",
@@ -39,15 +39,7 @@ export function useProfile(currentUser: User | null) {
     setIsUpdating(true)
 
     try {
-      await updateProfile(currentUser.id, profileForm)
-
-      const updatedUser: User = {
-        ...currentUser,
-        name: profileForm.name,
-        room: profileForm.room,
-        phone: profileForm.phone,
-        email: profileForm.email,
-      }
+      const updatedUser = await updateProfile(currentUser.id, profileForm)
 
       localStorage.setItem("currentUser", JSON.stringify(updatedUser))
       alert("個人資料已更新！")

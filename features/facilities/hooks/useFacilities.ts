@@ -164,33 +164,50 @@ export function useFacilitiesAdmin() {
     setImageFiles((prev) => ({ ...prev, [index]: file }))
   }
 
-  const handleSave = async (facility: Facility, index: number): Promise<{ success: boolean; message: string }> => {
+  const handleSave = async (
+    facility: Facility,
+    index: number,
+    imageFile?: File | null,
+  ): Promise<{ success: boolean; message: string }> => {
     try {
       let imageUrl = facility.image_url
 
-      if (imageFiles[index]) {
-        imageUrl = await uploadFacilityImage(imageFiles[index]!)
+      const fileToUpload = imageFile || imageFiles[index]
+      console.log("[v0] handleSave called, facility:", facility)
+      console.log("[v0] fileToUpload:", fileToUpload)
+
+      if (fileToUpload) {
+        imageUrl = await uploadFacilityImage(fileToUpload)
+        console.log("[v0] uploaded imageUrl:", imageUrl?.substring(0, 100) + "...")
         setImageFiles((prev) => ({ ...prev, [index]: null }))
       }
 
-      const facilityData = {
+      const facilityData: Record<string, any> = {
         name: facility.name,
-        description: facility.description,
-        location: facility.location,
-        capacity: facility.capacity,
-        available: facility.available,
-        image_url: imageUrl,
+        description: facility.description || null,
+        location: facility.location || null,
+        capacity: facility.capacity || 1,
+        available: facility.available ?? true,
+        image_url: imageUrl || null,
       }
 
+      console.log("[v0] facilityData to save:", {
+        ...facilityData,
+        image_url: facilityData.image_url ? facilityData.image_url.substring(0, 100) + "..." : "null",
+      })
+
       if (facility.id) {
+        console.log("[v0] updating facility with id:", facility.id)
         await updateFacility(facility.id, facilityData)
       } else {
+        console.log("[v0] creating new facility")
         await createFacility(facilityData as Omit<Facility, "id" | "created_at">)
       }
 
       await loadData()
       return { success: true, message: "儲存成功！" }
     } catch (error: any) {
+      console.error("[v0] handleSave error:", error)
       return { success: false, message: "儲存失敗：" + error.message }
     }
   }

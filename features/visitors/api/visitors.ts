@@ -4,14 +4,17 @@ export interface Visitor {
   id: string
   name: string
   phone?: string
-  room: string
   purpose?: string
   reservation_time?: string
   checked_in_at?: string
   checked_out_at?: string
   status: "reserved" | "checked_in" | "checked_out"
-  reserved_by?: string
   created_at: string
+  unit_id?: string
+  reserved_by_id?: string
+  room?: string
+  reserved_by?: string
+  reserved_by_name?: string
 }
 
 export interface VisitorReservation {
@@ -21,45 +24,80 @@ export interface VisitorReservation {
   reservation_time: string
 }
 
-// 獲取訪客列表
-export async function fetchVisitors(userRoom?: string | null, isAdmin?: boolean): Promise<Visitor[]> {
+export async function fetchVisitors(room?: string | null, isAdmin?: boolean, userUnitId?: string): Promise<Visitor[]> {
   const supabase = getSupabaseClient()
-  let query = supabase.from("visitors").select("*")
+  if (!supabase) return []
 
-  // 住戶只能看自己房號的訪客
-  if (userRoom && !isAdmin) {
-    query = query.eq("room", userRoom)
-  }
-
-  const { data, error } = await query.order("created_at", { ascending: false })
+  const { data, error } = await supabase
+    .from("visitors")
+    .select(`
+      id, name, phone, purpose, reservation_time, checked_in_at, checked_out_at, 
+      status, created_at, unit_id, reserved_by_id,
+      units ( id, unit_code, building, floor, room_number )
+    `)
+    .order("created_at", { ascending: false })
 
   if (error) {
     console.error("Error fetching visitors:", error)
-    throw error
+    return []
   }
 
-  return data || []
+  const visitors: Visitor[] = (data || []).map((v: any) => {
+    const unit = v.units
+    return {
+      id: v.id,
+      name: v.name,
+      phone: v.phone,
+      purpose: v.purpose,
+      reservation_time: v.reservation_time,
+      checked_in_at: v.checked_in_at,
+      checked_out_at: v.checked_out_at,
+      status: v.status,
+      created_at: v.created_at,
+      unit_id: v.unit_id,
+      reserved_by_id: v.reserved_by_id,
+      room: unit?.unit_code || "",
+    }
+  })
+
+  if (!isAdmin && userUnitId) {
+    return visitors.filter((v) => v.unit_id === userUnitId)
+  }
+
+  if (room && !isAdmin) {
+    return visitors.filter((v) => v.room === room)
+  }
+
+  return visitors
 }
 
-// 預約訪客
 export async function createVisitorReservation(
   reservation: VisitorReservation,
   room: string,
   reservedBy: string,
+  unitId?: string,
+  reservedById?: string,
 ): Promise<void> {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase not configured")
 
-  const { error } = await supabase.from("visitors").insert([
-    {
-      name: reservation.name,
-      phone: reservation.phone,
-      room: room,
-      purpose: reservation.purpose,
-      reservation_time: reservation.reservation_time,
-      status: "reserved",
-      reserved_by: reservedBy,
-    },
-  ])
+  const insertData: Record<string, unknown> = {
+    name: reservation.name,
+    phone: reservation.phone,
+    purpose: reservation.purpose,
+    reservation_time: reservation.reservation_time,
+    status: "reserved",
+  }
+
+  if (unitId) {
+    insertData.unit_id = unitId
+  }
+
+  if (reservedById) {
+    insertData.reserved_by_id = reservedById
+  }
+
+  const { error } = await supabase.from("visitors").insert([insertData])
 
   if (error) {
     console.error("Error creating reservation:", error)
@@ -67,9 +105,9 @@ export async function createVisitorReservation(
   }
 }
 
-// 訪客簽到
 export async function checkInVisitor(visitorId: string): Promise<void> {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase not configured")
 
   const { error } = await supabase
     .from("visitors")
@@ -85,9 +123,9 @@ export async function checkInVisitor(visitorId: string): Promise<void> {
   }
 }
 
-// 訪客簽退
 export async function checkOutVisitor(visitorId: string): Promise<void> {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase not configured")
 
   const { error } = await supabase
     .from("visitors")
@@ -101,4 +139,12 @@ export async function checkOutVisitor(visitorId: string): Promise<void> {
     console.error("Error checking out visitor:", error)
     throw error
   }
+}
+
+export function getReservedByName(visitor: Visitor): string {
+  return visitor.reserved_by_name || visitor.reserved_by || ""
+}
+
+export function getRoom(visitor: Visitor): string {
+  return visitor.room || ""
 }

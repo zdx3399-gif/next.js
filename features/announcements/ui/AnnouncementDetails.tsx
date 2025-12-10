@@ -172,13 +172,13 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
 
   return (
     <div className="flex gap-4 h-[600px]">
-      <div className="w-1/3 flex flex-col gap-3 border-r border-[rgba(255,215,0,0.2)] pr-4 overflow-hidden">
+      <div className="w-1/3 flex flex-col gap-3 border-r border-[var(--theme-border)] pr-4 overflow-hidden">
         <input
           type="text"
           placeholder="搜尋公告..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full p-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700] placeholder-[#b0b0b0]"
+          className="theme-input w-full p-2 rounded-lg"
         />
 
         <div className="flex-1 overflow-y-auto space-y-2">
@@ -194,7 +194,7 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
             </div>
           )}
           {loading ? (
-            <div className="text-[#b0b0b0] text-center py-4">載入中...</div>
+            <div className="text-[var(--theme-text-muted)] text-center py-4">載入中...</div>
           ) : filteredAnnouncements.length > 0 ? (
             filteredAnnouncements.map((announcement) => (
               <button
@@ -205,18 +205,18 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
                 }}
                 className={`w-full text-left p-3 rounded-lg transition-all ${
                   selectedAnnouncement?.id === announcement.id
-                    ? "bg-[rgba(255,215,0,0.2)] border border-[#ffd700]"
-                    : "bg-white/5 border border-[rgba(255,215,0,0.1)] hover:bg-white/10"
+                    ? "bg-[var(--theme-accent-light)] border border-[var(--theme-accent)]"
+                    : "bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-accent-light)]"
                 }`}
               >
-                <div className="text-white font-medium line-clamp-2">{announcement.title}</div>
-                <div className="text-[#b0b0b0] text-xs mt-1">
+                <div className="text-[var(--theme-text-primary)] font-medium line-clamp-2">{announcement.title}</div>
+                <div className="text-[var(--theme-text-muted)] text-xs mt-1">
                   {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
                 </div>
               </button>
             ))
           ) : (
-            <div className="text-[#b0b0b0] text-center py-4">沒有找到公告</div>
+            <div className="text-[var(--theme-text-muted)] text-center py-4">沒有找到公告</div>
           )}
         </div>
       </div>
@@ -226,8 +226,8 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
           <>
             <div className="flex-1 overflow-y-auto">
               <div className="mb-4">
-                <h3 className="text-2xl font-bold text-[#ffd700] mb-2">{selectedAnnouncement.title}</h3>
-                <div className="flex gap-4 text-[#b0b0b0] text-sm mb-4">
+                <h3 className="text-2xl font-bold text-[var(--theme-accent)] mb-2">{selectedAnnouncement.title}</h3>
+                <div className="flex gap-4 text-[var(--theme-text-muted)] text-sm mb-4">
                   <div>發布者: {selectedAnnouncement.author}</div>
                   <div>{new Date(selectedAnnouncement.created_at).toLocaleDateString("zh-TW")}</div>
                 </div>
@@ -241,14 +241,18 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
                 />
               )}
 
-              <div className="text-white mb-6 whitespace-pre-wrap">{selectedAnnouncement.content}</div>
+              <div className="text-[var(--theme-text-primary)] mb-6 whitespace-pre-wrap">
+                {selectedAnnouncement.content.split("\\n").join("\n")}
+              </div>
 
-              <div className="mb-6 pb-4 border-b border-[rgba(255,215,0,0.2)]">
+              <div className="mb-6 pb-4 border-b border-[var(--theme-border)]">
                 <button
                   onClick={handleToggleLike}
                   disabled={!currentUser}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                    hasLiked ? "bg-[#ffd700] text-[#222]" : "bg-white/20 text-[#ffd700] hover:bg-white/30"
+                    hasLiked
+                      ? "bg-[var(--theme-accent)] text-[var(--theme-bg-primary)]"
+                      : "bg-[var(--theme-bg-secondary)] text-[var(--theme-accent)] hover:bg-[var(--theme-accent-light)]"
                   } ${!currentUser ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   <span className="material-icons">favorite</span>
@@ -257,34 +261,34 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
               </div>
 
               <div>
-                <h4 className="text-lg font-bold text-[#ffd700] mb-4">留言 ({currentComments.length})</h4>
+                <h4 className="text-lg font-bold text-[var(--theme-accent)] mb-4">留言 ({currentComments.length})</h4>
                 <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
                   {currentComments.length > 0 ? (
                     currentComments.map((comment) => (
-                      <div key={comment.id} className="bg-white/5 p-3 rounded-lg">
+                      <div key={comment.id} className="bg-[var(--theme-bg-secondary)] p-3 rounded-lg">
                         <div className="flex justify-between items-start mb-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-[#ffd700] font-medium">{comment.user_name}</span>
+                            <span className="text-[var(--theme-accent)] font-medium">{comment.user_name}</span>
                             {bannedUsers.has(comment.user_name) && (
                               <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded">已禁言</span>
                             )}
                           </div>
-                          <span className="text-[#b0b0b0] text-xs">
+                          <span className="text-[var(--theme-text-muted)] text-xs">
                             {new Date(comment.created_at).toLocaleString("zh-TW")}
                           </span>
                         </div>
-                        <div className="text-white text-sm">{comment.comment_text}</div>
+                        <div className="text-[var(--theme-text-primary)] text-sm">{comment.comment_text}</div>
                       </div>
                     ))
                   ) : (
-                    <div className="text-[#b0b0b0] text-center py-4">還沒有留言</div>
+                    <div className="text-[var(--theme-text-muted)] text-center py-4">還沒有留言</div>
                   )}
                 </div>
               </div>
             </div>
 
             {currentUser && (
-              <div className="pt-4 border-t border-[rgba(255,215,0,0.2)] flex gap-2 flex-shrink-0">
+              <div className="pt-4 border-t border-[var(--theme-border)] flex gap-2 flex-shrink-0">
                 {bannedUsers.has(currentUser.name || "匿名") ? (
                   <div className="w-full p-3 bg-red-500/10 border border-red-500 rounded-lg text-red-400 text-center">
                     您已被禁言，無法留言
@@ -297,12 +301,12 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
                       onKeyPress={(e) => e.key === "Enter" && handleAddComment()}
-                      className="flex-1 p-2 rounded-lg bg-white/10 border border-[rgba(255,215,0,0.3)] text-white outline-none focus:border-[#ffd700] placeholder-[#b0b0b0]"
+                      className="theme-input flex-1 p-2 rounded-lg"
                     />
                     <button
                       onClick={handleAddComment}
                       disabled={!newComment.trim()}
-                      className="px-4 py-2 bg-[#ffd700] text-[#222] rounded-lg font-medium hover:bg-[#ffed4e] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      className="px-4 py-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                       發送
                     </button>
@@ -312,7 +316,7 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
             )}
           </>
         ) : (
-          <div className="flex items-center justify-center h-full text-[#b0b0b0]">
+          <div className="flex items-center justify-center h-full text-[var(--theme-text-muted)]">
             {loading ? "載入中..." : "選擇一則公告查看詳情"}
           </div>
         )}

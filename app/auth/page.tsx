@@ -8,6 +8,7 @@ import Link from "next/link"
 import { setCurrentTenant, setTenantConfig, type TenantId } from "@/lib/supabase"
 import { authenticateUser, registerUser, type UserRole } from "@/lib/auth-actions"
 import { shouldUseBackend } from "@/lib/permissions"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function AuthPage() {
   const router = useRouter()
@@ -116,26 +117,56 @@ export default function AuthPage() {
         }
       }, 2000)
     } catch (error: any) {
-      setErrorMessage(error.message || "註冊失敗，請稍後再試")
+      setErrorMessage(error.message || "註冊失敗，請稀後再試")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d] p-5">
+    <div
+      className="min-h-screen flex items-center justify-center p-5"
+      style={{ background: "var(--theme-bg-gradient)" }}
+    >
       <Link
         href="/"
-        className="absolute top-5 left-5 flex items-center gap-2 bg-[rgba(45,45,45,0.9)] text-white border-2 border-[#ffd700] rounded-full px-5 py-2.5 hover:bg-[#ffd700] hover:text-[#1a1a1a] transition-all"
+        className="absolute top-5 left-5 flex items-center gap-2 border-2 rounded-full px-5 py-2.5 transition-all"
+        style={{
+          background: "var(--theme-bg-card)",
+          color: "var(--theme-text-primary)",
+          borderColor: "var(--theme-accent)",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "var(--theme-accent)"
+          e.currentTarget.style.color = "var(--theme-bg-primary)"
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "var(--theme-bg-card)"
+          e.currentTarget.style.color = "var(--theme-text-primary)"
+        }}
       >
         <span className="material-icons">arrow_back</span>
         返回首頁
       </Link>
 
-      <div className="bg-[rgba(45,45,45,0.9)] backdrop-blur-md rounded-3xl p-12 w-full max-w-md border-2 border-[#ffd700] shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
+      <div className="absolute top-5 right-5">
+        <ThemeToggle />
+      </div>
+
+      <div
+        className="backdrop-blur-md rounded-3xl p-12 w-full max-w-md border-2 shadow-[0_20px_40px_rgba(0,0,0,0.3)]"
+        style={{
+          background: "var(--theme-bg-card)",
+          borderColor: "var(--theme-accent)",
+        }}
+      >
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-[#ffd700] mb-2">{isLoginMode ? "登入系統" : "註冊帳號"}</h1>
-          <p className="text-[#b0b0b0]">{isLoginMode ? "請輸入您的帳號密碼" : "請填寫以下資訊建立帳號"}</p>
+          <h1 className="text-3xl font-bold mb-2" style={{ color: "var(--theme-accent)" }}>
+            {isLoginMode ? "登入系統" : "註冊帳號"}
+          </h1>
+          <p style={{ color: "var(--theme-text-muted)" }}>
+            {isLoginMode ? "請輸入您的帳號密碼" : "請填寫以下資訊建立帳號"}
+          </p>
         </div>
 
         {errorMessage && (
@@ -153,29 +184,37 @@ export default function AuthPage() {
         {isLoginMode ? (
           <form onSubmit={handleLogin}>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">電子郵件</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                電子郵件
+              </label>
               <input
                 type="email"
                 name="email"
                 required
                 placeholder="請輸入電子郵件"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
               />
             </div>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">密碼</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                密碼
+              </label>
               <input
                 type="password"
                 name="password"
                 required
                 placeholder="請輸入密碼"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-[#ffd700] text-[#1a1a1a] rounded-lg font-semibold hover:bg-[#ffed4e] hover:-translate-y-0.5 transition-all mb-4 disabled:opacity-70"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-lg font-semibold hover:-translate-y-0.5 transition-all mb-4 disabled:opacity-70"
+              style={{
+                background: "var(--theme-accent)",
+                color: "var(--theme-bg-primary)",
+              }}
             >
               <span className="material-icons">login</span>
               {loading ? "登入中..." : "登入"}
@@ -184,123 +223,118 @@ export default function AuthPage() {
         ) : (
           <form onSubmit={handleRegister}>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">選擇社區</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                選擇社區
+              </label>
               <select
                 name="tenant"
                 required
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
+                className="theme-select w-full px-4 py-3 border-2 rounded-lg outline-none cursor-pointer"
               >
-                <option value="" className="bg-[#2a2a2a] text-[#b0b0b0]">
-                  請選擇要註冊的社區
-                </option>
-                <option value="tenant_a" className="bg-[#2a2a2a] text-white">
-                  社區 A
-                </option>
-                <option value="tenant_b" className="bg-[#2a2a2a] text-white">
-                  社區 B
-                </option>
+                <option value="">請選擇要註冊的社區</option>
+                <option value="tenant_a">社區 A</option>
+                <option value="tenant_b">社區 B</option>
               </select>
             </div>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">電子郵件</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                電子郵件
+              </label>
               <input
                 type="email"
                 name="email"
                 required
                 placeholder="請輸入電子郵件"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
               />
             </div>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">密碼</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                密碼
+              </label>
               <input
                 type="password"
                 name="password"
                 required
                 minLength={6}
                 placeholder="請輸入密碼"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
               />
             </div>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">姓名</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                姓名
+              </label>
               <input
                 type="text"
                 name="name"
                 required
                 placeholder="請輸入姓名"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
               />
             </div>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">電話</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                電話
+              </label>
               <input
                 type="tel"
                 name="phone"
                 required
                 placeholder="請輸入電話號碼"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
               />
             </div>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">住戶單位</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                住戶單位
+              </label>
               <input
                 type="text"
                 name="unit"
                 required
                 placeholder="例：A棟12樓3號"
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[rgba(255,255,255,0.1)] text-white focus:border-[#ffd700] focus:bg-[rgba(255,255,255,0.15)] outline-none transition-all"
+                className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
               />
             </div>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">身份</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                身份
+              </label>
               <select
                 name="role"
                 required
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
+                className="theme-select w-full px-4 py-3 border-2 rounded-lg outline-none cursor-pointer"
               >
-                <option value="" className="bg-[#2a2a2a] text-[#b0b0b0]">
-                  請選擇身份
-                </option>
-                <option value="resident" className="bg-[#2a2a2a] text-white">
-                  住戶
-                </option>
-                <option value="guard" className="bg-[#2a2a2a] text-white">
-                  警衛
-                </option>
-                <option value="committee" className="bg-[#2a2a2a] text-white">
-                  管委會
-                </option>
-                <option value="vendor" className="bg-[#2a2a2a] text-white">
-                  廠商
-                </option>
+                <option value="">請選擇身份</option>
+                <option value="resident">住戶</option>
+                <option value="guard">警衛</option>
+                <option value="committee">管委會</option>
               </select>
             </div>
             <div className="mb-6">
-              <label className="block mb-2 font-medium text-white">與戶主的關係</label>
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                與戶主的關係
+              </label>
               <select
                 name="relationship"
                 required
-                className="w-full px-4 py-3 border-2 border-[rgba(255,215,0,0.3)] rounded-lg bg-[#2a2a2a] text-white focus:border-[#ffd700] outline-none cursor-pointer [&>option]:bg-[#2a2a2a] [&>option]:text-white [&>option]:py-2"
+                className="theme-select w-full px-4 py-3 border-2 rounded-lg outline-none cursor-pointer"
               >
-                <option value="" className="bg-[#2a2a2a] text-[#b0b0b0]">
-                  請選擇關係
-                </option>
-                <option value="owner" className="bg-[#2a2a2a] text-white">
-                  戶主
-                </option>
-                <option value="household_member" className="bg-[#2a2a2a] text-white">
-                  住戶成員
-                </option>
-                <option value="tenant" className="bg-[#2a2a2a] text-white">
-                  租客
-                </option>
+                <option value="">請選擇關係</option>
+                <option value="owner">戶主</option>
+                <option value="household_member">住戶成員</option>
+                <option value="tenant">租客</option>
               </select>
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-[#ffd700] text-[#1a1a1a] rounded-lg font-semibold hover:bg-[#ffed4e] hover:-translate-y-0.5 transition-all mb-4 disabled:opacity-70"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-lg font-semibold hover:-translate-y-0.5 transition-all mb-4 disabled:opacity-70"
+              style={{
+                background: "var(--theme-accent)",
+                color: "var(--theme-bg-primary)",
+              }}
             >
               <span className="material-icons">person_add</span>
               {loading ? "註冊中..." : "註冊"}
@@ -308,15 +342,16 @@ export default function AuthPage() {
           </form>
         )}
 
-        <div className="text-center pt-6 border-t border-[rgba(255,215,0,0.3)]">
-          <span className="text-[#b0b0b0]">{isLoginMode ? "還沒有帳號？" : "已有帳號？"}</span>
+        <div className="text-center pt-6 border-t" style={{ borderColor: "var(--theme-border)" }}>
+          <span style={{ color: "var(--theme-text-muted)" }}>{isLoginMode ? "還沒有帳號？" : "已有帳號？"}</span>
           <button
             onClick={() => {
               setIsLoginMode(!isLoginMode)
               setErrorMessage("")
               setSuccessMessage("")
             }}
-            className="ml-2 text-[#ffd700] font-medium hover:underline"
+            className="ml-2 font-medium hover:underline"
+            style={{ color: "var(--theme-accent)" }}
           >
             {isLoginMode ? "立即註冊" : "立即登入"}
           </button>

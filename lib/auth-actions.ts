@@ -55,7 +55,10 @@ export async function authenticateUser(email: string, password: string) {
 
       const { data: users, error } = await supabase
         .from("profiles")
-        .select("*")
+        .select(`
+          *,
+          units ( id, unit_code )
+        `)
         .eq("email", email)
         .eq("password", password)
 
@@ -82,7 +85,8 @@ export async function authenticateUser(email: string, password: string) {
             name: user.name,
             role: user.role,
             phone: user.phone,
-            room: user.room,
+            room: user.units?.unit_code || "",
+            unit_id: user.unit_id,
             status: user.status,
             // Added safe accessors for anrui fields
             unit_type: user.unit_type || null, 

@@ -1,233 +1,65 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { getSupabaseClient } from "@/lib/supabase"
+// ==================================================================================
+// 👇👇👇 PASTE YOUR ADMIN LINKS HERE (請在這裡貼上管理員專用的連結) 👇👇👇
+// ==================================================================================
 
-interface Vote {
-  id: string | null
-  title: string
-  description: string
-  options: string
-  author: string
-  status: string
-  ends_at: string
-}
+const GOOGLE_FORM_EDIT_LINK = "https://docs.google.com/forms/d/1-RIrL9cKOfX4HY2gLa7m6gF-fVX72uDdtfVhABMUFx8/edit" // 貼上 Google 表單的「編輯」連結
+const GOOGLE_SHEET_RESULT_LINK = "https://docs.google.com/spreadsheets/d/1xegZfzU-UyS0Rqfs00Ar-A9hIVc-vpLUhAcrNmhv_-0/edit?usp=sharing" // 貼上 Google 試算表的連結
 
-interface VoteManagementAdminProps {
-  currentUserName?: string
-}
+// ==================================================================================
 
-export function VoteManagementAdmin({ currentUserName }: VoteManagementAdminProps) {
-  const [votes, setVotes] = useState<Vote[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const loadVotes = async () => {
-    setLoading(true)
-    const supabase = getSupabaseClient()
-    const { data, error } = await supabase.from("votes").select("*").order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Error loading votes:", error)
-    } else {
-      setVotes(
-        (data || []).map((v) => ({
-          ...v,
-          options: typeof v.options === "string" ? v.options : JSON.stringify(v.options),
-        }))
-      )
-    }
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    loadVotes()
-  }, [])
-
-  const handleAdd = () => {
-    const newVote: Vote = {
-      id: null,
-      title: "",
-      description: "",
-      options: '["同意","反對","棄權"]',
-      author: currentUserName || "",
-      status: "active",
-      ends_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    }
-    setVotes([newVote, ...votes])
-  }
-
-  const updateVote = (index: number, field: keyof Vote, value: string) => {
-    const updated = [...votes]
-    updated[index] = { ...updated[index], [field]: value }
-    setVotes(updated)
-  }
-
-  const handleSave = async (vote: Vote, index: number) => {
-    try {
-      const supabase = getSupabaseClient()
-      let parsedOptions
-      try {
-        parsedOptions = JSON.parse(vote.options)
-      } catch {
-        parsedOptions = vote.options.split(",").map((s) => s.trim())
-      }
-
-      const voteData = {
-        title: vote.title,
-        description: vote.description,
-        options: parsedOptions,
-        author: vote.author,
-        status: vote.status,
-        ends_at: vote.ends_at,
-      }
-
-      if (vote.id) {
-        const { error } = await supabase.from("votes").update(voteData).eq("id", vote.id)
-        if (error) throw error
-      } else {
-        const { data, error } = await supabase.from("votes").insert([voteData]).select().single()
-        if (error) throw error
-        const updated = [...votes]
-        updated[index] = { ...vote, id: data.id, options: JSON.stringify(data.options) }
-        setVotes(updated)
-      }
-
-      alert("儲存成功！")
-      await loadVotes()
-    } catch (e: any) {
-      console.error(e)
-      alert("儲存失敗：" + e.message)
-    }
-  }
-
-  const handleDelete = async (id: string | null) => {
-    if (!id) {
-      setVotes(votes.filter((v) => v.id !== null))
-      return
-    }
-
-    if (!confirm("確定要刪除此投票？")) return
-
-    try {
-      const supabase = getSupabaseClient()
-      const { error } = await supabase.from("votes").delete().eq("id", id)
-      if (error) throw error
-
-      alert("刪除成功！")
-      await loadVotes()
-    } catch (e: any) {
-      console.error(e)
-      alert("刪除失敗：" + e.message)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ffd700]"></div>
-      </div>
-    )
-  }
-
+export function VoteManagementAdmin() {
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-white font-bold">投票管理</h3>
-        <button
-          onClick={handleAdd}
-          className="px-4 py-2 bg-[#ffd700] text-[#1a1a1a] rounded-lg font-bold hover:bg-[#ffed4e] transition-all"
+    <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-6 min-h-[500px]">
+      <div className="flex justify-between items-center mb-8">
+        <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl font-bold">
+          <span className="material-icons">how_to_vote</span>
+          Google 表單投票管理
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Button 1: Edit Form */}
+        <a 
+          href={GOOGLE_FORM_EDIT_LINK}
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-dashed border-[var(--theme-accent)] text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all group"
         >
-          + 新增投票
-        </button>
+          <div className="p-4 rounded-full bg-[var(--theme-accent)]/10 group-hover:bg-white/20 transition-colors">
+            <span className="material-icons text-5xl">edit_note</span>
+          </div>
+          <div className="text-center">
+            <h3 className="text-xl font-bold mb-1">編輯投票表單</h3>
+            <p className="text-sm opacity-80">Edit Google Form</p>
+          </div>
+        </a>
+
+        {/* Button 2: View Results */}
+        <a 
+          href={GOOGLE_SHEET_RESULT_LINK}
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-dashed border-green-500 text-green-500 hover:bg-green-500 hover:text-white transition-all group"
+        >
+          <div className="p-4 rounded-full bg-green-500/10 group-hover:bg-white/20 transition-colors">
+            <span className="material-icons text-5xl">table_view</span>
+          </div>
+          <div className="text-center">
+            <h3 className="text-xl font-bold mb-1">查看投票結果</h3>
+            <p className="text-sm opacity-80">View Results (Excel/Sheet)</p>
+          </div>
+        </a>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">標題</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">說明</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">選項(JSON)</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">發起人</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">截止時間</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">狀態</th>
-              <th className="p-3 text-left text-[#ffd700] border-b border-white/10">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {votes.map((vote, index) => (
-              <tr key={vote.id || `new-${index}`} className="hover:bg-white/5">
-                <td className="p-3 border-b border-white/5">
-                  <input
-                    type="text"
-                    value={vote.title}
-                    onChange={(e) => updateVote(index, "title", e.target.value)}
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  />
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <textarea
-                    value={vote.description}
-                    onChange={(e) => updateVote(index, "description", e.target.value)}
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  />
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <textarea
-                    value={vote.options}
-                    onChange={(e) => updateVote(index, "options", e.target.value)}
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  />
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <input
-                    type="text"
-                    value={vote.author}
-                    onChange={(e) => updateVote(index, "author", e.target.value)}
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  />
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <input
-                    type="date"
-                    value={vote.ends_at ? vote.ends_at.split("T")[0] : ""}
-                    onChange={(e) => updateVote(index, "ends_at", e.target.value)}
-                    className="w-full p-2 bg-white/10 border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  />
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <select
-                    value={vote.status}
-                    onChange={(e) => updateVote(index, "status", e.target.value)}
-                    className="w-full p-2 bg-[#2a2a2a] border border-[rgba(255,215,0,0.3)] rounded text-white outline-none focus:border-[#ffd700]"
-                  >
-                    <option value="active">進行中</option>
-                    <option value="closed">已結束</option>
-                  </select>
-                </td>
-                <td className="p-3 border-b border-white/5">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleSave(vote, index)}
-                      className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-yellow-400 text-yellow-300 bg-transparent hover:bg-yellow-400/15 transition-all"
-                    >
-                      儲存
-                    </button>
-                    <button
-                      onClick={() => handleDelete(vote.id)}
-                      className="px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border border-rose-400 text-rose-300 bg-transparent hover:bg-rose-400/15 transition-all"
-                    >
-                      刪除
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="mt-8 p-4 bg-[var(--theme-bg-secondary)] rounded-xl border border-[var(--theme-border)] text-sm text-[var(--theme-text-secondary)]">
+        <p className="font-bold mb-2">💡 設定說明：</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>這是一個快速連結頁面，直接導向您的 Google 服務。</li>
+          <li>若要修改連結，請直接更改程式碼檔案 <code>VoteManagementAdmin.tsx</code> 最上方的變數。</li>
+        </ul>
       </div>
-
-      {votes.length === 0 && <div className="text-center text-[#b0b0b0] py-8">目前沒有投票</div>}
     </div>
   )
 }

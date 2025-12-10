@@ -6,12 +6,13 @@ export interface Meeting {
   time: string
   location: string
   notes?: string
+  minutes_url?: string
+  created_by?: string
   created_at?: string
 }
 
-const supabase = getSupabaseClient()
-
 export async function getMeetings(): Promise<Meeting[]> {
+  const supabase = getSupabaseClient()
   const { data, error } = await supabase.from("meetings").select("*").order("time", { ascending: false })
 
   if (error) {
@@ -21,8 +22,16 @@ export async function getMeetings(): Promise<Meeting[]> {
   return data || []
 }
 
-export async function createMeeting(meeting: Omit<Meeting, "id" | "created_at">): Promise<Meeting | null> {
-  const { data, error } = await supabase.from("meetings").insert([meeting]).select().single()
+export async function createMeeting(
+  meeting: Omit<Meeting, "id" | "created_at">,
+  userId?: string,
+): Promise<Meeting | null> {
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from("meetings")
+    .insert([{ ...meeting, created_by: userId }])
+    .select()
+    .single()
 
   if (error) {
     console.error("Error creating meeting:", error)
@@ -32,6 +41,7 @@ export async function createMeeting(meeting: Omit<Meeting, "id" | "created_at">)
 }
 
 export async function updateMeeting(id: string, meeting: Partial<Meeting>): Promise<Meeting | null> {
+  const supabase = getSupabaseClient()
   const { data, error } = await supabase.from("meetings").update(meeting).eq("id", id).select().single()
 
   if (error) {
@@ -42,6 +52,7 @@ export async function updateMeeting(id: string, meeting: Partial<Meeting>): Prom
 }
 
 export async function deleteMeeting(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient()
   const { error } = await supabase.from("meetings").delete().eq("id", id)
 
   if (error) {

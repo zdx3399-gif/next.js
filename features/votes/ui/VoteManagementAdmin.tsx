@@ -1,64 +1,126 @@
 "use client"
 
-// ==================================================================================
-// 👇👇👇 PASTE YOUR ADMIN LINKS HERE (請在這裡貼上管理員專用的連結) 👇👇👇
-// ==================================================================================
+import { useState } from "react"
+import type { User } from "@/features/profile/api/profile"
 
-const GOOGLE_FORM_EDIT_LINK = "https://docs.google.com/forms/d/1-RIrL9cKOfX4HY2gLa7m6gF-fVX72uDdtfVhABMUFx8/edit" // 貼上 Google 表單的「編輯」連結
-const GOOGLE_SHEET_RESULT_LINK = "https://docs.google.com/spreadsheets/d/1xegZfzU-UyS0Rqfs00Ar-A9hIVc-vpLUhAcrNmhv_-0/edit?usp=sharing" // 貼上 Google 試算表的連結
+interface VoteManagementAdminProps {
+  currentUser?: User | null // Made optional to prevent strict type errors if parent doesn't pass it
+}
 
-// ==================================================================================
+export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    endDate: "",
+  })
+  const [loading, setLoading] = useState(false)
 
-export function VoteManagementAdmin() {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!formData.title || !formData.endDate) {
+      alert("請填寫標題與截止日期")
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      // 呼叫後端 API (對應你上傳的 route-votes.js)
+      const res = await fetch('/api/votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          ends_at: formData.endDate,
+          author: currentUser?.name || "管委會",
+          options: ['同意', '反對', '棄權'], // 目前固定三個選項
+          test: false // 設定 false 代表真的會推播 LINE
+        }),
+      })
+
+      const data = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(data.error || '發起失敗')
+      }
+
+      alert('✅ 投票已建立並推播至 LINE')
+      setFormData({ title: "", description: "", endDate: "" })
+
+    } catch (error: any) {
+      console.error(error)
+      alert(`❌ 錯誤: ${error.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-6 min-h-[500px]">
       <div className="flex justify-between items-center mb-8">
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl font-bold">
           <span className="material-icons">how_to_vote</span>
-          Google 表單投票管理
+          發起新投票 (LINE Bot)
         </h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Button 1: Edit Form */}
-        <a 
-          href={GOOGLE_FORM_EDIT_LINK}
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-dashed border-[var(--theme-accent)] text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all group"
-        >
-          <div className="p-4 rounded-full bg-[var(--theme-accent)]/10 group-hover:bg-white/20 transition-colors">
-            <span className="material-icons text-5xl">edit_note</span>
+      <div className="max-w-2xl mx-auto bg-[var(--theme-bg-secondary)] p-6 rounded-xl border border-[var(--theme-border)]">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          
+          {/* 標題 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-1">投票標題</label>
+            <input 
+              type="text" 
+              className="w-full p-3 rounded-lg theme-input border border-[var(--theme-border)]"
+              placeholder="例如：關於中庭花園整修提案"
+              value={formData.title}
+              onChange={e => setFormData({...formData, title: e.target.value})}
+              required
+            />
           </div>
-          <div className="text-center">
-            <h3 className="text-xl font-bold mb-1">編輯投票表單</h3>
-            <p className="text-sm opacity-80">Edit Google Form</p>
-          </div>
-        </a>
 
-        {/* Button 2: View Results */}
-        <a 
-          href={GOOGLE_SHEET_RESULT_LINK}
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-dashed border-green-500 text-green-500 hover:bg-green-500 hover:text-white transition-all group"
-        >
-          <div className="p-4 rounded-full bg-green-500/10 group-hover:bg-white/20 transition-colors">
-            <span className="material-icons text-5xl">table_view</span>
+          {/* 說明 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-1">詳細說明</label>
+            <textarea 
+              className="w-full p-3 rounded-lg theme-input border border-[var(--theme-border)] min-h-[100px]"
+              placeholder="請輸入投票內容細節..."
+              value={formData.description}
+              onChange={e => setFormData({...formData, description: e.target.value})}
+            />
           </div>
-          <div className="text-center">
-            <h3 className="text-xl font-bold mb-1">查看投票結果</h3>
-            <p className="text-sm opacity-80">View Results (Excel/Sheet)</p>
+
+          {/* 截止日期 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-1">截止時間</label>
+            <input 
+              type="datetime-local" 
+              className="w-full p-3 rounded-lg theme-input border border-[var(--theme-border)]"
+              value={formData.endDate}
+              onChange={e => setFormData({...formData, endDate: e.target.value})}
+              required
+            />
           </div>
-        </a>
+
+          {/* 按鈕 */}
+          <button 
+            type="submit" 
+            disabled={loading}
+            className={`w-full py-3 rounded-lg font-bold text-white transition-all ${
+              loading ? "bg-gray-400 cursor-not-allowed" : "bg-[var(--theme-accent)] hover:opacity-90"
+            }`}
+          >
+            {loading ? "處理中..." : "發布並推播投票"}
+          </button>
+
+        </form>
       </div>
-
-      <div className="mt-8 p-4 bg-[var(--theme-bg-secondary)] rounded-xl border border-[var(--theme-border)] text-sm text-[var(--theme-text-secondary)]">
-        <p className="font-bold mb-2">💡 設定說明：</p>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>這是一個快速連結頁面，直接導向您的 Google 服務。</li>
-          <li>若要修改連結，請直接更改程式碼檔案 <code>VoteManagementAdmin.tsx</code> 最上方的變數。</li>
-        </ul>
+      
+      <div className="mt-8 text-center text-sm text-[var(--theme-text-secondary)]">
+        <p>⚠️ 注意：點擊發布後，系統將立即向所有已綁定 LINE 的住戶發送投票通知。</p>
       </div>
     </div>
   )

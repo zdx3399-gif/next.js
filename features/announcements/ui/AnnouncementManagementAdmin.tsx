@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import type { Announcement } from "../api/announcements"
+import type { User } from "@/features/profile/api/profile"
 import {
   fetchAllAnnouncements,
   createAnnouncement,
@@ -9,6 +10,11 @@ import {
   deleteAnnouncement,
   uploadAnnouncementImage,
 } from "../api/announcements"
+
+// 新增介面定義 currentUser
+interface AnnouncementManagementAdminProps {
+  currentUser: User | null
+}
 
 interface AnnouncementFormModalProps {
   isOpen: boolean
@@ -19,6 +25,7 @@ interface AnnouncementFormModalProps {
   isEdit: boolean
   onImageFileChange: (file: File | null) => void
   imageFile: File | null
+  loading: boolean
 }
 
 function AnnouncementFormModal({
@@ -30,6 +37,7 @@ function AnnouncementFormModal({
   isEdit,
   onImageFileChange,
   imageFile,
+  loading
 }: AnnouncementFormModalProps) {
   if (!isOpen) return null
 
@@ -104,9 +112,12 @@ function AnnouncementFormModal({
           <div className="flex gap-3 pt-2">
             <button
               onClick={onSave}
-              className="flex-1 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-xl font-semibold hover:opacity-90 transition-opacity"
+              disabled={loading}
+              className={`flex-1 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-xl font-semibold hover:opacity-90 transition-opacity ${
+                loading ? "opacity-50 cursor-not-allowed" : ""
+              }`}
             >
-              {isEdit ? "儲存變更" : "新增公告"}
+              {loading ? "處理中..." : (isEdit ? "儲存變更" : "新增公告")}
             </button>
             <button
               onClick={onClose}
@@ -121,9 +132,10 @@ function AnnouncementFormModal({
   )
 }
 
-export function AnnouncementManagementAdmin() {
+export function AnnouncementManagementAdmin({ currentUser }: AnnouncementManagementAdminProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false) // 新增 saving 狀態
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
   const [formData, setFormData] = useState<Partial<Announcement>>({})
@@ -144,7 +156,10 @@ export function AnnouncementManagementAdmin() {
 
   const handleAdd = () => {
     setEditingAnnouncement(null)
-    setFormData({ status: "draft" })
+    setFormData({ 
+      status: "draft",
+      author_name: currentUser?.name || "管理員" // 自動帶入作者
+    })
     setImageFile(null)
     setIsModalOpen(true)
   }
@@ -161,9 +176,11 @@ export function AnnouncementManagementAdmin() {
   }
 
   const handleSave = async () => {
+    setSaving(true)
     try {
       const finalData = { ...formData }
 
+      // 1. 處理圖片上傳
       if (imageFile) {
         try {
           const imageUrl = await uploadAnnouncementImage(imageFile)
@@ -171,19 +188,46 @@ export function AnnouncementManagementAdmin() {
         } catch (uploadError) {
           console.error("Error uploading image:", uploadError)
           alert("圖片上傳失敗，請稍後再試")
+          setSaving(false)
           return
         }
       }
 
+      // 2. 儲存到 Supabase (原邏輯)
       if (editingAnnouncement) {
         await updateAnnouncement(editingAnnouncement.id, finalData)
       } else {
         await createAnnouncement(finalData)
       }
+
+      // 3. 呼叫 LINE 推播 API (只有在「發布」且是「新增」或「切換狀態」時才推播，這裡簡化為發布即推播)
+      if (finalData.status === 'published') {
+         try {
+           await fetch('/api/announce', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+               title: finalData.title,
+               content: finalData.content,
+               author: finalData.author_name || "管理員",
+               test: false // 設定為 true 可關閉推播測試
+             })
+           })
+         } catch (lineError) {
+           console.error('Line Push Failed:', lineError)
+           // 推播失敗不應阻擋存檔，僅紀錄 Log
+         }
+      }
+
       setIsModalOpen(false)
       loadAnnouncements()
+      alert('公告處理完成' + (finalData.status === 'published' ? ' (已發送 LINE 通知)' : ''))
+
     } catch (error) {
       console.error("Error saving announcement:", error)
+      alert("儲存失敗")
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -295,6 +339,7 @@ export function AnnouncementManagementAdmin() {
         isEdit={!!editingAnnouncement}
         onImageFileChange={setImageFile}
         imageFile={imageFile}
+        loading={saving}
       />
     </div>
   )

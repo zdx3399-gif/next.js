@@ -24,7 +24,7 @@ import type { User } from "@/features/profile/api/profile"
 type Section =
   | "dashboard"
   | "announcements"
-  | "announcement-details" // 新增 announcement-details 到 Section 類型
+  | "announcement-details"
   | "residents"
   | "packages"
   | "votes"
@@ -41,7 +41,6 @@ export default function AdminPage() {
   const [currentSection, setCurrentSection] = useState<Section>("dashboard")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [currentSlide, setCurrentSlide] = useState(0)
   const { announcements, loading: announcementsLoading, reload } = useAnnouncements(false)
 
   useEffect(() => {
@@ -278,7 +277,7 @@ export default function AdminPage() {
           ) : currentSection === "maintenance" ? (
             <MaintenanceManagementAdmin />
           ) : currentSection === "votes" ? (
-            <VoteManagementAdmin />
+            <VoteManagementAdmin currentUser={currentUser} />
           ) : currentSection === "announcement-details" ? (
             <AnnouncementDetailsAdmin onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
           ) : currentSection === "meetings" ? (
@@ -290,7 +289,7 @@ export default function AdminPage() {
           ) : currentSection === "residents" ? (
             <ResidentManagementAdmin />
           ) : currentSection === "announcements" ? (
-            <AnnouncementManagementAdmin />
+            <AnnouncementManagementAdmin currentUser={currentUser} />
           ) : null}
         </div>
       </main>

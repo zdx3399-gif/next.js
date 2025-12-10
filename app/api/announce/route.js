@@ -1,4 +1,3 @@
-// Paste this into: app/api/announce/route.js
 import { createClient } from '@supabase/supabase-js';
 import { Client } from '@line/bot-sdk';
 
@@ -22,6 +21,7 @@ export async function POST(req) {
     });
 
     const body = await req.json();
+    // 我們只從前端接收這些資料
     const { title, content, author, test } = body;
 
     const supabase = createClient(
@@ -29,10 +29,18 @@ export async function POST(req) {
       process.env.SUPABASE_ANON_KEY
     );
 
-    // Save to DB
+    // ✅ 修正：只寫入你截圖中真正存在的欄位 (title, content, status)
+    // 我們不再寫入 'author', 'time', 'reads'，因為資料庫沒有這些欄位
     const { error } = await supabase
       .from('announcements')
-      .insert([{ title, content, time: new Date().toLocaleString(), author, reads: 0, status: 'published' }]);
+      .insert([
+        { 
+          title: title, 
+          content: content, 
+          status: 'published' 
+          // created_at 會由 Supabase 自動產生，不需要這裡寫
+        }
+      ]);
 
     if (error) {
       console.error("❌ [ERROR] Supabase 寫入失敗:", error.message);
@@ -44,7 +52,8 @@ export async function POST(req) {
       return Response.json({ message: '測試成功，未推播' });
     }
 
-    // Send LINE
+    // ✅ LINE 推播：這裡我們仍然可以使用 'author' 變數顯示給住戶看
+    // 雖然沒有存進資料庫，但 LINE 訊息還是可以顯示 "發布者：管理委員會"
     const flexMessage = {
       type: 'flex',
       altText: '📢 最新公告',
@@ -57,7 +66,8 @@ export async function POST(req) {
             { type: 'text', text: '📢 最新公告', weight: 'bold', size: 'lg' },
             { type: 'separator', margin: 'md' },
             { type: 'text', text: `📌 ${title}`, weight: 'bold', wrap: true, margin: 'md' },
-            { type: 'text', text: `📝 ${content}`, wrap: true, margin: 'sm' }
+            { type: 'text', text: `📝 ${content}`, wrap: true, margin: 'sm' },
+            { type: 'text', text: `👤 發布者：${author || '管理委員會'}`, size: 'xs', color: '#aaaaaa', margin: 'md' }
           ],
         },
       },

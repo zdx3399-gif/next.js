@@ -2,16 +2,7 @@
 
 import { useState } from "react"
 import { useFacilitiesAdmin } from "../hooks/useFacilities"
-
-interface Facility {
-  id?: string
-  name: string
-  description: string
-  location: string
-  capacity: number
-  image_url: string | null
-  available: boolean
-}
+import type { Facility } from "../api/facilities"
 
 interface FacilityFormModalProps {
   isOpen: boolean
@@ -79,15 +70,49 @@ function FacilityFormModal({
               className="w-full p-3 rounded-xl theme-input outline-none"
             />
           </div>
-          <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">容納人數</label>
-            <input
-              type="number"
-              value={formData.capacity || 1}
-              onChange={(e) => onChange("capacity", Number(e.target.value))}
-              placeholder="請輸入容納人數"
-              className="w-full p-3 rounded-xl theme-input outline-none"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[var(--theme-text-primary)] font-medium mb-2">容納人數</label>
+              <input
+                type="number"
+                value={formData.capacity || 1}
+                onChange={(e) => onChange("capacity", Number(e.target.value))}
+                placeholder="請輸入容納人數"
+                className="w-full p-3 rounded-xl theme-input outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[var(--theme-text-primary)] font-medium mb-2">基礎點數</label>
+              <input
+                type="number"
+                value={formData.base_price || 10}
+                onChange={(e) => onChange("base_price", Number(e.target.value))}
+                placeholder="基礎預約點數"
+                className="w-full p-3 rounded-xl theme-input outline-none"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[var(--theme-text-primary)] font-medium mb-2">冷卻時間（小時）</label>
+              <input
+                type="number"
+                value={formData.cool_down_hours || 24}
+                onChange={(e) => onChange("cool_down_hours", Number(e.target.value))}
+                placeholder="同設施再預約間隔"
+                className="w-full p-3 rounded-xl theme-input outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[var(--theme-text-primary)] font-medium mb-2">同時預約上限</label>
+              <input
+                type="number"
+                value={formData.max_concurrent_bookings || 2}
+                onChange={(e) => onChange("max_concurrent_bookings", Number(e.target.value))}
+                placeholder="每戶最大預約數"
+                className="w-full p-3 rounded-xl theme-input outline-none"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-[var(--theme-text-primary)] font-medium mb-2">圖片</label>
@@ -104,16 +129,29 @@ function FacilityFormModal({
               </div>
             )}
           </div>
-          <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">狀態</label>
-            <select
-              value={String(formData.available)}
-              onChange={(e) => onChange("available", e.target.value === "true")}
-              className="w-full p-3 rounded-xl theme-select outline-none cursor-pointer"
-            >
-              <option value="true">可用</option>
-              <option value="false">不可用</option>
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[var(--theme-text-primary)] font-medium mb-2">狀態</label>
+              <select
+                value={String(formData.available)}
+                onChange={(e) => onChange("available", e.target.value === "true")}
+                className="w-full p-3 rounded-xl theme-select outline-none cursor-pointer"
+              >
+                <option value="true">可用</option>
+                <option value="false">不可用</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[var(--theme-text-primary)] font-medium mb-2">熱門時段抽籤</label>
+              <select
+                value={String(formData.is_lottery_enabled)}
+                onChange={(e) => onChange("is_lottery_enabled", e.target.value === "true")}
+                className="w-full p-3 rounded-xl theme-select outline-none cursor-pointer"
+              >
+                <option value="false">關閉</option>
+                <option value="true">開啟</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -138,38 +176,39 @@ function FacilityFormModal({
 }
 
 export function FacilityManagementAdmin() {
-  const {
-    facilities,
-    bookings,
-    loading,
-    imageFiles,
-    updateRow,
-    handleImageFileChange,
-    handleSave,
-    handleDelete,
-    addNewFacility,
-  } = useFacilitiesAdmin()
+  const { facilities, bookings, loading, imageFiles, handleImageFileChange, handleSave, handleDelete, addNewFacility } =
+    useFacilitiesAdmin()
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [formData, setFormData] = useState<Facility>({
+    id: "",
     name: "",
     description: "",
     location: "",
     capacity: 1,
-    image_url: null,
+    image_url: "",
     available: true,
+    base_price: 10,
+    cool_down_hours: 24,
+    is_lottery_enabled: false,
+    max_concurrent_bookings: 2,
   })
   const [currentImageFile, setCurrentImageFile] = useState<File | null>(null)
 
   const handleAdd = () => {
     setFormData({
+      id: "",
       name: "",
       description: "",
       location: "",
       capacity: 1,
-      image_url: null,
+      image_url: "",
       available: true,
+      base_price: 10,
+      cool_down_hours: 24,
+      is_lottery_enabled: false,
+      max_concurrent_bookings: 2,
     })
     setCurrentImageFile(null)
     setEditingIndex(null)
@@ -184,8 +223,12 @@ export function FacilityManagementAdmin() {
       description: facility.description || "",
       location: facility.location || "",
       capacity: facility.capacity || 1,
-      image_url: facility.image_url || null,
+      image_url: facility.image_url || "",
       available: facility.available ?? true,
+      base_price: facility.base_price || 10,
+      cool_down_hours: facility.cool_down_hours || 24,
+      is_lottery_enabled: facility.is_lottery_enabled || false,
+      max_concurrent_bookings: facility.max_concurrent_bookings || 2,
     })
     setCurrentImageFile(imageFiles[index] || null)
     setEditingIndex(index)
@@ -223,6 +266,19 @@ export function FacilityManagementAdmin() {
     }
   }
 
+  // 獲取狀態顯示
+  const getStatusDisplay = (status: string) => {
+    const statusMap: Record<string, { color: string; text: string }> = {
+      confirmed: { color: "bg-green-500/20 text-green-500", text: "已確認" },
+      cancelled: { color: "bg-red-500/20 text-red-500", text: "已取消" },
+      completed: { color: "bg-blue-500/20 text-blue-500", text: "已完成" },
+      no_show: { color: "bg-orange-500/20 text-orange-500", text: "未到場" },
+      waitlist: { color: "bg-yellow-500/20 text-yellow-500", text: "候補中" },
+      pending_lottery: { color: "bg-purple-500/20 text-purple-500", text: "抽籤中" },
+    }
+    return statusMap[status] || { color: "bg-gray-500/20 text-gray-500", text: status }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -255,11 +311,12 @@ export function FacilityManagementAdmin() {
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
                   設施名稱
                 </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">說明</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">位置</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  容納人數
+                  基礎點數
                 </th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">冷卻</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">抽籤</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
               </tr>
@@ -271,14 +328,21 @@ export function FacilityManagementAdmin() {
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       {facility.name || "-"}
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] max-w-xs truncate">
-                      {facility.description || "-"}
-                    </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       {facility.location || "-"}
                     </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-accent)] font-medium">
+                      {facility.base_price || 10} 點
+                    </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {facility.capacity || 1} 人
+                      {facility.cool_down_hours || 24} 小時
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)]">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-bold ${facility.is_lottery_enabled ? "bg-purple-500/20 text-purple-500" : "bg-gray-500/20 text-gray-500"}`}
+                      >
+                        {facility.is_lottery_enabled ? "開啟" : "關閉"}
+                      </span>
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)]">
                       <span
@@ -311,7 +375,7 @@ export function FacilityManagementAdmin() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                  <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
                     目前沒有設施資料
                   </td>
                 </tr>
@@ -338,48 +402,50 @@ export function FacilityManagementAdmin() {
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
                   預約人
                 </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">房號</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">日期</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">時間</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">備註</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">點數</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">簽到</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
               </tr>
             </thead>
             <tbody>
               {bookings.length > 0 ? (
-                bookings.map((booking) => (
-                  <tr key={booking.id} className="hover:bg-[var(--theme-accent-light)] transition-colors">
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {booking.facilities?.name || "未知設施"}
-                    </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {booking.user_name}
-                    </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {booking.user_room || "-"}
-                    </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {new Date(booking.booking_date).toLocaleDateString("zh-TW")}
-                    </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {booking.start_time} - {booking.end_time}
-                    </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-secondary)]">
-                      {booking.notes || "-"}
-                    </td>
-                    <td className="p-3 border-b border-[var(--theme-border)]">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          booking.status === "confirmed"
-                            ? "bg-green-500/20 text-green-500"
-                            : "bg-red-500/20 text-red-500"
-                        }`}
-                      >
-                        {booking.status === "confirmed" ? "已確認" : "已取消"}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                bookings.map((booking) => {
+                  const statusDisplay = getStatusDisplay(booking.status)
+                  return (
+                    <tr key={booking.id} className="hover:bg-[var(--theme-accent-light)] transition-colors">
+                      <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                        {booking.facilities?.name || "未知設施"}
+                      </td>
+                      <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                        {booking.user_name} ({booking.user_room || "-"})
+                      </td>
+                      <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                        {new Date(booking.booking_date).toLocaleDateString("zh-TW")}
+                      </td>
+                      <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                        {booking.start_time} - {booking.end_time}
+                      </td>
+                      <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-accent)] font-medium">
+                        {booking.points_spent || "-"} 點
+                      </td>
+                      <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-secondary)]">
+                        {booking.check_in_time
+                          ? new Date(booking.check_in_time).toLocaleTimeString("zh-TW", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "-"}
+                      </td>
+                      <td className="p-3 border-b border-[var(--theme-border)]">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${statusDisplay.color}`}>
+                          {statusDisplay.text}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })
               ) : (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">

@@ -6,9 +6,6 @@ import {
   getAllFacilities,
   getUserBookings,
   getAllBookings,
-  checkBookingConflicts,
-  createBooking,
-  cancelBooking,
   createFacility,
   updateFacility,
   deleteFacility,
@@ -17,26 +14,11 @@ import {
   type FacilityBooking,
 } from "../api/facilities"
 
-interface BookingForm {
-  facilityId: string
-  bookingDate: string
-  startTime: string
-  endTime: string
-  notes: string
-}
-
-// Hook for residents
+// Hook for residents - 簡化版，主要邏輯移至 FacilityList
 export function useFacilities(userId?: string) {
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [myBookings, setMyBookings] = useState<FacilityBooking[]>([])
   const [loading, setLoading] = useState(true)
-  const [bookingForm, setBookingForm] = useState<BookingForm>({
-    facilityId: "",
-    bookingDate: "",
-    startTime: "",
-    endTime: "",
-    notes: "",
-  })
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -59,71 +41,10 @@ export function useFacilities(userId?: string) {
     loadData()
   }, [loadData])
 
-  const handleBooking = async (userName: string, userRoom?: string): Promise<{ success: boolean; message: string }> => {
-    if (!userId) {
-      return { success: false, message: "請先登入" }
-    }
-
-    if (!bookingForm.facilityId || !bookingForm.bookingDate || !bookingForm.startTime || !bookingForm.endTime) {
-      return { success: false, message: "請填寫所有必填欄位" }
-    }
-
-    try {
-      const hasConflict = await checkBookingConflicts(
-        bookingForm.facilityId,
-        bookingForm.bookingDate,
-        bookingForm.startTime,
-        bookingForm.endTime,
-      )
-
-      if (hasConflict) {
-        return { success: false, message: "此時段已被預約，請選擇其他時段" }
-      }
-
-      await createBooking({
-        facility_id: bookingForm.facilityId,
-        user_id: userId,
-        user_name: userName,
-        user_room: userRoom,
-        booking_date: bookingForm.bookingDate,
-        start_time: bookingForm.startTime,
-        end_time: bookingForm.endTime,
-        notes: bookingForm.notes,
-      })
-
-      setBookingForm({
-        facilityId: "",
-        bookingDate: "",
-        startTime: "",
-        endTime: "",
-        notes: "",
-      })
-
-      await loadData()
-      return { success: true, message: "預約成功！" }
-    } catch (error: any) {
-      return { success: false, message: "預約失敗：" + error.message }
-    }
-  }
-
-  const handleCancelBooking = async (bookingId: string): Promise<{ success: boolean; message: string }> => {
-    try {
-      await cancelBooking(bookingId)
-      await loadData()
-      return { success: true, message: "預約已取消" }
-    } catch (error: any) {
-      return { success: false, message: "取消失敗：" + error.message }
-    }
-  }
-
   return {
     facilities,
     myBookings,
     loading,
-    bookingForm,
-    setBookingForm,
-    handleBooking,
-    handleCancelBooking,
     reload: loadData,
   }
 }
@@ -173,12 +94,9 @@ export function useFacilitiesAdmin() {
       let imageUrl = facility.image_url
 
       const fileToUpload = imageFile || imageFiles[index]
-      console.log("[v0] handleSave called, facility:", facility)
-      console.log("[v0] fileToUpload:", fileToUpload)
 
       if (fileToUpload) {
         imageUrl = await uploadFacilityImage(fileToUpload)
-        console.log("[v0] uploaded imageUrl:", imageUrl?.substring(0, 100) + "...")
         setImageFiles((prev) => ({ ...prev, [index]: null }))
       }
 
@@ -189,25 +107,21 @@ export function useFacilitiesAdmin() {
         capacity: facility.capacity || 1,
         available: facility.available ?? true,
         image_url: imageUrl || null,
+        base_price: facility.base_price || 10,
+        cool_down_hours: facility.cool_down_hours || 24,
+        is_lottery_enabled: facility.is_lottery_enabled || false,
+        max_concurrent_bookings: facility.max_concurrent_bookings || 2,
       }
 
-      console.log("[v0] facilityData to save:", {
-        ...facilityData,
-        image_url: facilityData.image_url ? facilityData.image_url.substring(0, 100) + "..." : "null",
-      })
-
       if (facility.id) {
-        console.log("[v0] updating facility with id:", facility.id)
         await updateFacility(facility.id, facilityData)
       } else {
-        console.log("[v0] creating new facility")
         await createFacility(facilityData as Omit<Facility, "id" | "created_at">)
       }
 
       await loadData()
       return { success: true, message: "儲存成功！" }
     } catch (error: any) {
-      console.error("[v0] handleSave error:", error)
       return { success: false, message: "儲存失敗：" + error.message }
     }
   }
@@ -237,6 +151,10 @@ export function useFacilitiesAdmin() {
         capacity: 1,
         available: true,
         image_url: "",
+        base_price: 10,
+        cool_down_hours: 24,
+        is_lottery_enabled: false,
+        max_concurrent_bookings: 2,
       } as Facility,
     ])
   }

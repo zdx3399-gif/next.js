@@ -1,5 +1,8 @@
 "use client"
 
+import type React from "react"
+
+import { useRef, useState, useEffect } from "react"
 import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
 
 interface User {
@@ -25,6 +28,8 @@ interface AiChatWindowProps {
   activeTab: "functions" | "resident" | "emergency"
   setActiveTab: (tab: "functions" | "resident" | "emergency") => void
   currentUser?: User | null
+  position: { x: number; y: number }
+  onDrag: (position: { x: number; y: number }) => void
 }
 
 export function AiChatWindow({
@@ -37,21 +42,116 @@ export function AiChatWindow({
   activeTab,
   setActiveTab,
   currentUser,
+  position,
+  onDrag,
 }: AiChatWindowProps) {
+  const windowRef = useRef<HTMLDivElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return
+
+      const newX = e.clientX - dragStart.x
+      const newY = e.clientY - dragStart.y
+
+      // 限制在視窗範圍內
+      const maxX = window.innerWidth - 384 // w-96 = 384px
+      const maxY = window.innerHeight - 100
+
+      const boundedX = Math.max(0, Math.min(newX, maxX))
+      const boundedY = Math.max(0, Math.min(newY, maxY))
+
+      onDrag({ x: boundedX, y: boundedY })
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDragging) return
+      const touch = e.touches[0]
+
+      const newX = touch.clientX - dragStart.x
+      const newY = touch.clientY - dragStart.y
+
+      const maxX = window.innerWidth - 384
+      const maxY = window.innerHeight - 100
+
+      const boundedX = Math.max(0, Math.min(newX, maxX))
+      const boundedY = Math.max(0, Math.min(newY, maxY))
+
+      onDrag({ x: boundedX, y: boundedY })
+    }
+
+    const handleTouchEnd = () => {
+      setIsDragging(false)
+    }
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMouseMove)
+      window.addEventListener("mouseup", handleMouseUp)
+      window.addEventListener("touchmove", handleTouchMove)
+      window.addEventListener("touchend", handleTouchEnd)
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove)
+      window.removeEventListener("mouseup", handleMouseUp)
+      window.removeEventListener("touchmove", handleTouchMove)
+      window.removeEventListener("touchend", handleTouchEnd)
+    }
+  }, [isDragging, dragStart, onDrag])
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true)
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y })
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    setIsDragging(true)
+    setDragStart({ x: touch.clientX - position.x, y: touch.clientY - position.y })
+  }
+
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-[var(--theme-bg-card)] border-l-2 border-[var(--theme-border-accent)] shadow-2xl flex flex-col z-[999] transition-all duration-500">
-      <div className="flex items-center justify-between p-4 bg-[var(--theme-bg-primary)] border-b border-[var(--theme-border)]">
-        <div className="flex gap-2 items-center text-[var(--theme-accent)] font-bold">
+    <div
+      ref={windowRef}
+      style={{
+        position: "fixed",
+        left: position.x,
+        top: position.y,
+        maxHeight: "calc(100vh - 40px)",
+      }}
+      className="w-96 bg-[var(--theme-bg-card)] border-2 border-[var(--theme-border-accent)] rounded-xl shadow-2xl flex flex-col z-[999] transition-shadow"
+    >
+      {/* 可拖曳的標題列 */}
+      <div
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
+        className="flex items-center justify-between p-4 bg-[var(--theme-bg-primary)] border-b border-[var(--theme-border)] rounded-t-xl select-none"
+        style={{ cursor: isDragging ? "grabbing" : "grab" }}
+      >
+        <div className="flex gap-2 items-center text-[var(--theme-accent)] font-bold pointer-events-none">
           <span className="material-icons">smart_toy</span>
           AI 助理
+          <span className="text-xs text-[var(--theme-text-muted)] font-normal ml-2">(可拖曳移動)</span>
         </div>
-        <button onClick={onClose} className="material-icons text-[var(--theme-text-primary)] cursor-pointer">
+        <button
+          onClick={onClose}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="material-icons text-[var(--theme-text-primary)] cursor-pointer hover:text-[var(--theme-accent)] transition-colors"
+        >
           close
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+      {/* 訊息區域 */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[200px] max-h-[300px]">
         {messages.map((msg, index) => (
           <div key={index} className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}>
             <div
@@ -66,7 +166,9 @@ export function AiChatWindow({
           </div>
         ))}
       </div>
-      <div className="p-4 bg-[var(--theme-bg-primary)] border-t border-[var(--theme-border)]">
+
+      {/* 輸入區域 */}
+      <div className="p-4 bg-[var(--theme-bg-primary)] border-t border-[var(--theme-border)] rounded-b-xl">
         <div className="flex items-center gap-2">
           <input
             type="text"

@@ -43,24 +43,13 @@ function validateTenantConfig(tenantId: TenantId) {
 
 interface ParsedUnit {
   unit_number: string // Format: A-10-1001
-  building: string | null
-  floor: number | null
-  room_number: string | null
   unit_code: string // Format: A棟-10F-1001
 }
 
 function parseUnitInput(input: string): ParsedUnit {
   const trimmed = input.trim()
 
-  // Default result
-  const result: ParsedUnit = {
-    unit_number: trimmed,
-    building: null,
-    floor: null,
-    room_number: null,
-    unit_code: trimmed,
-  }
-
+  // Helper function to combine floor and room number
   const combineFloorRoom = (floor: number, room: number): string => {
     // Format: floor * 100 + room, with room padded to 2 digits
     const roomPadded = room.toString().padStart(2, "0")
@@ -72,13 +61,15 @@ function parseUnitInput(input: string): ParsedUnit {
   const chineseMatch = trimmed.match(chinesePattern)
 
   if (chineseMatch) {
-    result.building = chineseMatch[1].toUpperCase()
-    result.floor = Number.parseInt(chineseMatch[2], 10)
+    const building = chineseMatch[1].toUpperCase()
+    const floor = Number.parseInt(chineseMatch[2], 10)
     const roomNum = Number.parseInt(chineseMatch[3], 10)
-    result.room_number = combineFloorRoom(result.floor, roomNum)
-    result.unit_number = `${result.building}-${result.floor}-${result.room_number}`
-    result.unit_code = `${result.building}棟-${result.floor}F-${result.room_number}`
-    return result
+    const room_number = combineFloorRoom(floor, roomNum)
+
+    return {
+      unit_number: `${building}-${floor}-${room_number}`,
+      unit_code: `${building}棟-${floor}F-${room_number}`,
+    }
   }
 
   // Pattern 2: Dash/separator format - C-3-302, A/5/12, B_6_601
@@ -86,12 +77,14 @@ function parseUnitInput(input: string): ParsedUnit {
   const dashMatch = trimmed.match(dashPattern)
 
   if (dashMatch) {
-    result.building = dashMatch[1].toUpperCase()
-    result.floor = Number.parseInt(dashMatch[2], 10)
-    result.room_number = dashMatch[3] // Already in combined format like 302, 1001
-    result.unit_number = `${result.building}-${result.floor}-${result.room_number}`
-    result.unit_code = `${result.building}棟-${result.floor}F-${result.room_number}`
-    return result
+    const building = dashMatch[1].toUpperCase()
+    const floor = Number.parseInt(dashMatch[2], 10)
+    const room_number = dashMatch[3]
+
+    return {
+      unit_number: `${building}-${floor}-${room_number}`,
+      unit_code: `${building}棟-${floor}F-${room_number}`,
+    }
   }
 
   // Pattern 3: Compact format - A12F3, B5F12
@@ -99,13 +92,15 @@ function parseUnitInput(input: string): ParsedUnit {
   const compactMatch = trimmed.match(compactPattern)
 
   if (compactMatch) {
-    result.building = compactMatch[1].toUpperCase()
-    result.floor = Number.parseInt(compactMatch[2], 10)
+    const building = compactMatch[1].toUpperCase()
+    const floor = Number.parseInt(compactMatch[2], 10)
     const roomNum = Number.parseInt(compactMatch[3], 10)
-    result.room_number = combineFloorRoom(result.floor, roomNum)
-    result.unit_number = `${result.building}-${result.floor}-${result.room_number}`
-    result.unit_code = `${result.building}棟-${result.floor}F-${result.room_number}`
-    return result
+    const room_number = combineFloorRoom(floor, roomNum)
+
+    return {
+      unit_number: `${building}-${floor}-${room_number}`,
+      unit_code: `${building}棟-${floor}F-${room_number}`,
+    }
   }
 
   // Pattern 4: Simple number format - 302, A302
@@ -113,29 +108,24 @@ function parseUnitInput(input: string): ParsedUnit {
   const simpleMatch = trimmed.match(simplePattern)
 
   if (simpleMatch) {
-    if (simpleMatch[1]) {
-      result.building = simpleMatch[1].toUpperCase()
-    }
-    // Try to extract floor from room number (e.g., 302 -> floor 3, room 02)
+    const building = simpleMatch[1] ? simpleMatch[1].toUpperCase() : ""
     const roomNum = simpleMatch[2]
-    if (roomNum.length >= 3) {
-      result.floor = Number.parseInt(roomNum.substring(0, roomNum.length - 2), 10)
-      result.room_number = roomNum // Keep original combined format
-    } else {
-      result.room_number = roomNum
+
+    // Try to extract floor from room number (e.g., 302 -> floor 3, room 02)
+    if (roomNum.length >= 3 && building) {
+      const floor = Number.parseInt(roomNum.substring(0, roomNum.length - 2), 10)
+      return {
+        unit_number: `${building}-${floor}-${roomNum}`,
+        unit_code: `${building}棟-${floor}F-${roomNum}`,
+      }
     }
-    if (result.building && result.floor !== null) {
-      result.unit_number = `${result.building}-${result.floor}-${result.room_number}`
-      result.unit_code = `${result.building}棟-${result.floor}F-${result.room_number}`
-    } else {
-      result.unit_number = trimmed.toUpperCase()
-      result.unit_code = trimmed.toUpperCase()
-    }
-    return result
   }
 
   // If no pattern matches, use input as-is
-  return result
+  return {
+    unit_number: trimmed.toUpperCase(),
+    unit_code: trimmed.toUpperCase(),
+  }
 }
 
 // Server action to detect user tenant and authenticate
@@ -231,6 +221,7 @@ export async function registerUser(
 ) {
   try {
     console.log(`[v0] Registering user in ${tenantId}:`, email)
+    console.log("[v0] Input data:", { email, name, phone, unitNumber, role, relationship })
     const config = validateTenantConfig(tenantId)
     const supabase = createClient(config.url, config.anonKey)
 
@@ -239,7 +230,8 @@ export async function registerUser(
 
     let unitId: string | null = null
 
-    // First, try to find existing unit by unit_number OR unit_code
+    // Step 1: Find or create unit
+    console.log("[v0] Step 1: Looking for existing unit...")
     const { data: existingUnit, error: findUnitError } = await supabase
       .from("units")
       .select("id")
@@ -248,45 +240,86 @@ export async function registerUser(
 
     if (findUnitError) {
       console.error("[v0] Error finding unit:", findUnitError)
+      return {
+        success: false,
+        error: `查找單位失敗：${findUnitError.message}`,
+      }
     }
 
     if (existingUnit) {
       unitId = existingUnit.id
-      console.log("[v0] Found existing unit:", unitId)
+      console.log("[v0] Found existing unit with id:", unitId)
     } else {
+      console.log("[v0] Unit not found, creating new unit...")
       const { data: newUnit, error: createUnitError } = await supabase
         .from("units")
         .insert([
           {
             unit_number: parsedUnit.unit_number,
             unit_code: parsedUnit.unit_code,
-            building: parsedUnit.building,
-            floor: parsedUnit.floor,
-            room_number: parsedUnit.room_number,
           },
         ])
         .select("id")
         .single()
 
+      console.log("[v0] Create unit result:", {
+        hasData: !!newUnit,
+        hasError: !!createUnitError,
+        errorCode: createUnitError?.code,
+        errorMessage: createUnitError?.message,
+      })
+
       if (createUnitError) {
         console.error("[v0] Error creating unit:", createUnitError)
         // If unit creation fails due to unique constraint, try to fetch it again
         if (createUnitError.code === "23505") {
-          const { data: retryUnit } = await supabase
+          console.log("[v0] Unique constraint violation, retrying fetch...")
+          const { data: retryUnit, error: retryError } = await supabase
             .from("units")
             .select("id")
             .or(`unit_number.eq.${parsedUnit.unit_number},unit_code.eq.${parsedUnit.unit_code}`)
             .maybeSingle()
+
+          console.log("[v0] Retry fetch result:", { hasData: !!retryUnit, hasError: !!retryError })
+
           if (retryUnit) {
             unitId = retryUnit.id
+            console.log("[v0] Found unit on retry with id:", unitId)
+          } else {
+            return {
+              success: false,
+              error: "無法創建或查找單位",
+            }
+          }
+        } else {
+          return {
+            success: false,
+            error: `創建單位失敗：${createUnitError.message}`,
           }
         }
       } else if (newUnit) {
         unitId = newUnit.id
-        console.log("[v0] Created new unit:", unitId)
+        console.log("[v0] Successfully created new unit with id:", unitId)
+      } else {
+        console.error("[v0] No unit data returned and no error")
+        return {
+          success: false,
+          error: "創建單位失敗：未返回資料",
+        }
       }
     }
 
+    // Verify we have unitId before proceeding
+    if (!unitId) {
+      console.error("[v0] unitId is null, cannot proceed")
+      return {
+        success: false,
+        error: "無法取得單位 ID",
+      }
+    }
+
+    // Step 2: Create profile
+    console.log("[v0] Step 2: Creating profile with unit_id:", unitId)
     const { data: profileData, error: profileError } = await supabase
       .from("profiles")
       .insert([
@@ -301,8 +334,14 @@ export async function registerUser(
         },
       ])
       .select()
+      .single()
 
-    console.log("[v0] Register result:", { hasData: !!profileData, hasError: !!profileError })
+    console.log("[v0] Create profile result:", {
+      hasData: !!profileData,
+      hasError: !!profileError,
+      errorCode: profileError?.code,
+      errorMessage: profileError?.message,
+    })
 
     if (profileError) {
       console.error("[v0] Register error:", profileError)
@@ -314,37 +353,55 @@ export async function registerUser(
       }
       return {
         success: false,
-        error: profileError.message || "註冊失敗，請稍後再試",
+        error: `註冊失敗：${profileError.message}`,
       }
     }
 
-    if (!profileData || profileData.length === 0) {
+    if (!profileData) {
+      console.error("[v0] No profile data returned")
       return {
         success: false,
         error: "註冊失敗：未能建立用戶資料",
       }
     }
 
-    const profile = profileData[0]
+    const profile = profileData
+    console.log("[v0] Successfully created profile with id:", profile.id)
 
-    if (unitId && relationship) {
-      const { error: householdError } = await supabase.from("household_members").insert([
+    // Step 3: Create household member
+    console.log("[v0] Step 3: Creating household member...")
+    console.log("[v0] Household member data:", { name, role, relationship, unit_id: unitId, profile_id: profile.id })
+
+    const { data: householdData, error: householdError } = await supabase
+      .from("household_members")
+      .insert([
         {
           name,
           role,
-          relationship,
+          relationship: relationship || "owner",
           unit_id: unitId,
           profile_id: profile.id,
         },
       ])
+      .select()
+      .single()
 
-      if (householdError) {
-        console.error("[v0] Error creating household member:", householdError)
-      } else {
-        console.log("[v0] Created household member record")
-      }
+    console.log("[v0] Create household member result:", {
+      hasData: !!householdData,
+      hasError: !!householdError,
+      errorCode: householdError?.code,
+      errorMessage: householdError?.message,
+    })
+
+    if (householdError) {
+      console.error("[v0] Error creating household member:", householdError)
+      // Don't fail registration if household member creation fails, but log it
+      console.warn("[v0] Registration succeeded but household member creation failed")
+    } else {
+      console.log("[v0] Successfully created household member with id:", householdData?.id)
     }
 
+    console.log("[v0] Registration complete for user:", profile.email)
     return {
       success: true,
       user: profile,

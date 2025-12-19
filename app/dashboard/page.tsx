@@ -90,7 +90,7 @@ export default function DashboardPage() {
         .from("profiles")
         .select(`
           *,
-          units ( id, unit_code, building, floor, room_number, ping_size, car_spots, moto_spots, monthly_fee )
+          units ( id, unit_code, unit_number )
         `)
         .eq("id", user.id)
 
@@ -296,7 +296,7 @@ export default function DashboardPage() {
                   />
                 </section>
               )}
-              
+
               {/* Emergency Actions */}
               <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-xl p-3">
                 <h3 className="flex items-center gap-1 text-[var(--theme-text-primary)]/90 text-sm font-bold mb-2">

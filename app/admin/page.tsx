@@ -65,7 +65,7 @@ export default function AdminPage() {
           .from("profiles")
           .select(`
             *,
-            units ( id, unit_code, building, floor, room_number )
+            units ( id, unit_code, unit_number )
           `)
           .eq("id", user.id)
 

@@ -33,7 +33,7 @@ export async function fetchVisitors(room?: string | null, isAdmin?: boolean, use
     .select(`
       id, name, phone, purpose, reservation_time, checked_in_at, checked_out_at, 
       status, created_at, unit_id, reserved_by_id,
-      units ( id, unit_code, building, floor, room_number )
+      units ( id, unit_code, unit_number )
     `)
     .order("created_at", { ascending: false })
 

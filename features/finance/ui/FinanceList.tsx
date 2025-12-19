@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useFinance } from "../hooks/useFinance"
 
 interface ExpenseRecord {
@@ -30,6 +30,24 @@ export function FinanceList({ userRoom }: FinanceListProps) {
   const { records, loading } = useFinance(userRoom)
   const [activeTab, setActiveTab] = useState<TabType>("income")
   const [expenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES)
+
+  // 1. Calculate Unpaid Bills for the Reminder UI
+  const unpaidRecords = useMemo(() => records.filter(r => !r.paid), [records])
+  const hasUnpaid = unpaidRecords.length > 0
+
+  // 2. Mock Payment Instruction Function
+  const showPaymentInfo = (amount: number, due: string) => {
+    alert(
+      `💰 繳費資訊 (模擬)\n\n` +
+      `應繳金額: $${amount.toLocaleString()}\n` +
+      `繳費期限: ${new Date(due).toLocaleDateString()}\n\n` +
+      `請匯款至以下帳號：\n` +
+      `銀行：玉山銀行 (808)\n` +
+      `帳號：1234-5678-9012\n` +
+      `戶名：XX社區管理委員會\n\n` +
+      `匯款後請通知管理室，謝謝！`
+    )
+  }
 
   const reportData = {
     totalIncome: records.reduce((sum, r) => sum + (r.amount || 0), 0),
@@ -71,13 +89,21 @@ export function FinanceList({ userRoom }: FinanceListProps) {
         <div className="flex bg-[var(--theme-bg-secondary)] p-1 rounded-lg border border-[var(--theme-border)]">
           <button
             onClick={() => setActiveTab("income")}
-            className={`px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${
+            className={`relative px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${
               activeTab === "income"
                 ? "bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] shadow-md"
                 : "text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)]"
             }`}
           >
-            <span className="material-icons text-sm">payments</span> 收費
+            <span className="material-icons text-sm">payments</span> 
+            我的繳費
+            {/* 🔴 Red Dot Notification if Unpaid */}
+            {hasUnpaid && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab("expense")}
@@ -87,7 +113,7 @@ export function FinanceList({ userRoom }: FinanceListProps) {
                 : "text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)]"
             }`}
           >
-            <span className="material-icons text-sm">shopping_cart</span> 支出
+            <span className="material-icons text-sm">shopping_cart</span> 社區支出
           </button>
           <button
             onClick={() => setActiveTab("report")}
@@ -97,69 +123,102 @@ export function FinanceList({ userRoom }: FinanceListProps) {
                 : "text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)]"
             }`}
           >
-            <span className="material-icons text-sm">analytics</span> 報表
+            <span className="material-icons text-sm">analytics</span> 財務報表
           </button>
         </div>
       </div>
 
-      {/* Income Tab - Read Only */}
+      {/* Income Tab (My Payments) */}
       {activeTab === "income" && (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-[var(--theme-accent-light)]">
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tl-lg">
-                  房號
-                </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">金額</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  到期日
-                </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">發票</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tr-lg">
-                  狀態
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.length > 0 ? (
-                records.map((row, index) => (
-                  <tr
-                    key={row.id || `income-${index}`}
-                    className="hover:bg-[var(--theme-bg-secondary)] transition-colors border-b border-[var(--theme-border)] last:border-0"
-                  >
-                    <td className="p-3 text-[var(--theme-text-primary)]">{row.room || "-"}</td>
-                    <td className="p-3 text-[var(--theme-text-primary)] font-medium">
-                      ${row.amount?.toLocaleString() || 0}
-                    </td>
-                    <td className="p-3 text-[var(--theme-text-secondary)]">
-                      {row.due ? new Date(row.due).toLocaleDateString("zh-TW") : "-"}
-                    </td>
-                    <td className="p-3 text-[var(--theme-text-secondary)]">{row.invoice || "-"}</td>
-                    <td className="p-3">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-bold ${row.paid ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"}`}
-                      >
-                        {row.paid ? "已繳" : "未繳"}
-                      </span>
+        <div className="space-y-4 animate-fade-in">
+          
+          {/* ⚠️ Warning Banner for Unpaid Bills */}
+          {hasUnpaid && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
+              <span className="material-icons text-red-500 mt-0.5">warning</span>
+              <div>
+                <h3 className="text-red-600 dark:text-red-400 font-bold text-sm">您有 {unpaidRecords.length} 筆未繳費用</h3>
+                <p className="text-red-600/80 dark:text-red-400/80 text-xs mt-1">
+                  請盡快完成繳費，以免影響您的權益。點擊下方「前往繳費」查看匯款資訊。
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-[var(--theme-accent-light)]">
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tl-lg">
+                    房號
+                  </th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">金額</th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
+                    期限
+                  </th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">發票</th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tr-lg">
+                    狀態 / 操作
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.length > 0 ? (
+                  records.map((row, index) => (
+                    <tr
+                      key={row.id || `income-${index}`}
+                      className={`hover:bg-[var(--theme-bg-secondary)] transition-colors border-b border-[var(--theme-border)] last:border-0 ${
+                        !row.paid ? "bg-red-500/5" : ""
+                      }`}
+                    >
+                      <td className="p-3 text-[var(--theme-text-primary)] font-medium">{row.room || "-"}</td>
+                      <td className="p-3 text-[var(--theme-text-primary)] font-bold">
+                        ${row.amount?.toLocaleString() || 0}
+                      </td>
+                      <td className={`p-3 ${!row.paid ? "text-red-500 font-bold" : "text-[var(--theme-text-secondary)]"}`}>
+                        {row.due ? new Date(row.due).toLocaleDateString("zh-TW") : "-"}
+                      </td>
+                      <td className="p-3 text-[var(--theme-text-secondary)]">{row.invoice || "-"}</td>
+                      <td className="p-3 flex items-center gap-3">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            row.paid 
+                              ? "bg-green-500/20 text-green-500" 
+                              : "bg-red-500/20 text-red-500"
+                          }`}
+                        >
+                          {row.paid ? "已繳" : "未繳"}
+                        </span>
+
+                        {/* 💰 Pay Button (Only if unpaid) */}
+                        {!row.paid && (
+                          <button 
+                            onClick={() => showPaymentInfo(row.amount, row.due)}
+                            className="flex items-center gap-1 px-3 py-1 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-all shadow-sm active:scale-95"
+                          >
+                            <span className="material-icons text-[14px]">qr_code</span>
+                            前往繳費
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                      目前沒有財務記錄
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                    目前沒有財務記錄
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {/* Expense Tab - Read Only */}
       {activeTab === "expense" && (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto animate-fade-in">
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-red-500/10">
@@ -198,8 +257,9 @@ export function FinanceList({ userRoom }: FinanceListProps) {
         </div>
       )}
 
+      {/* Report Tab */}
       {activeTab === "report" && (
-        <div className="animate-fadeIn space-y-6">
+        <div className="animate-fade-in space-y-6">
           {/* Top Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Income */}

@@ -18,10 +18,7 @@ export interface User {
   status: string
   unit_id?: string
   room?: string // 顯示用，從 units.unit_code 來
-  building?: string
-  floor?: string
-  room_number?: string
-  unit_type?: string
+  unit_number?: string
   ping_size?: number
   car_spots?: number
   moto_spots?: number
@@ -54,7 +51,7 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     .from("profiles")
     .select(`
       *,
-      units ( id, unit_code, building, floor, room_number, ping_size, car_spots, moto_spots, monthly_fee )
+      units ( id, unit_code, unit_number, ping_size, car_spots, moto_spots, monthly_fee )
     `)
     .eq("id", userId)
     .single()
@@ -70,9 +67,7 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     status: profile.status || "active",
     unit_id: profile.unit_id,
     room: profile.units?.unit_code || "",
-    building: profile.units?.building,
-    floor: profile.units?.floor,
-    room_number: profile.units?.room_number,
+    unit_number: profile.units?.unit_number,
     ping_size: profile.units?.ping_size,
     car_spots: profile.units?.car_spots,
     moto_spots: profile.units?.moto_spots,
@@ -88,7 +83,7 @@ export async function getProfile(userId: string): Promise<User | null> {
     .from("profiles")
     .select(`
       *,
-      units ( id, unit_code, building, floor, room_number, ping_size, car_spots, moto_spots, monthly_fee )
+      units ( id, unit_code, unit_number, ping_size, car_spots, moto_spots, monthly_fee )
     `)
     .eq("id", userId)
     .single()
@@ -104,9 +99,7 @@ export async function getProfile(userId: string): Promise<User | null> {
     status: data.status,
     unit_id: data.unit_id,
     room: data.units?.unit_code || "",
-    building: data.units?.building,
-    floor: data.units?.floor,
-    room_number: data.units?.room_number,
+    unit_number: data.units?.unit_number,
     ping_size: data.units?.ping_size,
     car_spots: data.units?.car_spots,
     moto_spots: data.units?.moto_spots,
@@ -118,12 +111,7 @@ export async function getUnits() {
   const supabase = getSupabaseClient()
   if (!supabase) return []
 
-  const { data, error } = await supabase
-    .from("units")
-    .select("id, unit_code, building, floor, room_number")
-    .order("building")
-    .order("floor")
-    .order("room_number")
+  const { data, error } = await supabase.from("units").select("id, unit_code, unit_number").order("unit_number")
 
   if (error) throw error
   return data || []

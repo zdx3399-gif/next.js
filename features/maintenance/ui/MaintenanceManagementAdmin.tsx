@@ -14,6 +14,7 @@ interface MaintenanceRow {
   status: string
   handler: string
   cost: number
+  note: string
 }
 
 interface MaintenanceFormModalProps {
@@ -115,6 +116,16 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
               className="w-full p-3 rounded-xl theme-input outline-none"
             />
           </div>
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">備註</label>
+            <textarea
+              value={formData.note || ""}
+              onChange={(e) => onChange("note", e.target.value)}
+              placeholder="請輸入備註"
+              rows={3}
+              className="w-full p-3 rounded-xl theme-input outline-none resize-none"
+            />
+          </div>
         </div>
 
         {/* Footer Buttons */}
@@ -154,6 +165,7 @@ export function MaintenanceManagementAdmin() {
     status: "open",
     handler: "",
     cost: 0,
+    note: "",
   })
 
   const loadData = async () => {
@@ -172,15 +184,19 @@ export function MaintenanceManagementAdmin() {
       return
     }
 
-    // 收集所有 reported_by_id
+    // 收集所有 reported_by_id 和 handler_id
     const reporterIds = [
       ...new Set((maintenanceData || []).filter((m: any) => m.reported_by_id).map((m: any) => m.reported_by_id)),
     ]
+    const handlerIds = [
+      ...new Set((maintenanceData || []).filter((m: any) => m.handler_id).map((m: any) => m.handler_id)),
+    ]
+    const allIds = [...new Set([...reporterIds, ...handlerIds])]
 
     // 批量查詢 profiles 取得名字
     let profilesMap: Record<string, string> = {}
-    if (reporterIds.length > 0) {
-      const { data: profiles } = await supabase.from("profiles").select("id, name").in("id", reporterIds)
+    if (allIds.length > 0) {
+      const { data: profiles } = await supabase.from("profiles").select("id, name").in("id", allIds)
 
       if (profiles) {
         profilesMap = Object.fromEntries(profiles.map((p: any) => [p.id, p.name || "未知"]))
@@ -197,8 +213,9 @@ export function MaintenanceManagementAdmin() {
         reported_by_id: row.reported_by_id || null,
         photo_url: row.photo_url || row.image_url || null,
         status: row.status || "open",
-        handler: row.handler || row.handler_name || "",
+        handler: row.handler_id ? profilesMap[row.handler_id] || "" : "",
         cost: row.cost || 0,
+        note: row.note || "",
       })),
     )
     setLoading(false)
@@ -220,6 +237,7 @@ export function MaintenanceManagementAdmin() {
       status: "open",
       handler: "",
       cost: 0,
+      note: "",
     })
     setEditingIndex(null)
     setIsModalOpen(true)
@@ -245,8 +263,8 @@ export function MaintenanceManagementAdmin() {
         reported_by_name: formData.reported_by_name,
         reported_by_id: formData.reported_by_id,
         status: formData.status,
-        handler_name: formData.handler,
         cost: formData.cost,
+        note: formData.handler ? `處理人：${formData.handler}` : formData.note,
       }
 
       if (formData.id) {
@@ -327,6 +345,7 @@ export function MaintenanceManagementAdmin() {
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">處理人</th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">費用</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">備註</th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
             </tr>
           </thead>
@@ -359,6 +378,9 @@ export function MaintenanceManagementAdmin() {
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       ${row.cost?.toLocaleString() || 0}
                     </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                      {row.note || "-"}
+                    </td>
                     <td className="p-3 border-b border-[var(--theme-border)]">
                       <div className="flex gap-2">
                         <button
@@ -382,7 +404,7 @@ export function MaintenanceManagementAdmin() {
               })
             ) : (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                <td colSpan={9} className="p-8 text-center text-[var(--theme-text-secondary)]">
                   目前沒有維修紀錄
                 </td>
               </tr>

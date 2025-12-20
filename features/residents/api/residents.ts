@@ -249,9 +249,7 @@ export async function fetchResidentsByUnitId(unitId: string): Promise<Resident[]
 // 單位相關
 export interface Unit {
   id: string
-  building: string
-  floor: number
-  room_number: string
+  unit_number: string
   unit_code: string
   ping_size: number
   car_spots: number
@@ -265,12 +263,7 @@ export async function fetchUnits(): Promise<Unit[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
 
-  const { data, error } = await supabase
-    .from("units")
-    .select("*")
-    .order("building", { ascending: true })
-    .order("floor", { ascending: true })
-    .order("room_number", { ascending: true })
+  const { data, error } = await supabase.from("units").select("*").order("unit_number", { ascending: true })
 
   if (error) {
     console.error("Error fetching units:", error)
@@ -279,9 +272,7 @@ export async function fetchUnits(): Promise<Unit[]> {
   return data || []
 }
 
-export async function createUnit(
-  unit: Omit<Unit, "id" | "unit_code" | "created_at" | "updated_at">,
-): Promise<Unit | null> {
+export async function createUnit(unit: Omit<Unit, "id" | "created_at" | "updated_at">): Promise<Unit | null> {
   const supabase = getSupabaseClient()
   if (!supabase) return null
 
@@ -298,9 +289,7 @@ export async function updateUnit(id: string, updates: Partial<Unit>): Promise<Un
   const supabase = getSupabaseClient()
   if (!supabase) return null
 
-  const { unit_code, ...dbUpdates } = updates // unit_code 是 generated column
-
-  const { data, error } = await supabase.from("units").update(dbUpdates).eq("id", id).select().single()
+  const { data, error } = await supabase.from("units").update(updates).eq("id", id).select().single()
 
   if (error) {
     console.error("Error updating unit:", error)

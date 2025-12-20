@@ -34,7 +34,10 @@ export async function fetchAllFinanceRecords(): Promise<FinanceRecord[]> {
 
   let unitsMap: Record<string, any> = {}
   if (unitIds.length > 0) {
-    const { data: units } = await supabase.from("units").select("id, unit_code, unit_number").in("id", unitIds)
+    const { data: units } = await supabase
+      .from("units")
+      .select("id, unit_code, unit_number, ping_size, monthly_fee, car_spots, moto_spots")
+      .in("id", unitIds)
     if (units) {
       unitsMap = Object.fromEntries(units.map((u) => [u.id, u]))
     }
@@ -53,10 +56,10 @@ export async function fetchAllFinanceRecords(): Promise<FinanceRecord[]> {
       created_at: f.created_at,
       unit_id: f.unit_id,
       room: unit?.unit_code || "-",
-      ping_size: 0,
-      car_spots: 0,
-      moto_spots: 0,
-      monthly_fee: 0,
+      ping_size: unit?.ping_size || 0,
+      car_spots: unit?.car_spots || 0,
+      moto_spots: unit?.moto_spots || 0,
+      monthly_fee: unit?.monthly_fee || 0,
     }
   })
 }

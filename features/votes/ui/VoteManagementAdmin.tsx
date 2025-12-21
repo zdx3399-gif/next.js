@@ -7,9 +7,9 @@ import { getSupabaseClient } from "@/lib/supabase"
 // ==================================================================================
 // 🔧 CONFIG: Your Static Default Links
 // ==================================================================================
-// Link 1: 編輯既有的預設表單 (保留)
-const GOOGLE_FORM_EDIT_LINK = "https://drive.google.com/drive/folders/1ORmuy3ZpoY-dhTlt-plOHyWKbC91K6of"
-// Link 2: 建立全新的表單 (已更新 👇)
+// Link 1: 編輯既有的預設表單
+const GOOGLE_FORM_EDIT_LINK = "https://docs.google.com/forms/d/1-RIrL9cKOfX4HY2gLa7m6gF-fVX72uDdtfVhABMUFx8/edit"
+// Link 2: 建立全新的表單
 const GOOGLE_FORM_CREATE_LINK = "https://docs.google.com/forms/create"
 
 interface VoteManagementAdminProps {
@@ -20,8 +20,6 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
   const [loading, setLoading] = useState(false)
   
   // --- View States ---
-  // 'create' = The form to make new votes
-  // 'repo'   = The history and static links
   const [currentView, setCurrentView] = useState<'create' | 'repo'>('create')
   
   // --- Form States ---
@@ -30,8 +28,8 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
     title: "",
     description: "",
     endDate: "",
-    googleFormUrl: "",
-    googleResultUrl: ""
+    googleFormUrl: ""
+    // googleResultUrl removed as requested
   })
 
   // --- History State ---
@@ -83,7 +81,7 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
       if (!res.ok) throw new Error(data.error || '發起失敗')
 
       alert('✅ 通知已建立並推播至 LINE')
-      setFormData({ title: "", description: "", endDate: "", googleFormUrl: "", googleResultUrl: "" })
+      setFormData({ title: "", description: "", endDate: "", googleFormUrl: "" })
       fetchHistory() // Refresh history
 
     } catch (error: any) {
@@ -170,14 +168,7 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
                       placeholder="https://docs.google.com/forms/..." 
                       value={formData.googleFormUrl} onChange={e => setFormData({...formData, googleFormUrl: e.target.value})} />
                   </div>
-                  <div>
-                    <label className="block text-green-700 dark:text-green-400 font-bold text-sm mb-1 flex items-center gap-1">
-                      <span className="material-icons text-sm">table_view</span> Google Sheet 結果連結 (給管理員看)
-                    </label>
-                    <input type="url" className="w-full p-3 rounded-lg border border-green-200 dark:border-green-800 bg-white dark:bg-black/20"
-                      placeholder="https://docs.google.com/spreadsheets/..." 
-                      value={formData.googleResultUrl} onChange={e => setFormData({...formData, googleResultUrl: e.target.value})} />
-                  </div>
+                  {/* Google Excel Link Removed */}
                 </div>
               ) : (
                 <div className="bg-[var(--theme-accent)]/5 p-5 rounded-xl border border-[var(--theme-accent)]/20">
@@ -214,7 +205,7 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
-              {/* Button 1: Edit EXISTING (Keep this one) */}
+              {/* Button 1: Edit EXISTING */}
               <a href={GOOGLE_FORM_EDIT_LINK} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-4 p-4 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-secondary)] hover:bg-[var(--theme-accent)] hover:text-white transition-all group">
                 <span className="material-icons text-3xl text-purple-500 group-hover:text-white">edit_document</span>
@@ -224,7 +215,7 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
                 </div>
               </a>
 
-              {/* Button 2: CREATE NEW (Updated as requested) */}
+              {/* Button 2: CREATE NEW */}
               <a href={GOOGLE_FORM_CREATE_LINK} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-4 p-4 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-secondary)] hover:bg-blue-600 hover:text-white transition-all group">
                 <span className="material-icons text-3xl text-blue-500 group-hover:text-white">post_add</span>

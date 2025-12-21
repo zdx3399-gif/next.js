@@ -1,6 +1,6 @@
-// app/api/bind-line/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Client } from '@line/bot-sdk'; // 引入 LINE Bot SDK
 
 export async function POST(req: NextRequest) {
   try {
@@ -86,7 +86,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. 更新 profile，綁定 LINE 資訊
+    // ==========================================
+    // 🔥 新增功能 1: 同步寫入 line_users 資料表
+    // ==========================================
+    const { error: lineUserDbError } = await supabase
+      .from('line_users')
+      .upsert(
+        [
+          {
+            line_user_id: line_user_id,
+            profile_id: profile_id,
+            display_name: line_display_name,
+            avatar_url: line_avatar_url,
+            status_message: line_status_message || "",
+            updated_at: new Date().toISOString()
+          },
+        ],
+        { onConflict: 'line_user_id' }
+      );
+
+    if (lineUserDbError) {
+      console.error("❌ 無法寫入 line_users 資料表:", lineUserDbError);
+      return NextResponse.json({ success: false, message: "資料庫寫入失敗 (line_users)" }, { status: 500 });
+    }
+
+    // 4. 更新 profiles，綁定 LINE 資訊
     const { data: updatedProfile, error: updateError } = await supabase
       .from('profiles')
       .update({
@@ -112,11 +136,31 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (updateError || !updatedProfile) {
-      console.error('❌ 更新失敗:', updateError);
+      console.error('❌ 更新 profiles 失敗:', updateError);
       return NextResponse.json(
         { success: false, message: '綁定失敗，請稍後再試' },
         { status: 500 }
       );
+    }
+
+    // ==========================================
+    // 🔥 新增功能 2: 發送 LINE 歡迎訊息
+    // ==========================================
+    try {
+      if (process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_CHANNEL_SECRET) {
+          const client = new Client({
+            channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+            channelSecret: process.env.LINE_CHANNEL_SECRET,
+          });
+
+          await client.pushMessage(line_user_id, {
+            type: 'text',
+            text: `🎉 綁定成功！\n親愛的 ${line_display_name || '住戶'} 您好，您已成功連接社區管理系統。\n現在您可以直接透過 LINE 接收包裹與繳費通知了！`,
+          });
+      }
+    } catch (botError) {
+      console.warn("⚠️ 機器人推播失敗 (可能用戶未加好友):", botError);
+      // 我們不中斷流程，因為綁定在資料庫已經成功了
     }
 
     console.log('✅ LINE 綁定成功:', {
@@ -181,6 +225,7 @@ export async function DELETE(req: NextRequest) {
 
     console.log('🔓 解除 LINE 綁定請求:', profile_id);
 
+    // 1. 清除 profiles 表中的 LINE 資訊
     const { data: profile, error: updateError } = await supabase
       .from('profiles')
       .update({
@@ -191,7 +236,7 @@ export async function DELETE(req: NextRequest) {
         updated_at: new Date().toISOString()
       })
       .eq('id', profile_id)
-      .select('id, email, name')
+      .select('id, email, name, line_user_id') // 選取 line_user_id 以便稍後使用
       .single();
 
     if (updateError || !profile) {
@@ -200,6 +245,13 @@ export async function DELETE(req: NextRequest) {
         { status: 404 }
       );
     }
+
+    // 2. (選用) 如果你也想從 line_users 表中刪除該紀錄，可以解除下方的註解
+    /*
+    if (profile.line_user_id) {
+       await supabase.from('line_users').delete().eq('line_user_id', profile.line_user_id);
+    }
+    */
 
     console.log('✅ LINE 綁定已解除:', profile.email);
 

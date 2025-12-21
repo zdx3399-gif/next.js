@@ -33,6 +33,23 @@ export default function AuthPage() {
     }
   }, [searchParams, router])
 
+  // 👇 LINE Login Function (New Addition)
+  const handleLineBind = () => {
+    const channelId = process.env.NEXT_PUBLIC_LINE_CHANNEL_ID
+    const redirectUri = process.env.NEXT_PUBLIC_LINE_CALLBACK_URL
+    const state = "random_state_string" // In production, use a secure random string
+    
+    if (!channelId || !redirectUri) {
+      alert("❌ 系統設定錯誤：缺少 LINE ID 或 Callback URL")
+      return
+    }
+
+    // Redirect to LINE Login Authorization
+    const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${channelId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=profile%20openid`
+    
+    window.location.href = lineAuthUrl
+  }
+
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setErrorMessage("")
@@ -355,6 +372,25 @@ export default function AuthPage() {
           >
             {isLoginMode ? "立即註冊" : "立即登入"}
           </button>
+        </div>
+
+        {/* 👇 BIND LINE BUTTON (New Addition) */}
+        <div className="mt-6 pt-6 border-t" style={{ borderColor: "var(--theme-border)" }}>
+          <button
+            onClick={handleLineBind}
+            type="button"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+            style={{
+              background: "#06C755", // LINE Green color
+              color: "#ffffff",
+            }}
+          >
+            <span className="material-icons">chat</span>
+            綁定 LINE 帳號
+          </button>
+          <p className="text-xs text-center mt-2" style={{ color: "var(--theme-text-muted)" }}>
+            綁定後可接收社區重要通知
+          </p>
         </div>
       </div>
     </div>

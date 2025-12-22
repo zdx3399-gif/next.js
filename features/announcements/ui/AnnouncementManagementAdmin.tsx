@@ -128,6 +128,7 @@ export function AnnouncementManagementAdmin() {
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
   const [formData, setFormData] = useState<Partial<Announcement>>({})
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
 
   const loadAnnouncements = async () => {
     setLoading(true)
@@ -194,6 +195,16 @@ export function AnnouncementManagementAdmin() {
     }
   }
 
+  const filteredAnnouncements = announcements.filter((announcement) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      announcement.title?.toLowerCase().includes(term) ||
+      announcement.content?.toLowerCase().includes(term) ||
+      announcement.author_name?.toLowerCase().includes(term)
+    )
+  })
+
   return (
     <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
       <div className="flex justify-between items-center mb-4">
@@ -208,6 +219,16 @@ export function AnnouncementManagementAdmin() {
           <span className="material-icons text-xl">add</span>
           新增一筆
         </button>
+      </div>
+
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="搜尋標題、內容或作者..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-3 rounded-xl theme-input outline-none"
+        />
       </div>
 
       {loading ? (
@@ -228,8 +249,8 @@ export function AnnouncementManagementAdmin() {
               </tr>
             </thead>
             <tbody>
-              {announcements.length > 0 ? (
-                announcements.map((announcement) => (
+              {filteredAnnouncements.length > 0 ? (
+                filteredAnnouncements.map((announcement) => (
                   <tr key={announcement.id} className="hover:bg-[var(--theme-accent-light)] transition-colors">
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       {announcement.title}
@@ -277,7 +298,7 @@ export function AnnouncementManagementAdmin() {
               ) : (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                    目前沒有公告資料
+                    {searchTerm ? "沒有符合條件的公告資料" : "目前沒有公告資料"}
                   </td>
                 </tr>
               )}

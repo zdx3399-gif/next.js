@@ -193,7 +193,7 @@ export default function DashboardPage() {
     maintenance: "維修",
     finance: "管理費",
     visitors: "訪客",
-    meetings: "會議/活動",
+    meetings: "會議記錄",
     emergencies: "緊急事件",
     facilities: "設施預約",
   }
@@ -206,7 +206,7 @@ export default function DashboardPage() {
     { id: "maintenance", icon: "build", label: "設備/維護" },
     { id: "finance", icon: "account_balance", label: "管理費/收支" },
     { id: "visitors", icon: "how_to_reg", label: "訪客紀錄" },
-    { id: "meetings", icon: "event", label: "會議/活動" },
+    { id: "meetings", icon: "event", label: "會議記錄" },
     { id: "emergencies", icon: "emergency", label: "緊急事件" },
     { id: "facilities", icon: "meeting_room", label: "設施預約" },
   ]

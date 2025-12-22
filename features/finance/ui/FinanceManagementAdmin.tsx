@@ -13,6 +13,7 @@ interface FinanceRecord {
   invoice: string
   paid: boolean
   unit_id?: string
+  monthly_fee?: number
 }
 
 interface ExpenseRecord {
@@ -31,6 +32,7 @@ interface UnitOption {
   ping_size: number
   car_spots: number
   moto_spots: number
+  monthly_fee: number
 }
 
 type TabType = "income" | "expense" | "report"
@@ -48,7 +50,7 @@ interface FinanceFormModalProps {
   isOpen: boolean
   onClose: () => void
   formData: FinanceRecord
-  onChange: (field: keyof FinanceRecord, value: string | number | boolean) => void
+  onChange: (field: keyof FinanceRecord, value: any) => void
   onSave: () => void
   isEditing: boolean
 }
@@ -71,7 +73,7 @@ function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
     if (supabase) {
       const { data } = await supabase
         .from("units")
-        .select("id, unit_code, ping_size, car_spots, moto_spots")
+        .select("id, unit_code, ping_size, car_spots, moto_spots, monthly_fee")
         .order("unit_code")
       if (data) {
         setUnits(data)
@@ -85,6 +87,7 @@ function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
     if (unit) {
       onChange("unit_id", unit.id)
       onChange("room", unit.unit_code)
+      onChange("monthly_fee", unit.monthly_fee || 0)
       setCalc({
         parking: unit.car_spots > 0 ? 1 : 0,
         car: unit.car_spots || 0,
@@ -131,6 +134,19 @@ function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
                 ))}
               </select>
             )}
+          </div>
+
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">
+              每月管理費 <span className="text-xs text-[var(--theme-text-secondary)]">(將更新該房號的管理費設定)</span>
+            </label>
+            <input
+              type="number"
+              value={formData.monthly_fee || 0}
+              onChange={(e) => onChange("monthly_fee", Number(e.target.value))}
+              className="w-full p-3 rounded-xl theme-input outline-none font-semibold"
+              placeholder="輸入每月管理費"
+            />
           </div>
 
           <div className="bg-[var(--theme-accent-light)] p-3 rounded-xl space-y-2 border border-[var(--theme-border)]">
@@ -330,8 +346,10 @@ function ExpenseFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
 
 // --- Main Component ---
 export function FinanceManagementAdmin() {
-  const { records, loading, updateRow, addRow, saveRecord, removeRecord, refresh } = useFinanceAdmin()
+  const { records, saveRecord, deleteRecord, updateRecord, loading } = useFinanceAdmin()
   const [activeTab, setActiveTab] = useState<TabType>("income")
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES)
+  const [searchTerm, setSearchTerm] = useState("")
 
   // Income State
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false)
@@ -343,11 +361,10 @@ export function FinanceManagementAdmin() {
     invoice: "",
     paid: false,
     unit_id: "",
+    monthly_fee: 0,
   })
 
   // Expense State
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES)
-  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false)
   const [expenseEditingId, setExpenseEditingId] = useState<string | null>(null)
   const [expenseFormData, setExpenseFormData] = useState<ExpenseRecord>({
     id: "",
@@ -357,6 +374,7 @@ export function FinanceManagementAdmin() {
     amount: 0,
     vendor: "",
   })
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false)
 
   // --- Report Calculations ---
   const reportData = useMemo(() => {
@@ -383,7 +401,7 @@ export function FinanceManagementAdmin() {
 
   // --- Handlers: Income ---
   const handleAddIncome = () => {
-    setIncomeFormData({ room: "", amount: 0, due: "", invoice: "", paid: false, unit_id: "" })
+    setIncomeFormData({ room: "", amount: 0, due: "", invoice: "", paid: false, unit_id: "", monthly_fee: 0 })
     setIncomeEditingIndex(null)
     setIsIncomeModalOpen(true)
   }
@@ -398,26 +416,34 @@ export function FinanceManagementAdmin() {
       invoice: record.invoice || "",
       paid: record.paid || false,
       unit_id: record.unit_id || "",
+      monthly_fee: record.monthly_fee || 0,
     })
     setIncomeEditingIndex(index)
     setIsIncomeModalOpen(true)
   }
 
   const handleSaveIncome = async () => {
+    console.log("[v0] handleSaveIncome called", { incomeEditingIndex, incomeFormData })
+
     if (incomeEditingIndex !== null) {
-      const keys = Object.keys(incomeFormData) as Array<keyof FinanceRecord>
-      keys.forEach((key) => {
-        if (incomeFormData[key] !== undefined) updateRow(incomeEditingIndex, key as any, incomeFormData[key] as any)
-      })
-      const success = await saveRecord(records[incomeEditingIndex], incomeEditingIndex)
+      const recordToSave = {
+        ...records[incomeEditingIndex],
+        ...incomeFormData,
+      }
+      console.log("[v0] Saving updated record:", recordToSave)
+      const success = await saveRecord(recordToSave, incomeEditingIndex)
       if (success) {
-        await refresh()
+        console.log("[v0] Save successful, refreshing...")
+      } else {
+        console.log("[v0] Save failed")
       }
     } else {
-      addRow()
+      console.log("[v0] Creating new record:", incomeFormData)
       const success = await saveRecord({ ...incomeFormData, id: undefined } as any, records.length)
       if (success) {
-        await refresh()
+        console.log("[v0] Create successful, refreshing...")
+      } else {
+        console.log("[v0] Create failed")
       }
     }
     setIsIncomeModalOpen(false)
@@ -462,6 +488,189 @@ export function FinanceManagementAdmin() {
     if (confirm("確定要刪除此筆支出記錄嗎？")) {
       setExpenses((prev) => prev.filter((e) => e.id !== id))
     }
+  }
+
+  const renderIncomeTable = () => {
+    const filteredRecords = records.filter((row) => {
+      if (!searchTerm) return true
+      const term = searchTerm.toLowerCase()
+      return (
+        row.room?.toLowerCase().includes(term) ||
+        row.invoice?.toLowerCase().includes(term) ||
+        row.amount?.toString().includes(term)
+      )
+    })
+
+    return (
+      <>
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="搜尋房號、單號或金額..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full p-3 rounded-xl theme-input outline-none"
+          />
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse min-w-[800px]">
+            <thead>
+              <tr className="bg-[var(--theme-accent-light)]">
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tl-lg">
+                  房號
+                </th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">金額</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
+                  到期日
+                </th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">發票</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tr-lg">
+                  操作
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRecords.length > 0 ? (
+                filteredRecords.map((row, index) => (
+                  <tr
+                    key={row.id || `new-${index}`}
+                    className="hover:bg-[var(--theme-bg-secondary)] transition-colors border-b border-[var(--theme-border)] last:border-0"
+                  >
+                    <td className="p-3 text-[var(--theme-text-primary)]">{row.room || "-"}</td>
+                    <td className="p-3 text-[var(--theme-text-primary)] font-medium">
+                      ${row.amount?.toLocaleString() || 0}
+                    </td>
+                    <td className="p-3 text-[var(--theme-text-secondary)]">
+                      {row.due ? new Date(row.due).toLocaleDateString("zh-TW") : "-"}
+                    </td>
+                    <td className="p-3 text-[var(--theme-text-secondary)]">{row.invoice || "-"}</td>
+                    <td className="p-3">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-bold ${row.paid ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"}`}
+                      >
+                        {row.paid ? "已繳" : "未繳"}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditIncome(index)}
+                          className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
+                          title="編輯"
+                        >
+                          <span className="material-icons text-lg">edit</span>
+                        </button>
+                        {row.id && (
+                          <button
+                            onClick={() => deleteRecord(row.id!)}
+                            className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
+                            title="刪除"
+                          >
+                            <span className="material-icons text-lg">delete</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                    {searchTerm ? "沒有符合條件的收入記錄" : "目前沒有收入記錄"}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </>
+    )
+  }
+
+  const renderExpenseTable = () => {
+    const filteredExpenses = expenses.filter((row) => {
+      if (!searchTerm) return true
+      const term = searchTerm.toLowerCase()
+      return (
+        row.item?.toLowerCase().includes(term) ||
+        row.category?.toLowerCase().includes(term) ||
+        row.vendor?.toLowerCase().includes(term) ||
+        row.amount?.toString().includes(term)
+      )
+    })
+
+    return (
+      <>
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="搜尋項目、類別、廠商或金額..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full p-3 rounded-xl theme-input outline-none"
+          />
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse min-w-[700px]">
+            <thead>
+              <tr className="bg-red-500/10">
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] rounded-tl-lg">日期</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">項目</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">類別</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">廠商</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">金額</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] rounded-tr-lg">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredExpenses.length > 0 ? (
+                filteredExpenses.map((row, index) => (
+                  <tr
+                    key={row.id}
+                    className="hover:bg-[var(--theme-bg-secondary)] transition-colors border-b border-[var(--theme-border)] last:border-0"
+                  >
+                    <td className="p-3 text-[var(--theme-text-primary)]">{row.date}</td>
+                    <td className="p-3 text-[var(--theme-text-primary)] font-bold">{row.item}</td>
+                    <td className="p-3 text-[var(--theme-text-secondary)]">
+                      <span className="bg-[var(--theme-bg-secondary)] px-2 py-1 rounded text-xs">{row.category}</span>
+                    </td>
+                    <td className="p-3 text-[var(--theme-text-secondary)]">{row.vendor}</td>
+                    <td className="p-3 text-red-500 font-bold">-${row.amount.toLocaleString()}</td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditExpense(row.id)}
+                          className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
+                          title="編輯"
+                        >
+                          <span className="material-icons text-lg">edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteExpense(row.id)}
+                          className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
+                          title="刪除"
+                        >
+                          <span className="material-icons text-lg">delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                    {searchTerm ? "沒有符合條件的支出記錄" : "目前沒有支出記錄"}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </>
+    )
   }
 
   if (loading) {
@@ -528,84 +737,7 @@ export function FinanceManagementAdmin() {
               新增一筆
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-[var(--theme-accent-light)]">
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tl-lg">
-                    房號
-                  </th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                    金額
-                  </th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                    到期日
-                  </th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                    發票
-                  </th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                    狀態
-                  </th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tr-lg">
-                    操作
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.length > 0 ? (
-                  records.map((row, index) => (
-                    <tr
-                      key={row.id || `new-${index}`}
-                      className="hover:bg-[var(--theme-bg-secondary)] transition-colors border-b border-[var(--theme-border)] last:border-0"
-                    >
-                      <td className="p-3 text-[var(--theme-text-primary)]">{row.room || "-"}</td>
-                      <td className="p-3 text-[var(--theme-text-primary)] font-medium">
-                        ${row.amount?.toLocaleString() || 0}
-                      </td>
-                      <td className="p-3 text-[var(--theme-text-secondary)]">
-                        {row.due ? new Date(row.due).toLocaleDateString("zh-TW") : "-"}
-                      </td>
-                      <td className="p-3 text-[var(--theme-text-secondary)]">{row.invoice || "-"}</td>
-                      <td className="p-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-bold ${row.paid ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"}`}
-                        >
-                          {row.paid ? "已繳" : "未繳"}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEditIncome(index)}
-                            className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
-                            title="編輯"
-                          >
-                            <span className="material-icons text-lg">edit</span>
-                          </button>
-                          {row.id && (
-                            <button
-                              onClick={() => removeRecord(row.id!)}
-                              className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
-                              title="刪除"
-                            >
-                              <span className="material-icons text-lg">delete</span>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                      無記錄
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          {renderIncomeTable()}
         </div>
       )}
 
@@ -621,66 +753,7 @@ export function FinanceManagementAdmin() {
               新增支出
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-red-500/10">
-                  <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] rounded-tl-lg">
-                    日期
-                  </th>
-                  <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">項目</th>
-                  <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">類別</th>
-                  <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">廠商</th>
-                  <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">金額</th>
-                  <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] rounded-tr-lg">
-                    操作
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {expenses.length > 0 ? (
-                  expenses.map((exp) => (
-                    <tr
-                      key={exp.id}
-                      className="hover:bg-[var(--theme-bg-secondary)] transition-colors border-b border-[var(--theme-border)] last:border-0"
-                    >
-                      <td className="p-3 text-[var(--theme-text-primary)]">{exp.date}</td>
-                      <td className="p-3 text-[var(--theme-text-primary)] font-bold">{exp.item}</td>
-                      <td className="p-3 text-[var(--theme-text-secondary)]">
-                        <span className="bg-[var(--theme-bg-secondary)] px-2 py-1 rounded text-xs">{exp.category}</span>
-                      </td>
-                      <td className="p-3 text-[var(--theme-text-secondary)]">{exp.vendor}</td>
-                      <td className="p-3 text-red-500 font-bold">-${exp.amount.toLocaleString()}</td>
-                      <td className="p-3">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEditExpense(exp.id)}
-                            className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
-                            title="編輯"
-                          >
-                            <span className="material-icons text-lg">edit</span>
-                          </button>
-                          <button
-                            onClick={() => handleDeleteExpense(exp.id)}
-                            className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
-                            title="刪除"
-                          >
-                            <span className="material-icons text-lg">delete</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                      無支出記錄
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          {renderExpenseTable()}
         </div>
       )}
 

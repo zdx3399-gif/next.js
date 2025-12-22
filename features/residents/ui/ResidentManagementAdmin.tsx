@@ -156,6 +156,22 @@ export function ResidentManagementAdmin() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [formData, setFormData] = useState<Partial<Resident>>({})
+  const [searchTerm, setSearchTerm] = useState("")
+
+  const filteredResidents = residents.filter((resident) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      resident.name?.toLowerCase().includes(term) ||
+      false ||
+      resident.room?.toLowerCase().includes(term) ||
+      false ||
+      resident.phone?.toLowerCase().includes(term) ||
+      false ||
+      resident.email?.toLowerCase().includes(term) ||
+      false
+    )
+  })
 
   const handleOpenAddModal = () => {
     setFormData({
@@ -237,6 +253,16 @@ export function ResidentManagementAdmin() {
         </button>
       </div>
 
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="搜尋姓名、房號、電話或 Email..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-3 rounded-xl theme-input outline-none"
+        />
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
@@ -251,8 +277,8 @@ export function ResidentManagementAdmin() {
             </tr>
           </thead>
           <tbody>
-            {residents.length > 0 ? (
-              residents
+            {filteredResidents.length > 0 ? (
+              filteredResidents
                 .filter((r) => r.id)
                 .map((row: Resident, index: number) => (
                   <tr key={row.id || `new-${index}`} className="hover:bg-[var(--theme-accent-light)] transition-colors">
@@ -299,7 +325,7 @@ export function ResidentManagementAdmin() {
             ) : (
               <tr>
                 <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                  目前沒有資料
+                  {searchTerm ? "沒有符合條件的住戶資料" : "目前沒有資料"}
                 </td>
               </tr>
             )}

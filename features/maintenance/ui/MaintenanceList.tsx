@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { useMaintenance } from "../hooks/useMaintenance"
 import { MaintenanceForm } from "./MaintenanceForm"
 
@@ -10,6 +11,22 @@ interface MaintenanceListProps {
 
 export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
   const { maintenance, loading, reload } = useMaintenance(userId, true)
+  const [searchTerm, setSearchTerm] = useState("")
+
+  const filteredMaintenance = maintenance.filter((item) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      item.equipment?.toLowerCase().includes(term) ||
+      false ||
+      item.item?.toLowerCase().includes(term) ||
+      false ||
+      item.description?.toLowerCase().includes(term) ||
+      false ||
+      item.reported_by_name?.toLowerCase().includes(term) ||
+      false
+    )
+  })
 
   if (loading) {
     return (
@@ -28,9 +45,20 @@ export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
           <span className="material-icons">list</span>
           我的維修申請
         </h2>
+
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="搜尋設備、項目、描述或報修人..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full p-3 rounded-xl theme-input outline-none"
+          />
+        </div>
+
         <div className="space-y-3">
-          {maintenance.length > 0 ? (
-            maintenance.map((item) => (
+          {filteredMaintenance.length > 0 ? (
+            filteredMaintenance.map((item) => (
               <div
                 key={item.id}
                 className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] rounded-lg p-4 hover:bg-[var(--theme-accent-light)] transition-all"
@@ -74,7 +102,9 @@ export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
               </div>
             ))
           ) : (
-            <div className="text-center text-[var(--theme-text-muted)] py-8">目前沒有維修申請</div>
+            <div className="text-center text-[var(--theme-text-muted)] py-8">
+              {searchTerm ? "沒有符合條件的維修申請" : "目前沒有維修申請"}
+            </div>
           )}
         </div>
       </div>

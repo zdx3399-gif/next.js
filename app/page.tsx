@@ -59,7 +59,7 @@ export default function HomePage() {
     },
     {
       icon: "event",
-      title: "會議/活動",
+      title: "會議記錄",
       description: "社區會議記錄和活動安排",
       features: ["會議通知", "活動報名", "會議記錄"],
     },

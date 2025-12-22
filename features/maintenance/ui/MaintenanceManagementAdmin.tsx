@@ -168,6 +168,25 @@ export function MaintenanceManagementAdmin() {
     note: "",
   })
 
+  const [searchTerm, setSearchTerm] = useState("")
+
+  const filteredData = data.filter((row) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      row.equipment?.toLowerCase().includes(term) ||
+      false ||
+      row.item?.toLowerCase().includes(term) ||
+      false ||
+      row.description?.toLowerCase().includes(term) ||
+      false ||
+      row.reported_by_name?.toLowerCase().includes(term) ||
+      false ||
+      row.handler?.toLowerCase().includes(term) ||
+      false
+    )
+  })
+
   const loadData = async () => {
     setLoading(true)
     const supabase = getSupabaseClient()
@@ -334,6 +353,16 @@ export function MaintenanceManagementAdmin() {
         </button>
       </div>
 
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="搜尋設備、項目、描述、報修人或處理人..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-3 rounded-xl theme-input outline-none"
+        />
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
@@ -350,8 +379,8 @@ export function MaintenanceManagementAdmin() {
             </tr>
           </thead>
           <tbody>
-            {data.length > 0 ? (
-              data.map((row, index) => {
+            {filteredData.length > 0 ? (
+              filteredData.map((row, index) => {
                 const statusInfo = getStatusLabel(row.status)
                 return (
                   <tr key={row.id || `new-${index}`} className="hover:bg-[var(--theme-accent-light)] transition-colors">
@@ -405,7 +434,7 @@ export function MaintenanceManagementAdmin() {
             ) : (
               <tr>
                 <td colSpan={9} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                  目前沒有維修紀錄
+                  {searchTerm ? "沒有符合條件的維修紀錄" : "目前沒有維修紀錄"}
                 </td>
               </tr>
             )}

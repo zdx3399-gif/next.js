@@ -3,22 +3,76 @@
 import { useState } from "react"
 import { useMeetings } from "../hooks/useMeetings"
 import type { Meeting } from "../api/meetings"
+import { uploadMeetingPDF } from "../api/meetings"
 
 interface MeetingFormModalProps {
   isOpen: boolean
   onClose: () => void
   formData: Omit<Meeting, "id" | "created_at">
-  onChange: (field: keyof Meeting, value: string) => void
+  onChange: (field: keyof Meeting, value: any) => void
   onSave: () => void
   isEditing: boolean
+  onPDFFileChange: (file: File | null) => void
+  pdfFile: File | null
 }
 
-function MeetingFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing }: MeetingFormModalProps) {
+function MeetingFormModal({
+  isOpen,
+  onClose,
+  formData,
+  onChange,
+  onSave,
+  isEditing,
+  onPDFFileChange,
+  pdfFile,
+}: MeetingFormModalProps) {
+  const [newTakeaway, setNewTakeaway] = useState("")
+  const [editingTakeawayIndex, setEditingTakeawayIndex] = useState<number | null>(null)
+  const [editingTakeawayText, setEditingTakeawayText] = useState("")
+
   if (!isOpen) return null
+
+  const addTakeaway = () => {
+    if (newTakeaway.trim()) {
+      const currentTakeaways = formData.key_takeaways || []
+      onChange("key_takeaways", [...currentTakeaways, newTakeaway.trim()])
+      setNewTakeaway("")
+    }
+  }
+
+  const startEditTakeaway = (index: number) => {
+    const currentTakeaways = formData.key_takeaways || []
+    setEditingTakeawayIndex(index)
+    setEditingTakeawayText(currentTakeaways[index])
+  }
+
+  const saveEditTakeaway = () => {
+    if (editingTakeawayIndex !== null && editingTakeawayText.trim()) {
+      const currentTakeaways = formData.key_takeaways || []
+      const updated = [...currentTakeaways]
+      updated[editingTakeawayIndex] = editingTakeawayText.trim()
+      onChange("key_takeaways", updated)
+      setEditingTakeawayIndex(null)
+      setEditingTakeawayText("")
+    }
+  }
+
+  const cancelEditTakeaway = () => {
+    setEditingTakeawayIndex(null)
+    setEditingTakeawayText("")
+  }
+
+  const removeTakeaway = (index: number) => {
+    const currentTakeaways = formData.key_takeaways || []
+    onChange(
+      "key_takeaways",
+      currentTakeaways.filter((_, i) => i !== index),
+    )
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-      <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
           <h3 className="text-lg font-bold text-[var(--theme-accent)]">
@@ -60,6 +114,105 @@ function MeetingFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
               className="w-full p-3 rounded-xl theme-input outline-none"
             />
           </div>
+
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">
+              重點摘要 (3-5 點重要決議事項)
+            </label>
+            <div className="space-y-2">
+              {(formData.key_takeaways || []).map((item, index) => (
+                <div key={index} className="flex items-start gap-2 p-2 bg-[var(--theme-bg-secondary)] rounded-lg">
+                  <span className="text-[var(--theme-accent)] font-bold mt-1">{index + 1}.</span>
+                  {editingTakeawayIndex === index ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editingTakeawayText}
+                        onChange={(e) => setEditingTakeawayText(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter") saveEditTakeaway()
+                          if (e.key === "Escape") cancelEditTakeaway()
+                        }}
+                        className="flex-1 p-2 rounded theme-input outline-none"
+                        autoFocus
+                      />
+                      <button
+                        onClick={saveEditTakeaway}
+                        className="p-1 hover:bg-green-500/20 rounded transition-colors"
+                        title="儲存"
+                      >
+                        <span className="material-icons text-sm text-green-500">check</span>
+                      </button>
+                      <button
+                        onClick={cancelEditTakeaway}
+                        className="p-1 hover:bg-gray-500/20 rounded transition-colors"
+                        title="取消"
+                      >
+                        <span className="material-icons text-sm text-gray-500">close</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-[var(--theme-text-primary)] mt-1">{item}</span>
+                      <button
+                        onClick={() => startEditTakeaway(index)}
+                        className="p-1 hover:bg-blue-500/20 rounded transition-colors"
+                        title="編輯"
+                      >
+                        <span className="material-icons text-sm text-blue-500">edit</span>
+                      </button>
+                      <button
+                        onClick={() => removeTakeaway(index)}
+                        className="p-1 hover:bg-red-500/20 rounded transition-colors"
+                        title="刪除"
+                      >
+                        <span className="material-icons text-sm text-red-500">delete</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTakeaway}
+                  onChange={(e) => setNewTakeaway(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && addTakeaway()}
+                  placeholder="輸入新的重點決議後按 Enter 或點擊新增"
+                  className="flex-1 p-3 rounded-xl theme-input outline-none"
+                />
+                <button
+                  onClick={addTakeaway}
+                  className="px-4 py-3 rounded-xl bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all"
+                >
+                  <span className="material-icons">add</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">完整會議記錄 (PDF)</label>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => onPDFFileChange(e.target.files?.[0] || null)}
+              className="w-full p-3 rounded-xl theme-input outline-none focus:border-[var(--theme-accent)]"
+            />
+            {pdfFile && (
+              <div className="text-green-500 text-sm mt-1 flex items-center gap-1">
+                <span className="material-icons text-sm">check_circle</span>
+                已選擇: {pdfFile.name}
+              </div>
+            )}
+            {formData.pdf_file_url && !pdfFile && (
+              <div className="text-[var(--theme-text-secondary)] text-sm mt-1 flex items-center gap-1">
+                <span className="material-icons text-sm">description</span>
+                目前已有 PDF 檔案
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-[var(--theme-text-primary)] font-medium mb-2">備註</label>
             <textarea
@@ -97,16 +250,33 @@ export function MeetingManagementAdmin() {
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [formData, setFormData] = useState<Omit<Meeting, "id" | "created_at">>({
     topic: "",
     time: "",
     location: "",
     notes: "",
+    key_takeaways: [],
+    pdf_file_url: undefined,
+  })
+  const [searchTerm, setSearchTerm] = useState("")
+
+  const filteredMeetings = meetings.filter((meeting) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      meeting.topic?.toLowerCase().includes(term) ||
+      false ||
+      meeting.location?.toLowerCase().includes(term) ||
+      false ||
+      (meeting.time && new Date(meeting.time).toLocaleDateString("zh-TW").includes(term))
+    )
   })
 
   const handleAdd = () => {
-    setFormData({ topic: "", time: "", location: "", notes: "" })
+    setFormData({ topic: "", time: "", location: "", notes: "", key_takeaways: [], pdf_file_url: undefined })
     setEditingId(null)
+    setPdfFile(null)
     setIsModalOpen(true)
   }
 
@@ -116,12 +286,15 @@ export function MeetingManagementAdmin() {
       time: meeting.time ? meeting.time.slice(0, 16) : "",
       location: meeting.location,
       notes: meeting.notes || "",
+      key_takeaways: meeting.key_takeaways || [],
+      pdf_file_url: meeting.pdf_file_url || undefined,
     })
     setEditingId(meeting.id || null)
+    setPdfFile(null)
     setIsModalOpen(true)
   }
 
-  const handleFormChange = (field: keyof Meeting, value: string) => {
+  const handleFormChange = (field: keyof Meeting, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -131,12 +304,30 @@ export function MeetingManagementAdmin() {
       return
     }
 
-    if (editingId) {
-      await editMeeting(editingId, formData)
-    } else {
-      await addMeeting(formData)
+    try {
+      const finalData = { ...formData }
+
+      if (pdfFile) {
+        try {
+          const pdfUrl = await uploadMeetingPDF(pdfFile)
+          finalData.pdf_file_url = pdfUrl
+        } catch (uploadError) {
+          console.error("Error uploading PDF:", uploadError)
+          alert("PDF 上傳失敗，請稍後再試")
+          return
+        }
+      }
+
+      if (editingId) {
+        await editMeeting(editingId, finalData)
+      } else {
+        await addMeeting(finalData)
+      }
+      setIsModalOpen(false)
+    } catch (error) {
+      console.error("Error saving meeting:", error)
+      alert("儲存失敗，請稍後再試")
     }
-    setIsModalOpen(false)
   }
 
   const handleDelete = async (id: string) => {
@@ -169,6 +360,16 @@ export function MeetingManagementAdmin() {
         </button>
       </div>
 
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="搜尋會議主題、地點或日期..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-3 rounded-xl theme-input outline-none"
+        />
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
@@ -176,13 +377,16 @@ export function MeetingManagementAdmin() {
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">主題</th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">時間</th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">地點</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">備註</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
+                重點摘要
+              </th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">PDF</th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
             </tr>
           </thead>
           <tbody>
-            {meetings.length > 0 ? (
-              meetings.map((meeting) => (
+            {filteredMeetings.length > 0 ? (
+              filteredMeetings.map((meeting) => (
                 <tr key={meeting.id} className="hover:bg-[var(--theme-accent-light)] transition-colors">
                   <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                     {meeting.topic || "-"}
@@ -194,7 +398,16 @@ export function MeetingManagementAdmin() {
                     {meeting.location || "-"}
                   </td>
                   <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                    {meeting.notes || "-"}
+                    {meeting.key_takeaways && meeting.key_takeaways.length > 0
+                      ? `${meeting.key_takeaways.length} 點`
+                      : "-"}
+                  </td>
+                  <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                    {meeting.pdf_file_url ? (
+                      <span className="material-icons text-green-500">check_circle</span>
+                    ) : (
+                      <span className="material-icons text-gray-400">cancel</span>
+                    )}
                   </td>
                   <td className="p-3 border-b border-[var(--theme-border)]">
                     <div className="flex gap-2">
@@ -218,8 +431,8 @@ export function MeetingManagementAdmin() {
               ))
             ) : (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                  目前沒有會議/活動
+                <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                  {searchTerm ? "沒有符合條件的會議/活動" : "目前沒有會議/活動"}
                 </td>
               </tr>
             )}
@@ -234,6 +447,8 @@ export function MeetingManagementAdmin() {
         onChange={handleFormChange}
         onSave={handleSave}
         isEditing={editingId !== null}
+        onPDFFileChange={setPdfFile}
+        pdfFile={pdfFile}
       />
     </div>
   )

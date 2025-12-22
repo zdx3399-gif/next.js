@@ -136,7 +136,7 @@ export default function AdminPage() {
     { id: "residents", icon: "people", label: "住戶/人員" },
     { id: "packages", icon: "inventory_2", label: "包裹管理" },
     { id: "visitors", icon: "how_to_reg", label: "訪客管理" },
-    { id: "meetings", icon: "event", label: "會議/活動管理" },
+    { id: "meetings", icon: "event", label: "會議記錄" },
     { id: "emergencies", icon: "emergency", label: "緊急事件管理" },
     { id: "facilities", icon: "meeting_room", label: "設施管理" },
   ]

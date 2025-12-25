@@ -139,7 +139,7 @@ export function FinanceList({ userRoom }: FinanceListProps) {
               <div>
                 <h3 className="text-red-600 dark:text-red-400 font-bold text-sm">您有 {unpaidRecords.length} 筆未繳費用</h3>
                 <p className="text-red-600/80 dark:text-red-400/80 text-xs mt-1">
-                  請盡快完成繳費，以免影響您的權益。點擊下方「前往繳費」查看匯款資訊。
+                  請盡快完成繳費，以免影響您的權益。請到櫃台繳交。
                 </p>
               </div>
             </div>
@@ -191,15 +191,7 @@ export function FinanceList({ userRoom }: FinanceListProps) {
                         </span>
 
                         {/* 💰 Pay Button (Only if unpaid) */}
-                        {!row.paid && (
-                          <button 
-                            onClick={() => showPaymentInfo(row.amount, row.due)}
-                            className="flex items-center gap-1 px-3 py-1 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-all shadow-sm active:scale-95"
-                          >
-                            <span className="material-icons text-[14px]">qr_code</span>
-                            前往繳費
-                          </button>
-                        )}
+                        
                       </td>
                     </tr>
                   ))

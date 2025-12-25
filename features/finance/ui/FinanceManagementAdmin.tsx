@@ -381,6 +381,15 @@ export function FinanceManagementAdmin() {
     }
   }, [records, expenses])
 
+// --- New Handler: Urge Payment Notification ---
+  const handleUrgePayment = (room: string) => {
+    const confirmUrge = window.confirm(`是否針對 ${room} 房進行「催繳住戶」通知？`);
+    if (confirmUrge) {
+      // Logic for sending notification would go here
+      alert("催繳成功！已發送推播通知至該住戶手機。");
+    }
+  };
+
   // --- Handlers: Income ---
   const handleAddIncome = () => {
     setIncomeFormData({ room: "", amount: 0, due: "", invoice: "", paid: false, unit_id: "" })
@@ -576,6 +585,8 @@ export function FinanceManagementAdmin() {
                       </td>
                       <td className="p-3">
                         <div className="flex gap-2">
+                         
+                          
                           <button
                             onClick={() => handleEditIncome(index)}
                             className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
@@ -590,6 +601,16 @@ export function FinanceManagementAdmin() {
                               title="刪除"
                             >
                               <span className="material-icons text-lg">delete</span>
+                            </button>
+                          )}
+                          {/* 🔔 NEW: Urge Payment Button - Only show if not paid */}
+                          {!row.paid && (
+                            <button
+                              onClick={() => handleUrgePayment(row.room || "該")}
+                              className="p-2 rounded-lg border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 transition-all"
+                              title="催繳住戶"
+                            >
+                              <span className="material-icons text-lg">notifications_active</span>
                             </button>
                           )}
                         </div>

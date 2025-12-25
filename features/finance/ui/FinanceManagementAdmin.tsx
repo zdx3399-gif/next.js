@@ -413,23 +413,39 @@ export function FinanceManagementAdmin() {
   }
 
   const handleSaveIncome = async () => {
-    if (incomeEditingIndex !== null) {
-      const keys = Object.keys(incomeFormData) as Array<keyof FinanceRecord>
-      keys.forEach((key) => {
-        if (incomeFormData[key] !== undefined) updateRow(incomeEditingIndex, key as any, incomeFormData[key] as any)
-      })
-      const success = await saveRecord(records[incomeEditingIndex], incomeEditingIndex)
-      if (success) {
-        await refresh()
+    try {
+      if (incomeEditingIndex !== null) {
+        // 1. First, sync the local UI state for responsiveness
+        const keys = Object.keys(incomeFormData) as Array<keyof FinanceRecord>
+        keys.forEach((key) => {
+          if (incomeFormData[key] !== undefined) {
+            updateRow(incomeEditingIndex, key as any, incomeFormData[key] as any)
+          }
+        })
+
+        // 2. CRITICAL FIX: Send the incomeFormData (new data) 
+        // instead of records[index] (old data) to the database
+        const success = await saveRecord(incomeFormData as any, incomeEditingIndex)
+        
+        if (success) {
+          // 3. Refresh to make sure the UI matches the Database
+          await refresh()
+          alert("更新成功！狀態已改為：" + (incomeFormData.paid ? "已繳" : "未繳"))
+        } else {
+          alert("資料庫更新失敗，請檢查網路連線")
+        }
+      } else {
+        // Handling for adding new records
+        addRow()
+        const success = await saveRecord({ ...incomeFormData, id: undefined } as any, records.length)
+        if (success) await refresh()
       }
-    } else {
-      addRow()
-      const success = await saveRecord({ ...incomeFormData, id: undefined } as any, records.length)
-      if (success) {
-        await refresh()
-      }
+    } catch (error) {
+      console.error("Save error:", error)
+      alert("發生錯誤，無法儲存")
+    } finally {
+      setIsIncomeModalOpen(false)
     }
-    setIsIncomeModalOpen(false)
   }
 
   // --- Handlers: Expense ---

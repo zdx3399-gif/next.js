@@ -70,7 +70,7 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
           title: formData.title,
           description: formData.description,
           ends_at: formData.endDate,
-          vote_url: activeTab === 'link' ? formData.googleFormUrl : "",
+          form_url: activeTab === 'link' ? formData.googleFormUrl : "",
           author: currentUser?.name || "管委會",
           options: ['同意', '反對', '棄權'],
           test: false 
@@ -261,7 +261,7 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
                           {vote.title}
                         </td>
                         <td className="px-4 py-3">
-                          {vote.vote_url || (vote.description && vote.description.includes('http')) ? (
+                          {vote.form_url || (vote.description && vote.description.includes('http')) ? (
                             <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">Google Form</span>
                           ) : (
                             <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-green-900 dark:text-green-300">Line Vote</span>
@@ -271,9 +271,9 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
                           {vote.author || '管委會'}
                         </td>
                         <td className="px-4 py-3 text-right space-x-2">
-                          {(vote.vote_url || (vote.description && vote.description.match(/https?:\/\/[^\s\)]+/))) ? (
+                          {(vote.form_url || (vote.description && vote.description.match(/https?:\/\/[^\s\)]+/))) ? (
                             <>
-                              <a href={vote.vote_url || vote.description.match(/https?:\/\/[^\s\)]+/)?.[0]} target="_blank" rel="noreferrer"
+                              <a href={vote.form_url || vote.description.match(/https?:\/\/[^\s\)]+/)?.[0]} target="_blank" rel="noreferrer"
                                  className="text-blue-600 hover:underline">
                                 開啟表單
                               </a>

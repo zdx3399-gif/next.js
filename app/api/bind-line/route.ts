@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Client } from '@line/bot-sdk'; // 引入 LINE Bot SDK
 
-export async function POST(req: NextRequest) {
+
+
+export async function GET(req: NextRequest) {
   try {
     // Supabase 初始化
     const supabase = createClient(
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest) {
       line_avatar_url,
       line_status_message
     } = await req.json();
-
+ console.log("GET 請求參數:", { reqBod: await req.json() });
     // 驗證必要欄位
     if (!profile_id || !line_user_id) {
       return NextResponse.json(

@@ -198,7 +198,7 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
                       onChange={(e) => setFormData({ ...formData, googleFormUrl: e.target.value })}
                     />
                   </div>
-                  <div>
+               {/*    <div>
                     <label className="block text-green-700 dark:text-green-400 font-bold text-sm mb-1 flex items-center gap-1">
                       <span className="material-icons text-sm">table_view</span> Google Sheet 結果連結 (給管理員看)
                     </label>
@@ -209,7 +209,7 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
                       value={formData.googleResultUrl}
                       onChange={(e) => setFormData({ ...formData, googleResultUrl: e.target.value })}
                     />
-                  </div>
+                  </div> */}
                 </div>
               ) : (
                 <div className="bg-[var(--theme-accent)]/5 p-5 rounded-xl border border-[var(--theme-accent)]/20">

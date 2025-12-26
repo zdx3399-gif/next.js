@@ -117,7 +117,7 @@ function MeetingFormModal({
 
           <div>
             <label className="block text-[var(--theme-text-primary)] font-medium mb-2">
-              重點摘要 (3-5 點重要決議事項)
+              重點摘要 (3-5 項重要決議事項)
             </label>
             <div className="space-y-2">
               {(formData.key_takeaways || []).map((item, index) => (
@@ -399,7 +399,7 @@ export function MeetingManagementAdmin() {
                   </td>
                   <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                     {meeting.key_takeaways && meeting.key_takeaways.length > 0
-                      ? `${meeting.key_takeaways.length} 點`
+                      ? `${meeting.key_takeaways.length} 項`
                       : "-"}
                   </td>
                   <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">

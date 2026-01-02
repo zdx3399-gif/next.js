@@ -16,6 +16,7 @@ interface User {
 interface Message {
   type: "user" | "bot"
   text: string
+  images?: string[]
 }
 
 interface AiChatWindowProps {
@@ -162,6 +163,21 @@ export function AiChatWindow({
               }`}
             >
               {msg.text}
+              {msg.images && msg.images.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {msg.images.map((imgUrl, imgIndex) => (
+                    <img
+                      key={imgIndex}
+                      src={imgUrl}
+                      alt={`相關圖片 ${imgIndex + 1}`}
+                      className="w-full rounded-md border border-[var(--theme-border)]"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}

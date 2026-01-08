@@ -64,29 +64,41 @@ export async function POST(req) {
       .eq('unit_id', unit.id)
       .single();
 
+    // Log profile lookup error (if any)
+    if (profileError) {
+      console.error('Error finding profile:', profileError);
+    }
+
     // Send LINE Notification
     if (profile?.line_user_id) {
-      const time = new Date(arrived_at).toLocaleString('zh-TW', { hour12: false });
-      const flexMessage = {
-        type: 'flex',
-        altText: '📦 Package Notification',
-        contents: {
-          type: 'bubble',
-          body: {
-            type: 'box',
-            layout: 'vertical',
-            contents: [
-              { type: 'text', text: '📦 Package Notification', weight: 'bold', size: 'lg' },
-              { type: 'separator', margin: 'md' },
-              { type: 'text', text: `Recipient: ${recipient_name}`, margin: 'md' },
-              { type: 'text', text: `Room: ${recipient_room}`, margin: 'sm' },
-              { type: 'text', text: `Courier: ${courier}`, margin: 'sm' },
-              { type: 'text', text: `Time: ${time}`, margin: 'sm' }
-            ]
+      try {
+        const time = new Date(arrived_at).toLocaleString('zh-TW', { hour12: false });
+        const flexMessage = {
+          type: 'flex',
+          altText: '📦 Package Notification',
+          contents: {
+            type: 'bubble',
+            body: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [
+                { type: 'text', text: '📦 Package Notification', weight: 'bold', size: 'lg' },
+                { type: 'separator', margin: 'md' },
+                { type: 'text', text: `Recipient: ${recipient_name}`, margin: 'md' },
+                { type: 'text', text: `Room: ${recipient_room}`, margin: 'sm' },
+                { type: 'text', text: `Courier: ${courier}`, margin: 'sm' },
+                { type: 'text', text: `Time: ${time}`, margin: 'sm' }
+              ]
+            }
           }
-        }
-      };
-      await client.pushMessage(profile.line_user_id, flexMessage);
+        };
+        await client.pushMessage(profile.line_user_id, flexMessage);
+        console.log('LINE notification sent successfully to user:', profile.line_user_id);
+      } catch (lineError) {
+        console.error('Error sending LINE notification:', lineError);
+      }
+    } else {
+      console.warn('No LINE user ID found for unit:', unit.id);
     }
 
     return Response.json({ success: true });

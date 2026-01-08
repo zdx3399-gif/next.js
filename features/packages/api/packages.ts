@@ -128,46 +128,37 @@ export async function fetchPackages(room?: string, isAdmin = false, userUnitId?:
 }
 
 export async function addPackage(packageData: AddPackageData): Promise<Package | null> {
-  const supabase = getSupabaseClient()
-  if (!supabase) return null
+  // Call the API route which handles both database insert AND LINE notification
+  const response = await fetch("/api/packages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      courier: packageData.courier,
+      recipient_name: packageData.recipient_name,
+      recipient_room: packageData.recipient_room,
+      tracking_number: packageData.tracking_number || null,
+      arrived_at: packageData.arrived_at || new Date().toISOString(),
+    }),
+  })
 
-  let unitId = packageData.unit_id
-  if (!unitId && packageData.recipient_room) {
-    const { data: unitData } = await supabase
-      .from("units")
-      .select("id")
-      .eq("unit_code", packageData.recipient_room)
-      .single()
+  const result = await response.json()
 
-    if (unitData) {
-      unitId = unitData.id
-    }
+  if (!response.ok) {
+    console.error("[v0] Error adding package:", result.error)
+    throw new Error(result.error || "新增包裹失敗")
   }
 
-  const insertData: Record<string, unknown> = {
-    courier: packageData.courier,
-    tracking_number: packageData.tracking_number || null,
-    arrived_at: packageData.arrived_at,
-    status: "pending",
-  }
+  console.log("[v0] Package added successfully via API:", result)
 
-  if (unitId) {
-    insertData.unit_id = unitId
-  }
-
-  console.log("[v0] Adding package with data:", insertData)
-
-  const { data, error } = await supabase.from("packages").insert([insertData]).select().single()
-
-  if (error) {
-    console.error("[v0] Error adding package:", error.message, error.details, error.hint)
-    throw new Error(error.message || "新增包裹失敗")
-  }
-
-  console.log("[v0] Package added successfully:", data)
-
+  // Return a minimal package object (the list will reload anyway)
   return {
-    ...data,
+    id: result.id || "",
+    courier: packageData.courier,
+    tracking_number: packageData.tracking_number,
+    arrived_at: packageData.arrived_at || new Date().toISOString(),
+    status: "pending",
     recipient_name: packageData.recipient_name || "",
     recipient_room: packageData.recipient_room || "",
   }

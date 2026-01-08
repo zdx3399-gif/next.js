@@ -1,294 +1,444 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
-import type { Liff } from "@line/liff";
-// Ensure this path matches your project structure
-import { authenticateUser, registerUser, type UserRole } from "@/lib/auth-actions";
-
-// 🛠️ CONFIG: Your LIFF ID
-const LIFF_ID = "2008678437-qt2KwvhO";
 
 export default function BindLinePage() {
-  const router = useRouter();
-  
-  // -- State --
-  const [liffObject, setLiffObject] = useState<Liff | null>(null);
-  const [status, setStatus] = useState("Loading...");
+  /**********************
+   * State 區域
+   **********************/
+  const [liffObject, setLiffObject] = useState<any>(null);
+  const [status, setStatus] = useState("載入中...");
   const [profile, setProfile] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
 
-  // -- Register / Login Form State --
+  // 表單欄位
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  
-  // ✅ Extra Fields you wanted
-  const [unit, setUnit] = useState(""); 
-  const [tenant, setTenant] = useState("tenant_a"); 
-  const [role, setRole] = useState<UserRole>("resident");
-  const [relationship, setRelationship] = useState("owner");
 
   const [isBinding, setIsBinding] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoginMode, setIsLoginMode] = useState(true);
 
   const bindingAttempted = useRef(false);
+  const LIFF_ID = "2008678437-qt2KwvhO";
 
-  // 1. Load User from LocalStorage
+  /**********************
+   * 初始化 user 狀態
+   **********************/
   useEffect(() => {
-    const savedUser = localStorage.getItem("currentUser");
+    const savedUser = localStorage.getItem("user");
     if (savedUser) setUser(JSON.parse(savedUser));
   }, []);
 
-  // 2. Initialize LIFF
+  /**********************
+   * 初始化 LIFF
+   **********************/
   useEffect(() => {
     const initLiff = async () => {
       try {
-        const liffModule = await import("@line/liff");
-        const liff = liffModule.default;
+        const liff = (await import("@line/liff")).default;
         await liff.init({ liffId: LIFF_ID });
         setLiffObject(liff);
-        
-        if (liff.isLoggedIn()) {
-           const p = await liff.getProfile();
-           setProfile(p);
-        }
-        
-        setStatus(user ? "Please click the button to bind" : "Please Login or Register first");
-        console.log("✅ LIFF Init Success");
+        setStatus("請先登入或註冊帳號，再綁定 LINE");
+        console.log("✅ LIFF 初始化成功");
       } catch (err) {
-        console.error("❌ LIFF Init Failed", err);
-        setStatus("LIFF Initialization Failed");
+        console.error("❌ LIFF 初始化失敗", err);
+        setStatus("LIFF 初始化失敗，請重新整理頁面");
       }
     };
-    initLiff();
-  }, [user]);
 
-  // 3. Perform Binding (Updated to match Backend)
+    initLiff();
+  }, []);
+
+  /**********************
+   * 綁定邏輯（統一處理）
+   **********************/
   const performBinding = async () => {
-    if (!liffObject || !user || isBinding) return;
+    if (!liffObject || !user || isBinding || profile) return;
 
     if (!user.id) {
-      setStatus("User data error, please login again");
+      setStatus("使用者資料異常，請重新登入");
       setUser(null);
       return;
     }
 
-    if (!liffObject.isLoggedIn()) {
-        liffObject.login();
-        return;
-    }
+    if (!liffObject.isLoggedIn()) return;
 
     setIsBinding(true);
-    setStatus("Binding LINE Account...");
+    setStatus("正在綁定 LINE...");
 
     try {
       const lineProfile = await liffObject.getProfile();
 
-      // Call Backend API
       const res = await fetch("/api/bind-line", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile_id: user.id,
           line_user_id: lineProfile.userId,
-          line_display_name: lineProfile.displayName, // Changed to match your DB column
-          line_avatar_url: lineProfile.pictureUrl,    // Changed to match your DB column
+          line_display_name: lineProfile.displayName,
+          line_avatar_url: lineProfile.pictureUrl,
           line_status_message: lineProfile.statusMessage,
         }),
       });
 
       const data = await res.json();
 
-      if (res.ok && data.success) {
+      if (data.success) {
         setProfile(lineProfile);
-        setStatus("✓ LINE Binding Successful!");
+        setStatus("✓ LINE 綁定成功！");
         bindingAttempted.current = true;
-        
-        // Update LocalStorage
-        const updatedUser = { ...user, line_bound: true };
-        localStorage.setItem("currentUser", JSON.stringify(updatedUser));
-        setUser(updatedUser);
       } else {
-        setStatus(`Binding Failed: ${data.message || "Unknown Error"}`);
+        setStatus(`綁定失敗：${data.message || "未知錯誤"}`);
       }
-    } catch (err: any) {
-      setStatus(`Binding Failed: ${err.message}`);
+    } catch (err) {
+      setStatus(`綁定失敗：${err.message}`);
       console.error(err);
     } finally {
       setIsBinding(false);
     }
   };
 
-  // 4. Register Logic (With your fields)
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password || !unit) {
-      setStatus("⚠️ Please fill in all fields");
-      return;
+  /**********************
+   * 自動綁定（登入後 + LIFF 已登入）
+   **********************/
+  useEffect(() => {
+    if (
+      liffObject &&
+      user &&
+      liffObject.isLoggedIn() &&
+      !bindingAttempted.current &&
+      !profile
+    ) {
+      console.log("🤖 自動執行綁定");
+      performBinding();
     }
+  }, [liffObject, user]);
 
-    setIsLoading(true);
-    setStatus("Registering...");
-
-    try {
-      const result = await registerUser(
-          tenant as any, 
-          email, 
-          password, 
-          name, 
-          phone, 
-          unit, 
-          role, 
-          relationship
-      );
-
-      if (result.success && result.user) {
-        const userData = { ...result.user, tenantId: tenant };
-        setUser(userData);
-        localStorage.setItem("currentUser", JSON.stringify(userData));
-        setStatus("✓ Registered! Please click Bind LINE");
-        setEmail(""); setPassword("");
-      } else {
-        setStatus(`Registration Failed: ${result.error}`);
-      }
-    } catch (err: any) {
-      setStatus(`Registration Failed: ${err.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 5. Login Logic
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /**********************
+   * 註冊
+   **********************/
+  const handleRegister = async () => {
     if (!email || !password) {
-      setStatus("⚠️ Please enter Email and Password");
+      setStatus("⚠️ 請輸入 Email 和密碼");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setStatus("⚠️ Email 格式不正確");
+      return;
+    }
+
+    if (password.length < 6) {
+      setStatus("⚠️ 密碼至少 6 碼");
       return;
     }
 
     setIsLoading(true);
-    setStatus("Logging in...");
+    setStatus("註冊中...");
 
     try {
-      const result = await authenticateUser(email, password);
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          name: name || null,
+          phone: phone || null,
+        }),
+      });
 
-      if (result.success && result.user) {
-        const userData = { ...result.user, tenantId: result.tenantId };
-        setUser(userData);
-        localStorage.setItem("currentUser", JSON.stringify(userData));
-        setStatus("✓ Login Successful! Please Bind LINE");
-        setEmail(""); setPassword("");
+      const data = await res.json();
+
+      if (data.success && data.user) {
+        setUser(data.user);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        setStatus("✓ 註冊成功！請點擊綁定 LINE");
+
+        setEmail("");
+        setPassword("");
+        setName("");
+        setPhone("");
       } else {
-        setStatus(`Login Failed: ${result.error}`);
+        setStatus(`註冊失敗：${data.message}`);
       }
-    } catch (err: any) {
-      setStatus(`Login Failed: ${err.message}`);
+    } catch (err) {
+      setStatus(`註冊失敗：${err.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
+  /**********************
+   * 登入
+   **********************/
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setStatus("⚠️ 請輸入 Email 和密碼");
+      return;
+    }
+
+    setIsLoading(true);
+    setStatus("登入中...");
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.user) {
+        setUser(data.user);
+        localStorage.setItem("user", JSON.stringify(data.user));
+
+        if (data.user.line_bound) {
+          setProfile({
+            userId: data.user.line_user_id,
+            displayName: data.user.line_display_name,
+            pictureUrl: data.user.line_avatar_url,
+            statusMessage: data.user.line_status_message,
+          });
+          setStatus("✓ 已綁定 LINE");
+          bindingAttempted.current = true;
+        } else {
+          setStatus("✓ 登入成功！請綁定 LINE");
+        }
+
+        setEmail("");
+        setPassword("");
+      } else {
+        setStatus(`登入失敗：${data.message}`);
+      }
+    } catch (err) {
+      setStatus(`登入失敗：${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**********************
+   * 手動綁定
+   **********************/
+  const handleBindClick = () => {
+    if (!user) {
+      setStatus("⚠️ 請先登入或註冊");
+      return;
+    }
+
+    if (!liffObject.isLoggedIn()) {
+      setStatus("導向 LINE 登入中...");
+      liffObject.login();
+      return;
+    }
+
+    performBinding();
+  };
+
+  /**********************
+   * 登出
+   **********************/
   const handleLogout = () => {
     setUser(null);
     setProfile(null);
-    localStorage.removeItem("currentUser");
+    localStorage.removeItem("user");
     bindingAttempted.current = false;
-    setStatus("Logged out");
+    setStatus("已登出，請重新登入");
   };
 
-  return (
-    <main className="flex flex-col items-center p-6 gap-6 min-h-screen bg-gray-50">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        <h1 className="text-3xl font-bold text-center mb-2 text-gray-800">LINE Binding</h1>
-        <p className="text-center text-gray-500 mb-6 text-sm">Connect your community account to receive notifications</p>
+  /**********************
+   * 解除綁定
+   **********************/
+  const handleUnbind = async () => {
+    if (!user) return;
 
-        {/* Status Message */}
-        <div className={`p-4 rounded-xl mb-6 text-center text-sm font-medium ${
-            status.includes("Success") || status.includes("✓") ? "bg-green-50 text-green-700 border border-green-200" :
-            status.includes("Fail") || status.includes("⚠️") ? "bg-red-50 text-red-700 border border-red-200" :
-            "bg-blue-50 text-blue-700 border border-blue-200"
-          }`}>
+    const ok = confirm("確定要解除綁定嗎?");
+    if (!ok) return;
+
+    setIsLoading(true);
+    setStatus("解除中...");
+
+    try {
+      const res = await fetch("/api/bind-line", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_id: user.id }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setProfile(null);
+        setStatus("✓ 已解除 LINE 綁定");
+        bindingAttempted.current = false;
+      } else {
+        setStatus(`解除失敗：${data.message}`);
+      }
+    } catch (err) {
+      setStatus(`解除失敗：${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**********************
+   * UI
+   **********************/
+  return (
+    <main className="flex flex-col items-center p-10 gap-6 min-h-screen bg-gray-50">
+      <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
+        <h1 className="text-3xl font-bold text-center mb-2">LINE 帳號綁定</h1>
+        <p className="text-center text-gray-600 mb-6">
+          註冊或登入後綁定您的 LINE 帳號
+        </p>
+
+        {/* 狀態訊息 */}
+        <div
+          className={`p-4 rounded-lg mb-6 text-center ${
+            status.includes("成功") || status.includes("✓")
+              ? "bg-green-50 text-green-700 border border-green-200"
+              : status.includes("失敗") ||
+                status.includes("❌") ||
+                status.includes("⚠️")
+              ? "bg-red-50 text-red-700 border border-red-200"
+              : "bg-blue-50 text-blue-700 border border-blue-200"
+          }`}
+        >
           {status}
         </div>
 
-        {/* Not Logged In: Show Forms */}
+        {/* 註冊 / 登入表單 */}
         {!user && (
-          <>
-            {isLoginMode ? (
-              <form onSubmit={handleLogin} className="flex flex-col gap-4">
-                 <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={isLoading} className="theme-input px-4 py-3 rounded-xl border border-gray-200 outline-none" />
-                 <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={isLoading} className="theme-input px-4 py-3 rounded-xl border border-gray-200 outline-none" />
-                 <button type="submit" disabled={isLoading} className="bg-[var(--theme-accent)] text-white py-3 rounded-xl font-bold hover:opacity-90 transition-all">
-                    {isLoading ? "Logging in..." : "Login"}
-                 </button>
-              </form>
-            ) : (
-              <form onSubmit={handleRegister} className="flex flex-col gap-3">
-                 <div className="grid grid-cols-2 gap-3">
-                    <select value={tenant} onChange={(e) => setTenant(e.target.value)} className="theme-select px-3 py-3 rounded-xl border border-gray-200 bg-white">
-                        <option value="tenant_a">Community A</option>
-                        <option value="tenant_b">Community B</option>
-                    </select>
-                    <select value={role} onChange={(e) => setRole(e.target.value as any)} className="theme-select px-3 py-3 rounded-xl border border-gray-200 bg-white">
-                        <option value="resident">Resident</option>
-                        <option value="committee">Committee</option>
-                    </select>
-                 </div>
-                 <input type="text" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} className="theme-input px-4 py-3 rounded-xl border border-gray-200" />
-                 <input type="tel" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="theme-input px-4 py-3 rounded-xl border border-gray-200" />
-                 <input type="text" placeholder="Unit (e.g. A-10-1)" value={unit} onChange={(e) => setUnit(e.target.value)} className="theme-input px-4 py-3 rounded-xl border border-gray-200" />
-                 <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="theme-input px-4 py-3 rounded-xl border border-gray-200" />
-                 <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="theme-input px-4 py-3 rounded-xl border border-gray-200" />
-                 
-                 <button type="submit" disabled={isLoading} className="bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-gray-700 transition-all mt-2">
-                    {isLoading ? "Registering..." : "Register"}
-                 </button>
-              </form>
-            )}
+          <div className="flex flex-col gap-4">
+            <input
+              type="email"
+              placeholder="Email *"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading}
+              className="border border-gray-300 px-4 py-3 rounded-lg"
+            />
 
-            <div className="text-center mt-6 pt-4 border-t border-gray-100">
-              <span className="text-gray-400 text-sm">{isLoginMode ? "No account?" : "Have account?"}</span>
-              <button onClick={() => setIsLoginMode(!isLoginMode)} className="ml-2 text-[var(--theme-accent)] font-bold hover:underline">
-                {isLoginMode ? "Register" : "Login"}
+            <input
+              type="password"
+              placeholder="密碼（至少 6 個字元）*"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+              className="border border-gray-300 px-4 py-3 rounded-lg"
+            />
+
+            <div className="flex gap-4">
+              <button
+                onClick={handleRegister}
+                disabled={isLoading}
+                className="flex-1 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 disabled:bg-gray-400 font-semibold"
+              >
+                {isLoading ? "處理中..." : "註冊"}
+              </button>
+
+              <button
+                onClick={handleLogin}
+                disabled={isLoading}
+                className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400 font-semibold"
+              >
+                {isLoading ? "處理中..." : "登入"}
               </button>
             </div>
-          </>
+          </div>
         )}
 
-        {/* Logged In: Show Bind Button */}
-        {user && !bindingAttempted.current && (
-          <div className="flex flex-col items-center gap-6 animate-fade-in">
-            <div className="bg-blue-50 p-5 rounded-2xl w-full border border-blue-100">
-              <p className="font-bold text-gray-800 text-lg">{user.name || user.email}</p>
-              <p className="text-sm text-gray-600">Logged In</p>
+        {/* 綁定按鈕 */}
+        {user && !profile && (
+          <div className="flex flex-col items-center gap-4">
+            <div className="bg-gray-50 p-4 rounded-lg w-full">
+              <p className="text-sm text-gray-600">已登入帳號</p>
+              <p className="font-semibold text-lg">{user.email}</p>
+              {user.name && <p className="text-gray-600">{user.name}</p>}
             </div>
 
             <button
-              onClick={performBinding}
+              onClick={handleBindClick}
               disabled={isBinding || isLoading}
-              className="w-full py-4 bg-[#06C755] text-white rounded-xl hover:bg-[#05b34c] font-bold text-lg shadow-lg flex items-center justify-center gap-2"
+              className="w-full py-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 font-semibold text-lg shadow-md"
             >
-              {isBinding ? "Binding..." : "One-Click Bind LINE"}
+              {isBinding ? "綁定中..." : "🔗 使用 LINE 綁定帳號"}
             </button>
 
-            <button onClick={handleLogout} className="text-gray-400 text-sm hover:text-gray-600 underline">
-              Logout
+            <button
+              onClick={handleLogout}
+              className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+            >
+              登出
             </button>
           </div>
         )}
 
-        {/* Success State */}
-        {bindingAttempted.current && profile && (
-          <div className="flex flex-col items-center animate-fade-in">
-            <img src={profile.pictureUrl} alt="Profile" className="w-24 h-24 rounded-full border-4 border-[#06C755] mb-4" />
-            <h2 className="text-xl font-bold text-gray-800">{profile.displayName}</h2>
-            <p className="text-green-600 font-bold mb-6">✓ Binding Successful</p>
-            <button onClick={() => liffObject?.closeWindow()} className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold">
-              Close Window
-            </button>
+        {/* LINE Profile */}
+        {profile && (
+          <div className="flex flex-col items-center">
+            <div className="relative">
+              <img
+                src={profile.pictureUrl}
+                alt="LINE 大頭貼"
+                className="w-32 h-32 rounded-full border-4 border-green-500 shadow-lg"
+              />
+              <div className="absolute -bottom-2 -right-2 bg-green-500 text-white rounded-full p-2">
+                <svg
+                  className="w-6 h-6"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            <p className="mt-4 font-bold text-xl">{profile.displayName}</p>
+
+            {profile.statusMessage && (
+              <p className="text-sm text-gray-500 italic mt-1">
+                "{profile.statusMessage}"
+              </p>
+            )}
+
+            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 w-full">
+              <p className="text-green-700 font-semibold text-center">
+                ✓ LINE 綁定成功！
+              </p>
+
+              {user && (
+                <p className="text-sm text-gray-600 text-center mt-2">
+                  已綁定至 {user.email}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6 w-full">
+              <button
+                onClick={handleUnbind}
+                disabled={isLoading}
+                className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-400"
+              >
+                解除綁定
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+              >
+                登出
+              </button>
+            </div>
           </div>
         )}
       </div>

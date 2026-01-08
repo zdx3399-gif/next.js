@@ -382,11 +382,41 @@ export function FinanceManagementAdmin() {
   }, [records, expenses])
 
 // --- New Handler: Urge Payment Notification ---
-  const handleUrgePayment = (room: string) => {
-    const confirmUrge = window.confirm(`是否針對 ${room} 房進行「催繳住戶」通知？`);
-    if (confirmUrge) {
-      // Logic for sending notification would go here
-      alert("催繳成功！已發送推播通知至該住戶手機。");
+  const handleUrgePayment = async (record: { room?: string; amount?: number; due?: string; unit_id?: string }) => {
+    if (!record.room) {
+      alert("無法催繳：缺少房號資訊");
+      return;
+    }
+    
+    const confirmUrge = window.confirm(`是否針對 ${record.room} 房進行「催繳住戶」通知？`);
+    if (!confirmUrge) return;
+
+    try {
+      const response = await fetch("/api/remind-fee", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          room: record.room,
+          amount: record.amount,
+          due: record.due,
+          unit_id: record.unit_id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error("催繳通知失敗:", result.error);
+        alert(`催繳失敗：${result.error || "無法發送通知"}`);
+        return;
+      }
+
+      alert("催繳成功！已發送 LINE 推播通知至該住戶。");
+    } catch (error) {
+      console.error("催繳通知錯誤:", error);
+      alert("催繳失敗：網路錯誤，請稍後再試");
     }
   };
 
@@ -622,7 +652,7 @@ export function FinanceManagementAdmin() {
                           {/* 🔔 NEW: Urge Payment Button - Only show if not paid */}
                           {!row.paid && (
                             <button
-                              onClick={() => handleUrgePayment(row.room || "該")}
+                              onClick={() => handleUrgePayment(row)}
                               className="p-2 rounded-lg border border-amber-500/30 text-amber-500 hover:bg-amber-500/10 transition-all"
                               title="催繳住戶"
                             >

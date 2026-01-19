@@ -8,6 +8,7 @@ import type { Resident } from "@/features/residents/api/residents"
 
 interface PackageManagementAdminProps {
   currentUser?: any
+  isPreviewMode?: boolean
 }
 
 interface NewPackage {
@@ -122,10 +123,25 @@ const getRelationshipLabel = (relationship?: string): string => {
   return labels[relationship || "household_member"] || "住戶成員"
 }
 
-export function PackageManagementAdmin({ currentUser }: PackageManagementAdminProps) {
-  const { pendingPackages, pickedUpPackages, loading, handleAddPackage, handleMarkAsPickedUp } = usePackages({
+// 預覽模式的模擬資料
+const PREVIEW_PACKAGES: { pending: Package[]; pickedUp: Package[] } = {
+  pending: [
+    { id: "preview-1", courier: "黑貓宅急便", recipient_name: "王**", recipient_room: "A棟 5樓 501室", tracking_number: "TW***123", arrived_at: new Date().toISOString(), status: "pending" as const },
+    { id: "preview-2", courier: "郵局", recipient_name: "李**", recipient_room: "B棟 3樓 302室", tracking_number: "PO***456", arrived_at: new Date().toISOString(), status: "pending" as const },
+  ],
+  pickedUp: [
+    { id: "preview-3", courier: "UPS", recipient_name: "張**", recipient_room: "A棟 8樓 801室", tracking_number: "UP***789", arrived_at: new Date(Date.now() - 86400000).toISOString(), picked_up_at: new Date().toISOString(), picked_up_by: "張**", status: "picked_up" as const },
+  ],
+}
+
+export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: PackageManagementAdminProps) {
+  const { pendingPackages: realPending, pickedUpPackages: realPickedUp, loading, handleAddPackage, handleMarkAsPickedUp } = usePackages({
     isAdmin: true,
   })
+
+  // 預覽模式使用模擬資料
+  const pendingPackages = isPreviewMode ? PREVIEW_PACKAGES.pending : realPending
+  const pickedUpPackages = isPreviewMode ? PREVIEW_PACKAGES.pickedUp : realPickedUp
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedPickers, setSelectedPickers] = useState<{ [key: string]: Resident | null }>({})
   const [roomResidents, setRoomResidents] = useState<{ [room: string]: Resident[] }>({})

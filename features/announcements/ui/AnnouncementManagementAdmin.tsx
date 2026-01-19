@@ -121,7 +121,18 @@ function AnnouncementFormModal({
   )
 }
 
-export function AnnouncementManagementAdmin() {
+// 預覽模式的模擬資料
+const PREVIEW_ANNOUNCEMENTS = [
+  { id: "preview-1", title: "社區年度大會通知", content: "本年度區分所有權人會議將於...", author_name: "管委會", status: "published", created_at: new Date().toISOString(), image_url: "" },
+  { id: "preview-2", title: "電梯保養通知", content: "電梯將於下週進行例行保養...", author_name: "管理員", status: "published", created_at: new Date(Date.now() - 86400000).toISOString(), image_url: "" },
+  { id: "preview-3", title: "停車場施工公告", content: "停車場將進行地坪修復工程...", author_name: "管委會", status: "draft", created_at: new Date(Date.now() - 2 * 86400000).toISOString(), image_url: "" },
+]
+
+interface AnnouncementManagementAdminProps {
+  isPreviewMode?: boolean
+}
+
+export function AnnouncementManagementAdmin({ isPreviewMode = false }: AnnouncementManagementAdminProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -140,8 +151,13 @@ export function AnnouncementManagementAdmin() {
   }
 
   useEffect(() => {
-    loadAnnouncements()
-  }, [])
+    if (isPreviewMode) {
+      setAnnouncements(PREVIEW_ANNOUNCEMENTS as Announcement[])
+      setLoading(false)
+    } else {
+      loadAnnouncements()
+    }
+  }, [isPreviewMode])
 
   const handleAdd = () => {
     setEditingAnnouncement(null)
@@ -177,14 +193,27 @@ export function AnnouncementManagementAdmin() {
       }
 
       if (editingAnnouncement) {
-        await updateAnnouncement(editingAnnouncement.id, finalData)
+        const { error } = await updateAnnouncement(editingAnnouncement.id, finalData)
+        if (error) {
+          console.error("[v0] Failed to update announcement:", error)
+          alert(`更新失敗: ${error.message || "未知錯誤"}`)
+          return
+        }
+        alert("公告已更新")
       } else {
-        await createAnnouncement(finalData)
+        const { error } = await createAnnouncement(finalData)
+        if (error) {
+          console.error("[v0] Failed to create announcement:", error)
+          alert(`新增失敗: ${error.message || "未知錯誤"}`)
+          return
+        }
+        alert("公告已新增")
       }
       setIsModalOpen(false)
       loadAnnouncements()
     } catch (error) {
       console.error("Error saving announcement:", error)
+      alert("儲存失敗，請稍後再試")
     }
   }
 

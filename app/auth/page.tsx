@@ -121,7 +121,7 @@ export default function AuthPage() {
         throw new Error(result.error)
       }
 
-      setSuccessMessage("註冊成功！請使用新帳號登入。")
+      setSuccessMessage("註冊成功！請使用新���號登入。")
 
       setTimeout(() => {
         setIsLoginMode(true)

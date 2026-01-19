@@ -62,7 +62,12 @@
     "url": "latest",
     "vaul": "^1.1.2",
     "react-hook-form": "7.65.0",
-    "@vercel/blob": "2.0.0"
+    "@vercel/blob": "2.0.0",
+    "@line/bot-sdk": "10.5.0",
+    "dotenv": "17.2.3",
+    "axios": "1.13.2",
+    "@line/liff": "2.27.3",
+    "swr": "2.3.8"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

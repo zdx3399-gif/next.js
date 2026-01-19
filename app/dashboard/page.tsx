@@ -19,6 +19,8 @@ import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
 import { FacilityList } from "@/features/facilities/ui/FacilityList"
 import { AiChat } from "@/features/support/ui/AiChat"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { CommunityBoard } from "@/features/community/ui/CommunityBoard"
+import { KnowledgeBase } from "@/features/kms/ui/KnowledgeBase"
 
 type Section =
   | "dashboard"
@@ -31,6 +33,8 @@ type Section =
   | "meetings"
   | "emergencies"
   | "facilities"
+  | "community"
+  | "knowledge-base"
 
 function getNameString(name: unknown): string {
   if (typeof name === "string") return name
@@ -196,6 +200,8 @@ export default function DashboardPage() {
     meetings: "會議記錄",
     emergencies: "緊急事件",
     facilities: "設施預約",
+    community: "社區討論",
+    "knowledge-base": "知識庫",
   }
 
   const allNavItems = [
@@ -209,6 +215,8 @@ export default function DashboardPage() {
     { id: "meetings", icon: "event", label: "會議記錄" },
     { id: "emergencies", icon: "emergency", label: "緊急事件" },
     { id: "facilities", icon: "meeting_room", label: "設施預約" },
+    { id: "community", icon: "forum", label: "社區討論" },
+    { id: "knowledge-base", icon: "school", label: "知識庫" },
   ]
 
   const navItems = currentUser
@@ -348,6 +356,24 @@ export default function DashboardPage() {
                 公告詳情
               </h2>
               <AnnouncementDetails onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
+            </div>
+          )}
+          {currentSection === "community" && (
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
+                <span className="material-icons">forum</span>
+                社區討論
+              </h2>
+              <CommunityBoard currentUser={currentUser} />
+            </div>
+          )}
+          {currentSection === "knowledge-base" && (
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
+                <span className="material-icons">school</span>
+                知識庫
+              </h2>
+              <KnowledgeBase currentUser={currentUser} />
             </div>
           )}
         </main>

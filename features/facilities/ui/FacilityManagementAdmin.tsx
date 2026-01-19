@@ -175,9 +175,29 @@ function FacilityFormModal({
   )
 }
 
-export function FacilityManagementAdmin() {
-  const { facilities, bookings, loading, imageFiles, handleImageFileChange, handleSave, handleDelete, addNewFacility } =
+// 預覽模式的模擬資料
+const PREVIEW_FACILITIES = [
+  { id: "preview-1", name: "健身房", description: "配有跑步機、啞鈴等設備", location: "B棟 地下1樓", capacity: 10, image_url: "", available: true, base_price: 20, cool_down_hours: 24, is_lottery_enabled: false, max_concurrent_bookings: 2 },
+  { id: "preview-2", name: "游泳池", description: "25公尺標準泳池", location: "頂樓", capacity: 30, image_url: "", available: true, base_price: 30, cool_down_hours: 48, is_lottery_enabled: true, max_concurrent_bookings: 1 },
+  { id: "preview-3", name: "KTV包廂", description: "可容納10人的KTV包廂", location: "B棟 1樓", capacity: 10, image_url: "", available: false, base_price: 50, cool_down_hours: 72, is_lottery_enabled: false, max_concurrent_bookings: 1 },
+]
+
+const PREVIEW_BOOKINGS = [
+  { id: "preview-b1", facilities: { name: "健身房" }, user_name: "王**", user_room: "A棟 501室", booking_date: new Date().toISOString().split("T")[0], start_time: "09:00", end_time: "10:00", points_used: 20, points_spent: 20, check_in_time: null, status: "confirmed" },
+  { id: "preview-b2", facilities: { name: "游泳池" }, user_name: "李**", user_room: "B棟 302室", booking_date: new Date().toISOString().split("T")[0], start_time: "14:00", end_time: "15:00", points_used: 30, points_spent: 30, check_in_time: new Date().toISOString(), status: "completed" },
+]
+
+interface FacilityManagementAdminProps {
+  isPreviewMode?: boolean
+}
+
+export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManagementAdminProps) {
+  const { facilities: realFacilities, bookings: realBookings, loading, imageFiles, handleImageFileChange, handleSave, handleDelete, addNewFacility } =
     useFacilitiesAdmin()
+
+  // 預覽模式使用模擬資料
+  const facilities = isPreviewMode ? PREVIEW_FACILITIES : realFacilities
+  const bookings = isPreviewMode ? PREVIEW_BOOKINGS : realBookings
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)

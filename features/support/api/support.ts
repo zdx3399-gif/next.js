@@ -18,6 +18,10 @@ export interface ChatMessage {
 // 儲存對話紀錄（可選功能）
 export async function saveChatHistory(chat: Omit<ChatMessage, "id" | "created_at">): Promise<boolean> {
   const supabase = getSupabaseClient()
+  if (!supabase) {
+    console.error("Supabase client not available")
+    return false
+  }
   const { error } = await supabase.from("chat_history").insert([chat])
 
   if (error) {
@@ -31,6 +35,10 @@ export async function saveChatHistory(chat: Omit<ChatMessage, "id" | "created_at
 // 獲取使用者對話紀錄
 export async function fetchUserChatHistory(userId: string): Promise<ChatMessage[]> {
   const supabase = getSupabaseClient()
+  if (!supabase) {
+    console.error("Supabase client not available")
+    return []
+  }
   const { data, error } = await supabase
     .from("chat_history")
     .select("*")

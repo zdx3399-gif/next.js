@@ -16,9 +16,16 @@ const GOOGLE_FORM_CREATE_LINK = "https://docs.google.com/forms/create"
 
 interface VoteManagementAdminProps {
   currentUser?: User | null
+  isPreviewMode?: boolean
 }
 
-export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
+// 預覽模式的模擬資料
+const PREVIEW_VOTES = [
+  { id: "preview-1", title: "社區公共設施更新提案", description: "關於更新健身房設備的投票", created_at: new Date().toISOString(), ends_at: new Date(Date.now() + 7 * 86400000).toISOString(), author: "管委會", vote_url: "" },
+  { id: "preview-2", title: "停車場管理規則修訂", description: "修訂停車位輪替制度", created_at: new Date(Date.now() - 7 * 86400000).toISOString(), ends_at: new Date(Date.now() - 1 * 86400000).toISOString(), author: "管委會", vote_url: "https://forms.google.com/..." },
+]
+
+export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: VoteManagementAdminProps) {
   const [loading, setLoading] = useState(false)
 
   // --- View States ---
@@ -43,11 +50,19 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
 
   // --- Fetch History on Load ---
   useEffect(() => {
-    fetchHistory()
-  }, [])
+    if (!isPreviewMode) {
+      fetchHistory()
+    } else {
+      setVoteHistory(PREVIEW_VOTES)
+    }
+  }, [isPreviewMode])
 
   const fetchHistory = async () => {
     const supabase = getSupabaseClient()
+    if (!supabase) {
+      setVoteHistory([])
+      return
+    }
     const { data, error } = await supabase.from("votes").select("*").order("created_at", { ascending: false })
 
     if (data) setVoteHistory(data)

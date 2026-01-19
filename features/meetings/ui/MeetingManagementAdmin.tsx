@@ -245,8 +245,21 @@ function MeetingFormModal({
   )
 }
 
-export function MeetingManagementAdmin() {
-  const { meetings, loading, addMeeting, editMeeting, removeMeeting } = useMeetings()
+// 預覽模式的模擬資料
+const PREVIEW_MEETINGS = [
+  { id: "preview-1", topic: "年度區分所有權人會議", time: new Date(Date.now() + 7 * 86400000).toISOString(), location: "社區大會議室", notes: "年度重要會議", key_takeaways: ["預算審核", "管委會改選", "公共設施更新案"], pdf_file_url: "" },
+  { id: "preview-2", topic: "管委會例會", time: new Date(Date.now() - 7 * 86400000).toISOString(), location: "管理室", notes: "", key_takeaways: ["財務報告", "設備維修進度"], pdf_file_url: "https://example.com/meeting.pdf" },
+]
+
+interface MeetingManagementAdminProps {
+  isPreviewMode?: boolean
+}
+
+export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagementAdminProps) {
+  const { meetings: realMeetings, loading, addMeeting, editMeeting, removeMeeting } = useMeetings()
+
+  // 預覽模式使用模擬資料
+  const meetings = isPreviewMode ? PREVIEW_MEETINGS : realMeetings
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)

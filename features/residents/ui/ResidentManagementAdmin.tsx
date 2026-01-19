@@ -150,8 +150,22 @@ function ResidentFormModal({
   )
 }
 
-export function ResidentManagementAdmin() {
-  const { residents, loading, addNewRow, updateRow, handleSave, handleDelete } = useResidents()
+// 預覽模式的模擬資料
+const PREVIEW_RESIDENTS: Resident[] = [
+  { id: "preview-1", name: "王**", room: "A棟 5樓 501室", phone: "0912-***-***", email: "w***@email.com", relationship: "owner", role: "resident" as const },
+  { id: "preview-2", name: "李**", room: "B棟 3樓 302室", phone: "0923-***-***", email: "l***@email.com", relationship: "household_member", role: "resident" as const },
+  { id: "preview-3", name: "張**", room: "A棟 8樓 801室", phone: "0934-***-***", email: "z***@email.com", relationship: "tenant", role: "committee" as const },
+]
+
+interface ResidentManagementAdminProps {
+  isPreviewMode?: boolean
+}
+
+export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManagementAdminProps) {
+  const { residents: realResidents, loading, addNewRow, updateRow, handleSave, handleDelete } = useResidents()
+
+  // 預覽模式使用模擬資料
+  const residents = isPreviewMode ? PREVIEW_RESIDENTS : realResidents
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)

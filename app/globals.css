@@ -1,92 +1,87 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/* Removed @custom-variant directive that's not valid in Tailwind CSS v4 */
 
-/* Added Material Icons font */
 @import url("https://fonts.googleapis.com/icon?family=Material+Icons");
 @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap");
 
-/* Light mode: white-blue color scheme */
+/* Updated light mode to use softer Dcard-inspired colors */
 :root {
-  --background: oklch(0.98 0 0);
-  --foreground: oklch(0.2 0 0);
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.25 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0 0);
+  --card-foreground: oklch(0.25 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0 0);
-  --primary: oklch(0.55 0.2 250);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.95 0.02 250);
+  --popover-foreground: oklch(0.25 0 0);
+  --primary: oklch(0.6 0.18 250);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.015 250);
   --secondary-foreground: oklch(0.3 0 0);
-  --muted: oklch(0.95 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --accent: oklch(0.55 0.2 250);
-  --accent-foreground: oklch(1 0 0);
+  --muted: oklch(0.965 0.01 250);
+  --muted-foreground: oklch(0.5 0.01 250);
+  --accent: oklch(0.6 0.18 250);
+  --accent-foreground: oklch(0.99 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.88 0.02 250);
-  --input: oklch(0.92 0 0);
-  --ring: oklch(0.55 0.2 250);
-  --chart-1: oklch(0.55 0.2 250);
-  --chart-2: oklch(0.6 0.15 200);
-  --chart-3: oklch(0.5 0.15 280);
-  --chart-4: oklch(0.65 0.18 230);
-  --chart-5: oklch(0.7 0.12 210);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.97 0.01 250);
-  --sidebar-foreground: oklch(0.2 0 0);
-  --sidebar-primary: oklch(0.55 0.2 250);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.92 0.03 250);
-  --sidebar-accent-foreground: oklch(0.2 0 0);
-  --sidebar-border: oklch(0.88 0.02 250);
-  --sidebar-ring: oklch(0.55 0.2 250);
+  --border: oklch(0.93 0.01 250);
+  --input: oklch(0.96 0.01 250);
+  --ring: oklch(0.6 0.18 250);
+  --chart-1: oklch(0.6 0.18 250);
+  --chart-2: oklch(0.65 0.15 200);
+  --chart-3: oklch(0.55 0.15 280);
+  --chart-4: oklch(0.7 0.16 230);
+  --chart-5: oklch(0.75 0.12 210);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.98 0.005 250);
+  --sidebar-foreground: oklch(0.25 0 0);
+  --sidebar-primary: oklch(0.6 0.18 250);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.95 0.02 250);
+  --sidebar-accent-foreground: oklch(0.25 0 0);
+  --sidebar-border: oklch(0.93 0.01 250);
+  --sidebar-ring: oklch(0.6 0.18 250);
 
-  /* Custom theme colors for components - light mode (white-blue) */
-  --theme-bg-primary: #f8fafc;
-  --theme-bg-secondary: rgba(59, 130, 246, 0.05);
-  --theme-bg-card: rgba(255, 255, 255, 0.95);
-  --theme-border: rgba(59, 130, 246, 0.2);
-  --theme-border-accent: #3b82f6;
-  --theme-text-primary: #1e293b;
-  --theme-text-secondary: #64748b;
-  --theme-text-muted: #94a3b8;
-  --theme-accent: #3b82f6;
-  --theme-accent-hover: #2563eb;
-  --theme-accent-light: rgba(59, 130, 246, 0.1);
-  --theme-accent-glow: 0 15px 40px rgba(59, 130, 246, 0.3);
+  /* Updated custom theme colors for cleaner Dcard style */
+  --theme-bg-primary: #f7f9fb;
+  --theme-bg-secondary: rgba(96, 125, 255, 0.04);
+  --theme-bg-card: #ffffff;
+  --theme-border: rgba(0, 0, 0, 0.08);
+  --theme-border-accent: #607dff;
+  --theme-text-primary: #1a1a1a;
+  --theme-text-secondary: #6b7280;
+  --theme-text-muted: #9ca3af;
+  --theme-accent: #607dff;
+  --theme-accent-hover: #4c63d2;
+  --theme-accent-light: rgba(96, 125, 255, 0.08);
+  --theme-accent-glow: 0 8px 24px rgba(96, 125, 255, 0.2);
   --theme-danger: #ef4444;
-  --theme-gradient-from: #f1f5f9;
-  --theme-gradient-to: #e2e8f0;
-
-  /* 新增 landing page 和 auth page 使用的變數 */
-  --theme-bg-gradient: linear-gradient(to bottom right, #f1f5f9, #e2e8f0);
-  --theme-header-bg: rgba(255, 255, 255, 0.9);
-  --theme-hero-overlay-start: rgba(241, 245, 249, 0.95);
-  --theme-hero-overlay-end: rgba(226, 232, 240, 0.85);
-
-  /* Added input/select themed colors for light mode */
-  --theme-input-bg: rgba(59, 130, 246, 0.08);
-  --theme-input-border: rgba(59, 130, 246, 0.3);
-  --theme-input-focus: #3b82f6;
+  --theme-gradient-from: #f7f9fb;
+  --theme-gradient-to: #eef2f6;
+  --theme-bg-gradient: linear-gradient(to bottom right, #f7f9fb, #eef2f6);
+  --theme-header-bg: rgba(255, 255, 255, 0.95);
+  --theme-hero-overlay-start: rgba(247, 249, 251, 0.95);
+  --theme-hero-overlay-end: rgba(238, 242, 246, 0.85);
+  --theme-input-bg: #ffffff;
+  --theme-input-border: rgba(0, 0, 0, 0.12);
+  --theme-input-focus: #607dff;
   --theme-select-bg: #ffffff;
   --theme-select-option-bg: #ffffff;
-  --theme-placeholder: #94a3b8;
-
-  /* Button colors for light mode */
-  --theme-btn-save-border: #3b82f6;
-  --theme-btn-save-text: #3b82f6;
-  --theme-btn-save-hover: rgba(59, 130, 246, 0.15);
+  --theme-placeholder: #9ca3af;
+  --theme-btn-save-border: #607dff;
+  --theme-btn-save-text: #607dff;
+  --theme-btn-save-hover: rgba(96, 125, 255, 0.1);
   --theme-btn-delete-border: #ef4444;
   --theme-btn-delete-text: #ef4444;
-  --theme-btn-delete-hover: rgba(239, 68, 68, 0.15);
-  --theme-btn-add-border: #22c55e;
-  --theme-btn-add-text: #22c55e;
-  --theme-btn-add-hover: rgba(34, 197, 94, 0.15);
+  --theme-btn-delete-hover: rgba(239, 68, 68, 0.1);
+  --theme-btn-add-border: #10b981;
+  --theme-btn-add-text: #10b981;
+  --theme-btn-add-hover: rgba(16, 185, 129, 0.1);
 }
 
 /* Dark mode: black-yellow color scheme (original) */
+/* Added .dark selector for proper dark mode support */
+:root:has(.dark),
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -137,22 +132,16 @@
   --theme-danger: #f44336;
   --theme-gradient-from: #1a1a1a;
   --theme-gradient-to: #2d2d2d;
-
-  /* 新增 landing page 和 auth page 使用的變數 */
   --theme-bg-gradient: linear-gradient(to bottom right, #1a1a1a, #2d2d2d);
   --theme-header-bg: rgba(45, 45, 45, 0.9);
   --theme-hero-overlay-start: rgba(0, 0, 0, 0.8);
   --theme-hero-overlay-end: rgba(0, 0, 0, 0.6);
-
-  /* Added input/select themed colors for dark mode */
   --theme-input-bg: rgba(255, 255, 255, 0.1);
   --theme-input-border: rgba(255, 215, 0, 0.3);
   --theme-input-focus: #ffd700;
   --theme-select-bg: #2a2a2a;
   --theme-select-option-bg: #2a2a2a;
   --theme-placeholder: #b0b0b0;
-
-  /* Button colors for dark mode */
   --theme-btn-save-border: #facc15;
   --theme-btn-save-text: #fde047;
   --theme-btn-save-hover: rgba(250, 204, 21, 0.15);
@@ -164,9 +153,14 @@
   --theme-btn-add-hover: rgba(74, 222, 128, 0.15);
 }
 
+/* Simplified @theme directive to only include font configuration */
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+@theme inline {
+  /* optional: --font-sans, --font-serif, --font-mono if they are applied in the layout.tsx */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -212,6 +206,16 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Added Dcard-style scrollbar hiding utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Updated scrollbar for theme support */

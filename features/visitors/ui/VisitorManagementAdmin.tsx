@@ -2,22 +2,43 @@
 
 import { useVisitors } from "../hooks/useVisitors"
 import { VisitorCard } from "./VisitorCard"
+import type { Visitor } from "../api/visitors"
 
 interface VisitorManagementAdminProps {
   currentUser?: any
+  isPreviewMode?: boolean
 }
 
-export function VisitorManagementAdmin({ currentUser }: VisitorManagementAdminProps) {
+// 預覽模式的模擬資料
+const PREVIEW_VISITORS: { reserved: Visitor[]; checkedIn: Visitor[]; history: Visitor[] } = {
+  reserved: [
+    { id: "preview-1", name: "王小明", room: "A棟 5樓 501室", phone: "0912-***-***", reservation_time: new Date().toISOString(), status: "reserved" as const, created_at: new Date().toISOString() },
+    { id: "preview-2", name: "李大華", room: "B棟 3樓 302室", phone: "0923-***-***", reservation_time: new Date().toISOString(), status: "reserved" as const, created_at: new Date().toISOString() },
+  ],
+  checkedIn: [
+    { id: "preview-3", name: "張美玲", room: "A棟 8樓 801室", phone: "0934-***-***", reservation_time: new Date().toISOString(), status: "checked_in" as const, checked_in_at: new Date().toISOString(), created_at: new Date().toISOString() },
+  ],
+  history: [
+    { id: "preview-4", name: "陳志明", room: "C棟 2樓 201室", phone: "0945-***-***", reservation_time: new Date(Date.now() - 86400000).toISOString(), status: "checked_out" as const, checked_out_at: new Date().toISOString(), created_at: new Date(Date.now() - 86400000).toISOString() },
+  ],
+}
+
+export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: VisitorManagementAdminProps) {
   const {
-    reservedVisitors,
-    checkedInVisitors,
-    historyVisitors,
+    reservedVisitors: realReserved,
+    checkedInVisitors: realCheckedIn,
+    historyVisitors: realHistory,
     loading,
     searchTerm,
     setSearchTerm,
     handleCheckIn,
     handleCheckOut,
   } = useVisitors({ currentUser, isAdmin: true })
+
+  // 預覽模式使用模擬資料
+  const reservedVisitors = isPreviewMode ? PREVIEW_VISITORS.reserved : realReserved
+  const checkedInVisitors = isPreviewMode ? PREVIEW_VISITORS.checkedIn : realCheckedIn
+  const historyVisitors = isPreviewMode ? PREVIEW_VISITORS.history : realHistory
 
   if (loading) {
     return (

@@ -2,14 +2,25 @@ import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
-const supabaseKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
-const supabase = createClient(supabaseUrl, supabaseKey)
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
+  const supabaseKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "supabaseUrl is required. Missing env: NEXT_PUBLIC_TENANT_A_SUPABASE_URL / NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY or SUPABASE_URL / SUPABASE_ANON_KEY."
+    )
+  }
+
+  return createClient(supabaseUrl, supabaseKey)
+}
 
 // POST: 建立檢舉
 export async function POST(req: NextRequest) {
   try {
+    const supabase = getSupabase()
     const body = await req.json()
     const { reporter_id, target_type, target_id, reason, description } = body
 
@@ -47,7 +58,7 @@ export async function POST(req: NextRequest) {
     if (error) throw error
 
     // 加入審核隊列
-    await supabase.from("moderation_queue").insert([
+    const { error: qErr } = await supabase.from("moderation_queue").insert([
       {
         item_type: "report",
         item_id: data.id,
@@ -56,6 +67,8 @@ export async function POST(req: NextRequest) {
         due_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
       },
     ])
+
+    if (qErr) throw qErr
 
     return NextResponse.json({ data })
   } catch (error: any) {
@@ -67,6 +80,7 @@ export async function POST(req: NextRequest) {
 // GET: 獲取用戶的檢舉記錄
 export async function GET(req: NextRequest) {
   try {
+    const supabase = getSupabase()
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get("userId")
 

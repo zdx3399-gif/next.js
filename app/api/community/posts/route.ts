@@ -2,14 +2,26 @@ import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
-const supabaseKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
-const supabase = createClient(supabaseUrl, supabaseKey)
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
+  const supabaseKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "supabaseUrl is required. Missing env: NEXT_PUBLIC_TENANT_A_SUPABASE_URL / NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY or SUPABASE_URL / SUPABASE_ANON_KEY.",
+    )
+  }
+
+  return createClient(supabaseUrl, supabaseKey)
+}
 
 // GET: 獲取社區貼文列表
 export async function GET(req: NextRequest) {
   try {
+    const supabase = getSupabase()
+
     const { searchParams } = new URL(req.url)
     const category = searchParams.get("category")
     const status = searchParams.get("status")
@@ -40,6 +52,8 @@ export async function GET(req: NextRequest) {
 // POST: 建立新貼文（含 AI 審核）
 export async function POST(req: NextRequest) {
   try {
+    const supabase = getSupabase()
+
     const body = await req.json()
     const { author_id, category, display_mode, title, content, structured_data } = body
 
@@ -152,7 +166,9 @@ export async function POST(req: NextRequest) {
           item_type: "post",
           item_id: data.id,
           priority: aiResult.riskLevel === "high" ? "urgent" : "medium",
-          ai_risk_summary: `${category} 類別貼文，風險等級：${aiResult.riskLevel}${aiResult.risks ? `，風險：${aiResult.risks.join("、")}` : ""}`,
+          ai_risk_summary: `${category} 類別貼文，風險等級：${aiResult.riskLevel}${
+            aiResult.risks ? `，風險：${aiResult.risks.join("、")}` : ""
+          }`,
           due_at: dueAt,
         },
       ])
@@ -242,6 +258,8 @@ ${content}
 
       // 如果適合加入知識庫，更新貼文標記
       if (analysis.suitableForKMS) {
+        const supabase = getSupabase()
+
         await supabase
           .from("community_posts")
           .update({

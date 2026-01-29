@@ -2,14 +2,25 @@ import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
-const supabaseKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
-const supabase = createClient(supabaseUrl, supabaseKey)
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
+  const supabaseKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "supabaseUrl is required. Missing env: NEXT_PUBLIC_TENANT_A_SUPABASE_URL / NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY or SUPABASE_URL / SUPABASE_ANON_KEY."
+    )
+  }
+
+  return createClient(supabaseUrl, supabaseKey)
+}
 
 // GET: 獲取貼文的留言
 export async function GET(req: NextRequest) {
   try {
+    const supabase = getSupabase()
     const { searchParams } = new URL(req.url)
     const postId = searchParams.get("postId")
 
@@ -36,6 +47,7 @@ export async function GET(req: NextRequest) {
 // POST: 建立留言
 export async function POST(req: NextRequest) {
   try {
+    const supabase = getSupabase()
     const body = await req.json()
     const { post_id, author_id, parent_comment_id, content, display_mode } = body
 

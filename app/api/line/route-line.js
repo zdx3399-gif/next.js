@@ -1,21 +1,46 @@
+import "dotenv/config"
 import { Client } from "@line/bot-sdk"
 import { createClient } from "@supabase/supabase-js"
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
 import { generateAnswer } from "../../../grokmain.cjs"
-import "dotenv/config"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-const lineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
+function getSupabase() {
+  // 兼容你目前 env：TENANT_A_SUPABASE_* / NEXT_PUBLIC_TENANT_A_* / SUPABASE_*
+  const url =
+    process.env.TENANT_A_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    ""
+
+  const key =
+    process.env.TENANT_A_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    ""
+
+  if (!url || !key) {
+    throw new Error(
+      "supabaseUrl is required. Missing env: TENANT_A_SUPABASE_URL/TENANT_A_SUPABASE_ANON_KEY (or NEXT_PUBLIC_TENANT_A_* or SUPABASE_URL/SUPABASE_ANON_KEY).",
+    )
+  }
+
+  return createClient(url, key)
 }
 
-const client = new Client(lineConfig)
+function getLineClient() {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
+  const secret = process.env.LINE_CHANNEL_SECRET
+  if (!token || !secret) {
+    throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN or LINE_CHANNEL_SECRET.")
+  }
+  return new Client({ channelAccessToken: token, channelSecret: secret })
+}
 
 const IMAGE_KEYWORDS = ["圖片", "設施", "游泳池", "健身房", "大廳"]
 
-async function handleCommunityPost(userId, userText, replyToken, existingProfile) {
+async function handleCommunityPost(client, supabase, userId, userText, replyToken, existingProfile) {
   // 格式: #投稿 [標題] [內容]
   const content = userText.replace("#投稿", "").trim()
   const lines = content.split("\n")
@@ -32,10 +57,7 @@ async function handleCommunityPost(userId, userText, replyToken, existingProfile
   const postContent = lines.slice(1).join("\n").replace("內容：", "").replace("內容:", "").trim()
 
   if (!title || !postContent) {
-    await client.replyMessage(replyToken, {
-      type: "text",
-      text: "標題和內容不能為空",
-    })
+    await client.replyMessage(replyToken, { type: "text", text: "標題和內容不能為空" })
     return
   }
 
@@ -73,10 +95,7 @@ async function handleCommunityPost(userId, userText, replyToken, existingProfile
 
   if (error) {
     console.error("創建貼文失敗:", error)
-    await client.replyMessage(replyToken, {
-      type: "text",
-      text: "投稿失敗，請稍後再試",
-    })
+    await client.replyMessage(replyToken, { type: "text", text: "投稿失敗，請稍後再試" })
     return
   }
 
@@ -86,7 +105,7 @@ async function handleCommunityPost(userId, userText, replyToken, existingProfile
   })
 }
 
-async function handleCommunityQuestion(userId, userText, replyToken) {
+async function handleCommunityQuestion(client, supabase, userId, userText, replyToken) {
   // 格式: #問答 [問題]
   const question = userText.replace("#問答", "").trim()
 
@@ -117,20 +136,18 @@ async function handleCommunityQuestion(userId, userText, replyToken) {
     // 使用 LLM 回答
     try {
       const answer = await generateAnswer(question)
-      replyText = typeof answer === "string" ? answer.trim() : "目前沒有找到相關資訊，您可以在社區討論板發文詢問。"
+      replyText =
+        typeof answer === "string" ? answer.trim() : "目前沒有找到相關資訊，您可以在社區討論板發文詢問。"
     } catch (err) {
       console.error("LLM 查詢失敗:", err)
       replyText = "查詢失敗，請稍後再試或在社區討論板發文詢問。"
     }
   }
 
-  await client.replyMessage(replyToken, {
-    type: "text",
-    text: replyText,
-  })
+  await client.replyMessage(replyToken, { type: "text", text: replyText })
 }
 
-async function handleReportContent(userId, userText, replyToken) {
+async function handleReportContent(client, supabase, userId, userText, replyToken) {
   // 格式: #檢舉 [貼文ID/留言ID] [原因]
   const content = userText.replace("#檢舉", "").trim()
   const parts = content.split(" ")
@@ -155,10 +172,7 @@ async function handleReportContent(userId, userText, replyToken) {
     .maybeSingle()
 
   if (!binding) {
-    await client.replyMessage(replyToken, {
-      type: "text",
-      text: "您尚未綁定帳號，請先完成綁定後再進行檢舉",
-    })
+    await client.replyMessage(replyToken, { type: "text", text: "您尚未綁定帳號，請先完成綁定後再進行檢舉" })
     return
   }
 
@@ -166,10 +180,7 @@ async function handleReportContent(userId, userText, replyToken) {
   const { data: post } = await supabase.from("community_posts").select("id").eq("id", targetId).maybeSingle()
 
   if (!post) {
-    await client.replyMessage(replyToken, {
-      type: "text",
-      text: "找不到該貼文，請確認貼文ID是否正確",
-    })
+    await client.replyMessage(replyToken, { type: "text", text: "找不到該貼文，請確認貼文ID是否正確" })
     return
   }
 
@@ -184,21 +195,19 @@ async function handleReportContent(userId, userText, replyToken) {
 
   if (error) {
     console.error("創建檢舉失敗:", error)
-    await client.replyMessage(replyToken, {
-      type: "text",
-      text: "檢舉失敗，請稍後再試",
-    })
+    await client.replyMessage(replyToken, { type: "text", text: "檢舉失敗，請稍後再試" })
     return
   }
 
-  await client.replyMessage(replyToken, {
-    type: "text",
-    text: "檢舉已送出，我們會盡快處理。感謝您協助維護社區環境。",
-  })
+  await client.replyMessage(replyToken, { type: "text", text: "檢舉已送出，我們會盡快處理。感謝您協助維護社區環境。" })
 }
 
 export async function POST(req) {
   try {
+    // ✅ 延後初始化：避免 build 時 env 沒帶到就爆
+    const supabase = getSupabase()
+    const client = getLineClient()
+
     const rawBody = await req.text()
     if (!rawBody) return new Response("Bad Request: Empty body", { status: 400 })
 
@@ -247,10 +256,8 @@ export async function POST(req) {
           updated_at: new Date().toISOString(),
         }
         if (existingProfile?.id) upsertProfile.id = existingProfile.id
-        const { error: upsertError } = await supabase
-          .from("profiles")
-          .upsert([upsertProfile], { onConflict: "line_user_id" })
 
+        const { error: upsertError } = await supabase.from("profiles").upsert([upsertProfile], { onConflict: "line_user_id" })
         if (upsertError) console.error("❌ Supabase upsert 錯誤:", upsertError)
       }
 
@@ -261,19 +268,19 @@ export async function POST(req) {
 
         // 1. 投稿功能
         if (userText.startsWith("#投稿")) {
-          await handleCommunityPost(userId, userText, replyToken, existingProfile)
+          await handleCommunityPost(client, supabase, userId, userText, replyToken, existingProfile)
           continue
         }
 
         // 2. 問答功能
         if (userText.startsWith("#問答")) {
-          await handleCommunityQuestion(userId, userText, replyToken)
+          await handleCommunityQuestion(client, supabase, userId, userText, replyToken)
           continue
         }
 
         // 3. 檢舉功能
         if (userText.startsWith("#檢舉")) {
-          await handleReportContent(userId, userText, replyToken)
+          await handleReportContent(client, supabase, userId, userText, replyToken)
           continue
         }
 
@@ -288,54 +295,18 @@ export async function POST(req) {
                 type: "box",
                 layout: "vertical",
                 contents: [
-                  {
-                    type: "text",
-                    text: "社區討論板功能",
-                    weight: "bold",
-                    size: "xl",
-                    margin: "md",
-                  },
-                  {
-                    type: "separator",
-                    margin: "lg",
-                  },
+                  { type: "text", text: "社區討論板功能", weight: "bold", size: "xl", margin: "md" },
+                  { type: "separator", margin: "lg" },
                   {
                     type: "box",
                     layout: "vertical",
                     margin: "lg",
                     spacing: "sm",
                     contents: [
-                      {
-                        type: "text",
-                        text: "#投稿\n標題：您的標題\n內容：您的內容",
-                        size: "sm",
-                        wrap: true,
-                        color: "#666666",
-                      },
-                      {
-                        type: "text",
-                        text: "#問答 您的問題",
-                        size: "sm",
-                        wrap: true,
-                        color: "#666666",
-                        margin: "md",
-                      },
-                      {
-                        type: "text",
-                        text: "#檢舉 [貼文ID] [原因]",
-                        size: "sm",
-                        wrap: true,
-                        color: "#666666",
-                        margin: "md",
-                      },
-                      {
-                        type: "text",
-                        text: "公共設施 - 查看設施資訊",
-                        size: "sm",
-                        wrap: true,
-                        color: "#666666",
-                        margin: "md",
-                      },
+                      { type: "text", text: "#投稿\n標題：您的標題\n內容：您的內容", size: "sm", wrap: true, color: "#666666" },
+                      { type: "text", text: "#問答 您的問題", size: "sm", wrap: true, color: "#666666", margin: "md" },
+                      { type: "text", text: "#檢舉 [貼文ID] [原因]", size: "sm", wrap: true, color: "#666666", margin: "md" },
+                      { type: "text", text: "公共設施 - 查看設施資訊", size: "sm", wrap: true, color: "#666666", margin: "md" },
                     ],
                   },
                 ],
@@ -346,6 +317,7 @@ export async function POST(req) {
           continue
         }
 
+        // 投票處理
         if (userText.includes("vote:")) {
           try {
             const parts = userText.split(":")
@@ -358,7 +330,6 @@ export async function POST(req) {
             const option_selected = parts[2].replace("🗳️", "").trim()
 
             const { data: voteExists } = await supabase.from("votes").select("id").eq("id", voteIdFromMsg).maybeSingle()
-
             if (!voteExists) {
               await client.replyMessage(replyToken, { type: "text", text: "投票已過期或不存在" })
               continue
@@ -386,13 +357,7 @@ export async function POST(req) {
             }
 
             const { error: voteError } = await supabase.from("vote_records").insert([
-              {
-                vote_id,
-                user_id,
-                user_name,
-                option_selected,
-                voted_at: new Date().toISOString(),
-              },
+              { vote_id, user_id, user_name, option_selected, voted_at: new Date().toISOString() },
             ])
 
             if (voteError) {
@@ -408,6 +373,7 @@ export async function POST(req) {
           continue
         }
 
+        // 公共設施
         if (userText.includes("公共設施")) {
           const carouselMessage = {
             type: "flex",
@@ -424,11 +390,7 @@ export async function POST(req) {
                     aspectRatio: "20:13",
                     aspectMode: "cover",
                   },
-                  body: {
-                    type: "box",
-                    layout: "vertical",
-                    contents: [{ type: "text", text: "健身房\n開放時間：06:00 - 22:00", wrap: true }],
-                  },
+                  body: { type: "box", layout: "vertical", contents: [{ type: "text", text: "健身房\n開放時間：06:00 - 22:00", wrap: true }] },
                 },
                 {
                   type: "bubble",
@@ -439,11 +401,7 @@ export async function POST(req) {
                     aspectRatio: "20:13",
                     aspectMode: "cover",
                   },
-                  body: {
-                    type: "box",
-                    layout: "vertical",
-                    contents: [{ type: "text", text: "游泳池\n開放時間：08:00 - 20:00", wrap: true }],
-                  },
+                  body: { type: "box", layout: "vertical", contents: [{ type: "text", text: "游泳池\n開放時間：08:00 - 20:00", wrap: true }] },
                 },
                 {
                   type: "bubble",
@@ -454,11 +412,7 @@ export async function POST(req) {
                     aspectRatio: "20:13",
                     aspectMode: "cover",
                   },
-                  body: {
-                    type: "box",
-                    layout: "vertical",
-                    contents: [{ type: "text", text: "大廳\n開放時間：全天", wrap: true }],
-                  },
+                  body: { type: "box", layout: "vertical", contents: [{ type: "text", text: "大廳\n開放時間：全天", wrap: true }] },
                 },
               ],
             },
@@ -473,6 +427,7 @@ export async function POST(req) {
           continue
         }
 
+        // 其他：LLM 回答
         try {
           const answer = await generateAnswer(userText)
           const replyMessage = typeof answer === "string" ? answer.trim() : "目前沒有找到相關資訊，請查看社區公告。"

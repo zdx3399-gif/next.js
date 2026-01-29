@@ -1,117 +1,148 @@
+// app/api/remind-fee/route.js
+import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
-import fs from 'fs';
-import path from 'path';
-import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
-export const runtime = 'nodejs';
+const LINE_API = "https://api.line.me/v2/bot/message/push"
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY; // 或改用 GROQ Embeddings API
-const cachePath = path.join(process.cwd(), 'supabase_embeddings.json');
+function getSupabase() {
+  const url =
+    process.env.TENANT_A_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    ""
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const key =
+    process.env.TENANT_A_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    ""
 
-// ✅ Embedding function (OpenAI)
-async function getEmbedding(text) {
-  try {
-    const response = await axios.post(
-      'https://api.openai.com/v1/embeddings',
-      {
-        model: 'text-embedding-3-small',
-        input: text
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    return response.data.data[0].embedding;
-  } catch (error) {
-    console.error('Embedding API 錯誤:', error.response?.data || error.message);
-    return null;
+  if (!url || !key) {
+    throw new Error(
+      "supabaseUrl is required. Missing env: TENANT_A_SUPABASE_URL/TENANT_A_SUPABASE_ANON_KEY (or NEXT_PUBLIC_TENANT_A_* or SUPABASE_URL/SUPABASE_ANON_KEY).",
+    )
   }
+
+  return createClient(url, key)
 }
 
 export async function POST(req) {
   try {
-    const { force } = await req.json(); // 可選參數：強制更新
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !OPENAI_API_KEY) {
-      return new Response(JSON.stringify({ error: '環境變數未設定完整' }), { status: 500 });
+    const supabase = getSupabase()
+
+    const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
+    if (!LINE_TOKEN) {
+      return NextResponse.json({ error: "缺少 LINE_CHANNEL_ACCESS_TOKEN 環境變數" }, { status: 500 })
     }
 
-    // ✅ 預設 FAQ
-    const defaultFaqs = [
-      '本大樓禁止飼養寵物，違者將依規定處理。',
-      '問：可以養寵物嗎？\n答：本大樓禁止飼養寵物，違者將依規定處理。',
-      '問：垃圾要什麼時候丟？\n答：垃圾請於每日晚上八點至九點間丟置指定地點。',
-      '問：停車場可以給訪客停車嗎？\n答：停車場僅供本社區住戶使用，外來車輛請勿停放。'
-    ];
-
-    // ✅ 查詢現有 FAQ
-    const { data: existData, error: existError } = await supabase.from('knowledge').select('content');
-    if (existError) {
-      return new Response(JSON.stringify({ error: '讀取 knowledge 失敗', detail: existError }), { status: 500 });
+    const { feeId, customMessage } = await req.json()
+    if (!feeId) {
+      return NextResponse.json({ error: "feeId 必填" }, { status: 400 })
     }
 
-    const existSet = new Set((existData || []).map(row => row.content));
-    for (const faq of defaultFaqs) {
-      if (!existSet.has(faq)) {
-        await supabase.from('knowledge').insert({ content: faq });
+    // 1) 查詢 fees 表
+    const { data: fee, error: feeErr } = await supabase
+      .from("fees")
+      .select("id, unit_id, amount, due, paid, note")
+      .eq("id", feeId)
+      .single()
+
+    if (feeErr || !fee) {
+      console.error("查詢 fees 表失敗:", feeErr)
+      return NextResponse.json({ error: "Fee not found" }, { status: 404 })
+    }
+
+    // 檢查是否已繳費
+    if (fee.paid) {
+      console.log("該費用已繳清，僅執行推播通知")
+    } else {
+      console.log("費用未繳，準備進行催繳通知")
+    }
+
+    // 2) 查詢 profiles 表
+    const { data: profile, error: pErr } = await supabase
+      .from("profiles")
+      .select("id, name, unit_id, line_user_id")
+      .eq("unit_id", fee.unit_id)
+      .maybeSingle()
+
+    if (pErr) {
+      console.error("查詢 profiles 表失敗:", pErr)
+      return NextResponse.json({ error: "查詢住戶資料失敗" }, { status: 500 })
+    }
+
+    if (!profile?.id) {
+      return NextResponse.json({ error: `未找到單位 ID ${fee.unit_id} 的住戶` }, { status: 404 })
+    }
+
+    // 3) 確認 line_user_id
+    let lineUserId = profile.line_user_id
+
+    if (!lineUserId) {
+      const { data: lu, error: luErr } = await supabase
+        .from("line_users")
+        .select("line_user_id")
+        .eq("profile_id", profile.id)
+        .maybeSingle()
+
+      if (luErr) {
+        console.error("查詢 line_users 表失敗:", luErr)
+        return NextResponse.json({ error: "查詢 LINE 綁定失敗" }, { status: 500 })
       }
+
+      lineUserId = lu?.line_user_id
     }
 
-    // ✅ 重新查詢最新 FAQ
-    const { data, error } = await supabase.from('knowledge').select('id, content');
-    if (error || !data || data.length === 0) {
-      return new Response(JSON.stringify({ error: 'knowledge table 無資料' }), { status: 500 });
+    if (!lineUserId) {
+      return NextResponse.json({ error: "此住戶尚未完成 LINE 綁定" }, { status: 400 })
     }
 
-    let cache = {};
-    if (fs.existsSync(cachePath) && !force) {
-      try {
-        cache = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
-      } catch {}
+    // 4) 發送通知
+    const text =
+      customMessage ??
+      `親愛的${profile?.name ?? "住戶"}您好，\n` +
+        `您本期的管理費尚未繳清：\n` +
+        `金額：${fee.amount}\n` +
+        `到期日：${fee.due}\n` +
+        `狀態：${fee.paid ? "已繳" : "未繳"}\n` +
+        `${fee.note ? `備註：${fee.note}` : ""}\n` +
+        `請盡快完成繳費，謝謝！`
+
+    const resp = await fetch(LINE_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${LINE_TOKEN}`,
+      },
+      body: JSON.stringify({
+        to: lineUserId,
+        messages: [{ type: "text", text }],
+      }),
+    })
+
+    if (!resp.ok) {
+      const errText = await resp.text()
+      console.error("LINE 推播失敗:", errText)
+      return NextResponse.json({ error: "LINE 推播失敗", detail: errText }, { status: 500 })
     }
 
-    let updated = false;
-    for (const row of data) {
-      const key = String(row.id);
-      if (!cache[key] || cache[key].content !== row.content) {
-        const embedding = await getEmbedding(row.content);
-        if (embedding) {
-          cache[key] = { content: row.content, embedding };
-          updated = true;
-        }
-      }
+    // 5) 更新 fees 表的 updated_at 欄位
+    const { error: updateErr } = await supabase
+      .from("fees")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", fee.id)
+
+    if (updateErr) {
+      console.error("更新 fees 表失敗:", updateErr)
+      return NextResponse.json({ error: "更新費用記錄失敗" }, { status: 500 })
     }
 
-    // ✅ 處理圖片資料
-    const { data: imageData } = await supabase.from('images').select('id, url, description');
-    if (imageData && imageData.length > 0) {
-      for (const img of imageData) {
-        const imgKey = `img_${img.id}`;
-        const imgContent = `圖片: ${img.description || '無描述'}\nURL: ${img.url}`;
-        if (!cache[imgKey] || cache[imgKey].content !== imgContent) {
-          const embedding = await getEmbedding(imgContent);
-          if (embedding) {
-            cache[imgKey] = { content: imgContent, embedding, type: 'image', url: img.url };
-            updated = true;
-          }
-        }
-      }
-    }
-
-    if (updated || force) {
-      fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2), 'utf-8');
-    }
-
-    return new Response(JSON.stringify({ message: '✅ 同步完成', updatedCount: Object.keys(cache).length }), { status: 200 });
-  } catch (error) {
-    console.error('Sync API 錯誤:', error.message);
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    console.error("伺服器錯誤:", e)
+    return NextResponse.json({ error: e.message || "伺服器錯誤" }, { status: 500 })
   }
 }

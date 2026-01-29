@@ -22,7 +22,7 @@ function getSupabase() {
 
   if (!url || !key) {
     throw new Error(
-      "supabaseUrl is required. Missing env: TENANT_A_SUPABASE_URL/TENANT_A_SUPABASE_ANON_KEY (or NEXT_PUBLIC_TENANT_A_* or SUPABASE_URL/SUPABASE_ANON_KEY).",
+      "supabaseUrl is required. Missing env: NEXT_PUBLIC_TENANT_A_SUPABASE_URL/NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY.",
     )
   }
 

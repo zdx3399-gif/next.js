@@ -4,8 +4,8 @@ import { type NextRequest, NextResponse } from "next/server"
 export const runtime = "nodejs"
 
 const getSupabase = () => {
-  const url = process.env.TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
-  const key = process.env.TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+  const url = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
+  const key = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
   if (!url || !key) return null
   return createClient(url, key)
 }

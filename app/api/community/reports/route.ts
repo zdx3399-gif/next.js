@@ -3,8 +3,8 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
 
-const supabaseUrl = process.env.TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
-const supabaseKey = process.env.TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+const supabaseUrl = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
+const supabaseKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 // POST: 建立檢舉

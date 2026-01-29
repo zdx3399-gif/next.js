@@ -131,7 +131,9 @@ function parseUnitInput(input: string): ParsedUnit {
 // Server action to detect user tenant and authenticate
 export async function authenticateUser(email: string, password: string) {
   console.log("[v0] Starting authentication for email:", email)
-  const tenants: TenantId[] = ["tenant_a", "tenant_b"]
+  //const tenants: TenantId[] = ["tenant_a", "tenant_b"]
+  const tenants: TenantId[] = ["tenant_a"]
+
   const errors: string[] = []
 
   for (const tenantId of tenants) {

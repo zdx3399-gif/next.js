@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 
 export default function BindLinePage() {
+  const router = useRouter();
+  const { user, profile, isLoading: authLoading, isLineBound, signIn, signUp, signOut, refreshProfile } = useAuth();
+  
   /**********************
    * State 區域
    **********************/
   const [liffObject, setLiffObject] = useState<any>(null);
   const [status, setStatus] = useState("載入中...");
-  const [profile, setProfile] = useState<any>(null);
-  const [user, setUser] = useState<any>(null);
+  const [lineProfile, setLineProfile] = useState<any>(null);
 
   // 表單欄位
   const [email, setEmail] = useState("");
@@ -18,18 +22,10 @@ export default function BindLinePage() {
   const [phone, setPhone] = useState("");
 
   const [isBinding, setIsBinding] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(false);
 
   const bindingAttempted = useRef(false);
-  const LIFF_ID = "2008678437-qt2KwvhO";
-
-  /**********************
-   * 初始化 user 狀態
-   **********************/
-  useEffect(() => {
-    const savedUser = localStorage.getItem("user");
-    if (savedUser) setUser(JSON.parse(savedUser));
-  }, []);
+  const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID || "2008678437-qt2KwvhO";
 
   /**********************
    * 初始化 LIFF
@@ -40,7 +36,6 @@ export default function BindLinePage() {
         const liff = (await import("@line/liff")).default;
         await liff.init({ liffId: LIFF_ID });
         setLiffObject(liff);
-        setStatus("請先登入或註冊帳號，再綁定 LINE");
         console.log("✅ LIFF 初始化成功");
       } catch (err) {
         console.error("❌ LIFF 初始化失敗", err);
@@ -52,14 +47,35 @@ export default function BindLinePage() {
   }, []);
 
   /**********************
+   * Update status when auth state changes
+   **********************/
+  useEffect(() => {
+    if (authLoading) return;
+    
+    if (!user) {
+      setStatus("請先登入或註冊帳號，再綁定 LINE");
+    } else if (isLineBound && profile) {
+      setStatus("✓ 已綁定 LINE");
+      setLineProfile({
+        userId: profile.line_user_id,
+        displayName: profile.line_display_name,
+        pictureUrl: profile.line_avatar_url,
+        statusMessage: profile.line_status_message,
+      });
+      bindingAttempted.current = true;
+    } else if (user) {
+      setStatus("✓ 登入成功！請綁定 LINE");
+    }
+  }, [user, profile, isLineBound, authLoading]);
+
+  /**********************
    * 綁定邏輯（統一處理）
    **********************/
   const performBinding = async () => {
-    if (!liffObject || !user || isBinding || profile) return;
+    if (!liffObject || !user || isBinding || lineProfile) return;
 
     if (!user.id) {
       setStatus("使用者資料異常，請重新登入");
-      setUser(null);
       return;
     }
 
@@ -69,26 +85,34 @@ export default function BindLinePage() {
     setStatus("正在綁定 LINE...");
 
     try {
-      const lineProfile = await liffObject.getProfile();
+      const liffProfile = await liffObject.getProfile();
 
       const res = await fetch("/api/bind-line", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile_id: user.id,
-          line_user_id: lineProfile.userId,
-          line_display_name: lineProfile.displayName,
-          line_avatar_url: lineProfile.pictureUrl,
-          line_status_message: lineProfile.statusMessage,
+          line_user_id: liffProfile.userId,
+          line_display_name: liffProfile.displayName,
+          line_avatar_url: liffProfile.pictureUrl,
+          line_status_message: liffProfile.statusMessage,
         }),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        setProfile(lineProfile);
-        setStatus("✓ LINE 綁定成功！");
+        setLineProfile(liffProfile);
+        setStatus("✓ LINE 綁定成功！正在跳轉...");
         bindingAttempted.current = true;
+        
+        // Refresh profile to get updated LINE info
+        await refreshProfile();
+        
+        // Redirect to dashboard after 2 seconds
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 2000);
       } else {
         setStatus(`綁定失敗：${data.message || "未知錯誤"}`);
       }
@@ -108,14 +132,15 @@ export default function BindLinePage() {
     if (
       liffObject &&
       user &&
+      !isLineBound &&
       liffObject.isLoggedIn() &&
       !bindingAttempted.current &&
-      !profile
+      !lineProfile
     ) {
       console.log("🤖 自動執行綁定");
       performBinding();
     }
-  }, [liffObject, user]);
+  }, [liffObject, user, isLineBound]);
 
   /**********************
    * 註冊
@@ -137,40 +162,26 @@ export default function BindLinePage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsFormLoading(true);
     setStatus("註冊中...");
 
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          name: name || null,
-          phone: phone || null,
-        }),
-      });
+      const result = await signUp(email, password, name || undefined, phone || undefined);
 
-      const data = await res.json();
-
-      if (data.success && data.user) {
-        setUser(data.user);
-        localStorage.setItem("user", JSON.stringify(data.user));
+      if (result.success) {
         setStatus("✓ 註冊成功！請點擊綁定 LINE");
-
         setEmail("");
         setPassword("");
         setName("");
         setPhone("");
       } else {
-        setStatus(`註冊失敗：${data.message}`);
+        setStatus(`註冊失敗：${result.error}`);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "未知錯誤";
       setStatus(`註冊失敗：${errorMessage}`);
     } finally {
-      setIsLoading(false);
+      setIsFormLoading(false);
     }
   };
 
@@ -183,45 +194,24 @@ export default function BindLinePage() {
       return;
     }
 
-    setIsLoading(true);
+    setIsFormLoading(true);
     setStatus("登入中...");
 
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const result = await signIn(email, password);
 
-      const data = await res.json();
-
-      if (data.success && data.user) {
-        setUser(data.user);
-        localStorage.setItem("user", JSON.stringify(data.user));
-
-        if (data.user.line_bound) {
-          setProfile({
-            userId: data.user.line_user_id,
-            displayName: data.user.line_display_name,
-            pictureUrl: data.user.line_avatar_url,
-            statusMessage: data.user.line_status_message,
-          });
-          setStatus("✓ 已綁定 LINE");
-          bindingAttempted.current = true;
-        } else {
-          setStatus("✓ 登入成功！請綁定 LINE");
-        }
-
+      if (result.success) {
         setEmail("");
         setPassword("");
+        // Status will be updated by useEffect when auth state changes
       } else {
-        setStatus(`登入失敗：${data.message}`);
+        setStatus(`登入失敗：${result.error}`);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "未知錯誤";
       setStatus(`登入失敗：${errorMessage}`);
     } finally {
-      setIsLoading(false);
+      setIsFormLoading(false);
     }
   };
 
@@ -246,10 +236,9 @@ export default function BindLinePage() {
   /**********************
    * 登出
    **********************/
-  const handleLogout = () => {
-    setUser(null);
-    setProfile(null);
-    localStorage.removeItem("user");
+  const handleLogout = async () => {
+    await signOut();
+    setLineProfile(null);
     bindingAttempted.current = false;
     setStatus("已登出，請重新登入");
   };
@@ -263,7 +252,7 @@ export default function BindLinePage() {
     const ok = confirm("確定要解除綁定嗎?");
     if (!ok) return;
 
-    setIsLoading(true);
+    setIsFormLoading(true);
     setStatus("解除中...");
 
     try {
@@ -276,9 +265,12 @@ export default function BindLinePage() {
       const data = await res.json();
 
       if (data.success) {
-        setProfile(null);
+        setLineProfile(null);
         setStatus("✓ 已解除 LINE 綁定");
         bindingAttempted.current = false;
+        
+        // Refresh profile to clear LINE info
+        await refreshProfile();
       } else {
         setStatus(`解除失敗：${data.message}`);
       }
@@ -286,9 +278,21 @@ export default function BindLinePage() {
       const errorMessage = err instanceof Error ? err.message : "未知錯誤";
       setStatus(`解除失敗：${errorMessage}`);
     } finally {
-      setIsLoading(false);
+      setIsFormLoading(false);
     }
   };
+
+  /**********************
+   * Loading State
+   **********************/
+  if (authLoading) {
+    return (
+      <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+        <p className="mt-4 text-gray-600">載入中...</p>
+      </main>
+    );
+  }
 
   /**********************
    * UI
@@ -324,7 +328,7 @@ export default function BindLinePage() {
               placeholder="Email *"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={isLoading}
+              disabled={isFormLoading}
               className="border border-gray-300 px-4 py-3 rounded-lg"
             />
 
@@ -333,42 +337,42 @@ export default function BindLinePage() {
               placeholder="密碼（至少 6 個字元）*"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading}
+              disabled={isFormLoading}
               className="border border-gray-300 px-4 py-3 rounded-lg"
             />
 
             <div className="flex gap-4">
               <button
                 onClick={handleRegister}
-                disabled={isLoading}
+                disabled={isFormLoading}
                 className="flex-1 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 disabled:bg-gray-400 font-semibold"
               >
-                {isLoading ? "處理中..." : "註冊"}
+                {isFormLoading ? "處理中..." : "註冊"}
               </button>
 
               <button
                 onClick={handleLogin}
-                disabled={isLoading}
+                disabled={isFormLoading}
                 className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400 font-semibold"
               >
-                {isLoading ? "處理中..." : "登入"}
+                {isFormLoading ? "處理中..." : "登入"}
               </button>
             </div>
           </div>
         )}
 
         {/* 綁定按鈕 */}
-        {user && !profile && (
+        {user && !lineProfile && !isLineBound && (
           <div className="flex flex-col items-center gap-4">
             <div className="bg-gray-50 p-4 rounded-lg w-full">
               <p className="text-sm text-gray-600">已登入帳號</p>
-              <p className="font-semibold text-lg">{user.email}</p>
-              {user.name && <p className="text-gray-600">{user.name}</p>}
+              <p className="font-semibold text-lg">{profile?.email || user.email}</p>
+              {profile?.name && <p className="text-gray-600">{profile.name}</p>}
             </div>
 
             <button
               onClick={handleBindClick}
-              disabled={isBinding || isLoading}
+              disabled={isBinding || isFormLoading}
               className="w-full py-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 font-semibold text-lg shadow-md"
             >
               {isBinding ? "綁定中..." : "🔗 使用 LINE 綁定帳號"}
@@ -384,11 +388,11 @@ export default function BindLinePage() {
         )}
 
         {/* LINE Profile */}
-        {profile && (
+        {(lineProfile || isLineBound) && (
           <div className="flex flex-col items-center">
             <div className="relative">
               <img
-                src={profile.pictureUrl}
+                src={lineProfile?.pictureUrl || profile?.line_avatar_url}
                 alt="LINE 大頭貼"
                 className="w-32 h-32 rounded-full border-4 border-green-500 shadow-lg"
               />
@@ -407,11 +411,13 @@ export default function BindLinePage() {
               </div>
             </div>
 
-            <p className="mt-4 font-bold text-xl">{profile.displayName}</p>
+            <p className="mt-4 font-bold text-xl">
+              {lineProfile?.displayName || profile?.line_display_name}
+            </p>
 
-            {profile.statusMessage && (
+            {(lineProfile?.statusMessage || profile?.line_status_message) && (
               <p className="text-sm text-gray-500 italic mt-1">
-                "{profile.statusMessage}"
+                "{lineProfile?.statusMessage || profile?.line_status_message}"
               </p>
             )}
 
@@ -420,9 +426,9 @@ export default function BindLinePage() {
                 ✓ LINE 綁定成功！
               </p>
 
-              {user && (
+              {(user || profile) && (
                 <p className="text-sm text-gray-600 text-center mt-2">
-                  已綁定至 {user.email}
+                  已綁定至 {profile?.email || user?.email}
                 </p>
               )}
             </div>
@@ -430,19 +436,26 @@ export default function BindLinePage() {
             <div className="flex gap-3 mt-6 w-full">
               <button
                 onClick={handleUnbind}
-                disabled={isLoading}
+                disabled={isFormLoading}
                 className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-400"
               >
                 解除綁定
               </button>
 
               <button
-                onClick={handleLogout}
-                className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                onClick={() => router.push("/dashboard")}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
               >
-                登出
+                前往首頁
               </button>
             </div>
+
+            <button
+              onClick={handleLogout}
+              className="mt-3 px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+            >
+              登出
+            </button>
           </div>
         )}
       </div>

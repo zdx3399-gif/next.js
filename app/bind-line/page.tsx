@@ -93,7 +93,8 @@ export default function BindLinePage() {
         setStatus(`綁定失敗：${data.message || "未知錯誤"}`);
       }
     } catch (err) {
-      setStatus(`綁定失敗：${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : "未知錯誤";
+      setStatus(`綁定失敗：${errorMessage}`);
       console.error(err);
     } finally {
       setIsBinding(false);
@@ -166,7 +167,8 @@ export default function BindLinePage() {
         setStatus(`註冊失敗：${data.message}`);
       }
     } catch (err) {
-      setStatus(`註冊失敗：${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : "未知錯誤";
+      setStatus(`註冊失敗：${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -216,7 +218,8 @@ export default function BindLinePage() {
         setStatus(`登入失敗：${data.message}`);
       }
     } catch (err) {
-      setStatus(`登入失敗：${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : "未知錯誤";
+      setStatus(`登入失敗：${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -280,7 +283,8 @@ export default function BindLinePage() {
         setStatus(`解除失敗：${data.message}`);
       }
     } catch (err) {
-      setStatus(`解除失敗：${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : "未知錯誤";
+      setStatus(`解除失敗：${errorMessage}`);
     } finally {
       setIsLoading(false);
     }

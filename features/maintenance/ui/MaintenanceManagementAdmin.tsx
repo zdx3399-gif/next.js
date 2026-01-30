@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { getSupabaseClient } from "@/lib/supabase"
+import { DispatchModal } from "./DispatchModal"
 
 interface MaintenanceRow {
   id: string | null
@@ -156,6 +157,10 @@ export function MaintenanceManagementAdmin() {
     cost: 0,
   })
 
+  // Dispatch modal state
+  const [isDispatchOpen, setIsDispatchOpen] = useState(false)
+  const [selectedMaintenanceId, setSelectedMaintenanceId] = useState<string | null>(null)
+
   const loadData = async () => {
     setLoading(true)
     const supabase = getSupabaseClient()
@@ -283,6 +288,12 @@ export function MaintenanceManagementAdmin() {
     }
   }
 
+  const handleDispatch = (id: string | null) => {
+    if (!id) return
+    setSelectedMaintenanceId(id)
+    setIsDispatchOpen(true)
+  }
+
   const getStatusLabel = (status: string) => {
     const labels: Record<string, { text: string; class: string }> = {
       open: { text: "待處理", class: "bg-yellow-500/20 text-yellow-500" },
@@ -362,6 +373,13 @@ export function MaintenanceManagementAdmin() {
                     <td className="p-3 border-b border-[var(--theme-border)]">
                       <div className="flex gap-2">
                         <button
+                          onClick={() => handleDispatch(row.id)}
+                          className="p-2 rounded-lg border border-blue-500 text-blue-500 hover:bg-blue-500/10 transition-all"
+                          title="派工"
+                        >
+                          <span className="material-icons text-lg">assignment_ind</span>
+                        </button>
+                        <button
                           onClick={() => handleEdit(index)}
                           className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
                           title="編輯"
@@ -398,6 +416,13 @@ export function MaintenanceManagementAdmin() {
         onChange={handleFormChange}
         onSave={handleSave}
         isEditing={editingIndex !== null}
+      />
+
+      <DispatchModal
+        isOpen={isDispatchOpen}
+        onClose={() => setIsDispatchOpen(false)}
+        maintenanceId={selectedMaintenanceId || ""}
+        onSuccess={loadData}
       />
     </div>
   )

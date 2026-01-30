@@ -8,7 +8,7 @@ import { getSupabaseClient } from "@/lib/supabase"
 // 🔧 CONFIG: Your Static Default Links
 // ==================================================================================
 // Link 1: 編輯既有的預設表單
-const GOOGLE_FORM_EDIT_LINK = "https://docs.google.com/forms/d/1-RIrL9cKOfX4HY2gLa7m6gF-fVX72uDdtfVhABMUFx8/edit"
+const GOOGLE_FORM_EDIT_LINK = "https://drive.google.com/drive/folders/1ORmuy3ZpoY-dhTlt-plOHyWKbC91K6of"
 // Link 2: 建立全新的表單
 const GOOGLE_FORM_CREATE_LINK = "https://docs.google.com/forms/create"
 
@@ -210,8 +210,8 @@ export function VoteManagementAdmin({ currentUser }: VoteManagementAdminProps) {
                 className="flex items-center gap-4 p-4 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-secondary)] hover:bg-[var(--theme-accent)] hover:text-white transition-all group">
                 <span className="material-icons text-3xl text-purple-500 group-hover:text-white">edit_document</span>
                 <div>
-                  <h3 className="font-bold">編輯預設表單</h3>
-                  <p className="text-xs opacity-70">Edit Default Form</p>
+                  <h3 className="font-bold">打開 Google Drive 設定</h3>
+                  <p className="text-xs opacity-70">Edit Google Drive Settings</p>
                 </div>
               </a>
 

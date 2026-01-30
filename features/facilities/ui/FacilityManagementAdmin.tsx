@@ -175,9 +175,29 @@ function FacilityFormModal({
   )
 }
 
-export function FacilityManagementAdmin() {
-  const { facilities, bookings, loading, imageFiles, handleImageFileChange, handleSave, handleDelete, addNewFacility } =
+// 預覽模式的模擬資料
+const PREVIEW_FACILITIES = [
+  { id: "preview-1", name: "健身房", description: "配有跑步機、啞鈴等設備", location: "B棟 地下1樓", capacity: 10, image_url: "", available: true, base_price: 20, cool_down_hours: 24, is_lottery_enabled: false, max_concurrent_bookings: 2 },
+  { id: "preview-2", name: "游泳池", description: "25公尺標準泳池", location: "頂樓", capacity: 30, image_url: "", available: true, base_price: 30, cool_down_hours: 48, is_lottery_enabled: true, max_concurrent_bookings: 1 },
+  { id: "preview-3", name: "KTV包廂", description: "可容納10人的KTV包廂", location: "B棟 1樓", capacity: 10, image_url: "", available: false, base_price: 50, cool_down_hours: 72, is_lottery_enabled: false, max_concurrent_bookings: 1 },
+]
+
+const PREVIEW_BOOKINGS = [
+  { id: "preview-b1", facilities: { name: "健身房" }, user_name: "王**", user_room: "A棟 501室", booking_date: new Date().toISOString().split("T")[0], start_time: "09:00", end_time: "10:00", points_used: 20, points_spent: 20, check_in_time: null, status: "confirmed" },
+  { id: "preview-b2", facilities: { name: "游泳池" }, user_name: "李**", user_room: "B棟 302室", booking_date: new Date().toISOString().split("T")[0], start_time: "14:00", end_time: "15:00", points_used: 30, points_spent: 30, check_in_time: new Date().toISOString(), status: "completed" },
+]
+
+interface FacilityManagementAdminProps {
+  isPreviewMode?: boolean
+}
+
+export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManagementAdminProps) {
+  const { facilities: realFacilities, bookings: realBookings, loading, imageFiles, handleImageFileChange, handleSave, handleDelete, addNewFacility } =
     useFacilitiesAdmin()
+
+  // 預覽模式使用模擬資料
+  const facilities = isPreviewMode ? PREVIEW_FACILITIES : realFacilities
+  const bookings = isPreviewMode ? PREVIEW_BOOKINGS : realBookings
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
@@ -195,6 +215,8 @@ export function FacilityManagementAdmin() {
     max_concurrent_bookings: 2,
   })
   const [currentImageFile, setCurrentImageFile] = useState<File | null>(null)
+  const [searchTermFacility, setSearchTermFacility] = useState("")
+  const [searchTermBooking, setSearchTermBooking] = useState("")
 
   const handleAdd = () => {
     setFormData({
@@ -266,7 +288,6 @@ export function FacilityManagementAdmin() {
     }
   }
 
-  // 獲取狀態顯示
   const getStatusDisplay = (status: string) => {
     const statusMap: Record<string, { color: string; text: string }> = {
       confirmed: { color: "bg-green-500/20 text-green-500", text: "已確認" },
@@ -278,6 +299,28 @@ export function FacilityManagementAdmin() {
     }
     return statusMap[status] || { color: "bg-gray-500/20 text-gray-500", text: status }
   }
+
+  const filteredFacilities = facilities.filter((facility) => {
+    if (!searchTermFacility) return true
+    const term = searchTermFacility.toLowerCase()
+    return (
+      facility.name?.toLowerCase().includes(term) || false || facility.location?.toLowerCase().includes(term) || false
+    )
+  })
+
+  const filteredBookings = bookings.filter((booking) => {
+    if (!searchTermBooking) return true
+    const term = searchTermBooking.toLowerCase()
+    return (
+      booking.facilities?.name?.toLowerCase().includes(term) ||
+      false ||
+      booking.user_name?.toLowerCase().includes(term) ||
+      false ||
+      booking.user_room?.toLowerCase().includes(term) ||
+      false ||
+      booking.status.toLowerCase().includes(term)
+    )
+  })
 
   if (loading) {
     return (
@@ -304,6 +347,16 @@ export function FacilityManagementAdmin() {
           </button>
         </div>
 
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="搜尋設施名稱或位置..."
+            value={searchTermFacility}
+            onChange={(e) => setSearchTermFacility(e.target.value)}
+            className="w-full p-3 rounded-xl theme-input outline-none"
+          />
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
@@ -322,8 +375,8 @@ export function FacilityManagementAdmin() {
               </tr>
             </thead>
             <tbody>
-              {facilities.length > 0 ? (
-                facilities.map((facility, index) => (
+              {filteredFacilities.length > 0 ? (
+                filteredFacilities.map((facility, index) => (
                   <tr key={facility.id || index} className="hover:bg-[var(--theme-accent-light)] transition-colors">
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       {facility.name || "-"}
@@ -376,7 +429,7 @@ export function FacilityManagementAdmin() {
               ) : (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                    目前沒有設施資料
+                    {searchTermFacility ? "沒有符合條件的設施資料" : "目前沒有設施資料"}
                   </td>
                 </tr>
               )}
@@ -392,6 +445,16 @@ export function FacilityManagementAdmin() {
             <span className="material-icons">event</span>
             預約紀錄
           </h2>
+        </div>
+
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="搜尋設施、預約人、房號或狀態..."
+            value={searchTermBooking}
+            onChange={(e) => setSearchTermBooking(e.target.value)}
+            className="w-full p-3 rounded-xl theme-input outline-none"
+          />
         </div>
 
         <div className="overflow-x-auto">
@@ -410,8 +473,8 @@ export function FacilityManagementAdmin() {
               </tr>
             </thead>
             <tbody>
-              {bookings.length > 0 ? (
-                bookings.map((booking) => {
+              {filteredBookings.length > 0 ? (
+                filteredBookings.map((booking) => {
                   const statusDisplay = getStatusDisplay(booking.status)
                   return (
                     <tr key={booking.id} className="hover:bg-[var(--theme-accent-light)] transition-colors">
@@ -449,7 +512,7 @@ export function FacilityManagementAdmin() {
               ) : (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                    目前沒有預約紀錄
+                    {searchTermBooking ? "沒有符合條件的預約紀錄" : "目前沒有預約紀錄"}
                   </td>
                 </tr>
               )}

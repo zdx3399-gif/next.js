@@ -9,6 +9,7 @@ export interface Emergency {
   created_by?: string
   reported_by_name?: string
   created_at?: string
+  by?: string
 }
 
 export async function fetchEmergencies(): Promise<Emergency[]> {
@@ -33,6 +34,7 @@ export async function fetchEmergencies(): Promise<Emergency[]> {
   return (data || []).map((item: any) => ({
     ...item,
     reported_by_name: item.reporter?.name || "未知",
+    by: item.reporter?.name || "未知", // Added 'by' property
   }))
 }
 

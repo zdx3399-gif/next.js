@@ -13,7 +13,13 @@ import { FacilityManagementAdmin } from "@/features/facilities/ui/FacilityManage
 import { ResidentManagementAdmin } from "@/features/residents/ui/ResidentManagementAdmin"
 import { AnnouncementDetailsAdmin } from "@/features/announcements/ui/AnnouncementDetailsAdmin"
 import { AnnouncementManagementAdmin } from "@/features/announcements/ui/AnnouncementManagementAdmin"
-import { canAccessSection, getRoleLabel, shouldUseBackend, type UserRole } from "@/lib/permissions"
+import { CommunityBoardAdmin } from "@/features/community/ui/CommunityBoardAdmin"
+import { KnowledgeBaseAdmin } from "@/features/kms/ui/KnowledgeBaseAdmin"
+import { AuditLogViewer } from "@/features/audit/ui/AuditLogViewer"
+import { DecryptionReviewPanel } from "@/features/decryption/ui/DecryptionReviewPanel"
+import { DecryptionRequestList } from "@/features/decryption/ui/DecryptionRequestList"
+import { canAccessSection, getRoleLabel, shouldUseBackend, isAdminPreviewMode, type UserRole } from "@/lib/permissions"
+import { AdminPreviewBanner } from "@/components/AdminPreviewBanner"
 import { ProfileDropdown } from "@/features/profile/ui/ProfileDropdown"
 import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
 import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCarousel"
@@ -24,7 +30,7 @@ import type { User } from "@/features/profile/api/profile"
 type Section =
   | "dashboard"
   | "announcements"
-  | "announcement-details" // 新增 announcement-details 到 Section 類型
+  | "announcement-details"
   | "residents"
   | "packages"
   | "votes"
@@ -34,6 +40,10 @@ type Section =
   | "meetings"
   | "emergencies"
   | "facilities"
+  | "community"
+  | "knowledge-base"
+  | "audit-logs"
+  | "decryption"
 
 export default function AdminPage() {
   const router = useRouter()
@@ -61,6 +71,12 @@ export default function AdminPage() {
         }
 
         const supabase = getSupabaseClient()
+        if (!supabase) {
+          console.error("[v0] Supabase client not available")
+          setCurrentUser(user)
+          return
+        }
+
         const { data: userDataArray, error } = await supabase
           .from("profiles")
           .select(`
@@ -136,9 +152,13 @@ export default function AdminPage() {
     { id: "residents", icon: "people", label: "住戶/人員" },
     { id: "packages", icon: "inventory_2", label: "包裹管理" },
     { id: "visitors", icon: "how_to_reg", label: "訪客管理" },
-    { id: "meetings", icon: "event", label: "會議/活動管理" },
+    { id: "meetings", icon: "event", label: "會議記錄" },
     { id: "emergencies", icon: "emergency", label: "緊急事件管理" },
     { id: "facilities", icon: "meeting_room", label: "設施管理" },
+    { id: "community", icon: "forum", label: "社區討論管理" },
+    { id: "knowledge-base", icon: "school", label: "知識庫管理" },
+    { id: "decryption", icon: "lock_open", label: "解密申請" },
+    { id: "audit-logs", icon: "history", label: "稽核紀錄" },
   ]
 
   const navItems = currentUser
@@ -146,6 +166,7 @@ export default function AdminPage() {
     : allNavItems
 
   const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection, false) : false
+  const isPreviewMode = currentUser ? isAdminPreviewMode(currentUser.role as UserRole, currentSection as any) : false
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[var(--theme-gradient-from)] to-[var(--theme-gradient-to)]">
@@ -270,27 +291,129 @@ export default function AdminPage() {
               </div>
             </div>
           ) : currentSection === "visitors" ? (
-            <VisitorManagementAdmin currentUser={currentUser} />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <VisitorManagementAdmin currentUser={currentUser} isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "packages" ? (
-            <PackageManagementAdmin />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <PackageManagementAdmin isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "finance" ? (
-            <FinanceManagementAdmin />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <FinanceManagementAdmin isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "maintenance" ? (
-            <MaintenanceManagementAdmin />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <MaintenanceManagementAdmin isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "votes" ? (
-            <VoteManagementAdmin />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <VoteManagementAdmin isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "announcement-details" ? (
             <AnnouncementDetailsAdmin onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
           ) : currentSection === "meetings" ? (
-            <MeetingManagementAdmin />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <MeetingManagementAdmin isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "emergencies" ? (
-            <EmergencyManagementAdmin currentUserName={currentUser?.name} />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <EmergencyManagementAdmin currentUserName={currentUser?.name} isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "facilities" ? (
-            <FacilityManagementAdmin />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <FacilityManagementAdmin isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "residents" ? (
-            <ResidentManagementAdmin />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <ResidentManagementAdmin isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "announcements" ? (
             <AnnouncementManagementAdmin />
+          ) : currentSection === "community" ? (
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <AdminPreviewBanner show={isPreviewMode} />
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
+                <span className="material-icons">forum</span>
+                社區討論管理
+              </h2>
+              <CommunityBoardAdmin currentUser={currentUser} isPreviewMode={isPreviewMode} />
+            </div>
+          ) : currentSection === "knowledge-base" ? (
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <AdminPreviewBanner show={isPreviewMode} />
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
+                <span className="material-icons">school</span>
+                知識庫管理
+              </h2>
+              <KnowledgeBaseAdmin currentUser={currentUser} isPreviewMode={isPreviewMode} />
+            </div>
+          ) : currentSection === "audit-logs" ? (
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
+                <span className="material-icons">history</span>
+                稽核紀錄
+              </h2>
+              <AuditLogViewer />
+            </div>
+          ) : currentSection === "decryption" ? (
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
+                <span className="material-icons">lock_open</span>
+                解密申請管理
+              </h2>
+              <div className="space-y-6">
+                {/* 管委會初審區（第一層）- 只有管委會可以操作 */}
+                {currentUser?.role === "committee" && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 text-[var(--theme-text-primary)]">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="bg-blue-500 text-white text-xs px-2 py-0.5 rounded">第一層</span>
+                        管委會初審
+                      </span>
+                    </h3>
+                    <p className="text-sm text-[var(--theme-text-secondary)] mb-3">
+                      審核新進的解密申請，通過後將送交系統管理員覆核
+                    </p>
+                    <DecryptionReviewPanel 
+                      reviewerId={currentUser?.id || ""} 
+                      reviewerRole="committee"
+                    />
+                  </div>
+                )}
+                {/* 系統管理員覆核區（第二層）- 只有 admin 可以操作 */}
+                {currentUser?.role === "admin" && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 text-[var(--theme-text-primary)]">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded">第二層</span>
+                        系統管理員覆核
+                      </span>
+                    </h3>
+                    <p className="text-sm text-[var(--theme-text-secondary)] mb-3">
+                      覆核管委會已通過的解密申請，確認後將解密作者身份
+                    </p>
+                    <DecryptionReviewPanel 
+                      reviewerId={currentUser?.id || ""} 
+                      reviewerRole="admin"
+                    />
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 text-[var(--theme-text-primary)]">所有申請記錄</h3>
+                  <DecryptionRequestList />
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       </main>

@@ -85,6 +85,10 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
       setLoading(true)
       setError(null)
       const supabase = getSupabaseClient()
+      if (!supabase) {
+        setAnnouncements([])
+        return
+      }
       const { data, error } = await supabase
         .from("announcements")
         .select("*")

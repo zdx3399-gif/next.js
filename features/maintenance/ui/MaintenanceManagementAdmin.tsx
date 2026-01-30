@@ -148,7 +148,18 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
   )
 }
 
-export function MaintenanceManagementAdmin() {
+// 預覽模式的模擬資料
+const PREVIEW_MAINTENANCE = [
+  { id: "preview-1", equipment: "電梯", item: "馬達", description: "電梯運轉有異音", reported_by_name: "王**", reported_by_id: null, photo_url: null, status: "open", handler: "", cost: 0, note: "" },
+  { id: "preview-2", equipment: "空調", item: "冷氣主機", description: "冷氣不冷", reported_by_name: "李**", reported_by_id: null, photo_url: null, status: "progress", handler: "張師傅", cost: 2500, note: "已派人處理中" },
+  { id: "preview-3", equipment: "照明", item: "大廳燈泡", description: "大廳燈泡損壞", reported_by_name: "管理員", reported_by_id: null, photo_url: null, status: "done", handler: "電器行", cost: 800, note: "已更換完成" },
+]
+
+interface MaintenanceManagementAdminProps {
+  isPreviewMode?: boolean
+}
+
+export function MaintenanceManagementAdmin({ isPreviewMode = false }: MaintenanceManagementAdminProps) {
   const [data, setData] = useState<MaintenanceRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -168,9 +179,33 @@ export function MaintenanceManagementAdmin() {
     note: "",
   })
 
+  const [searchTerm, setSearchTerm] = useState("")
+
+  const filteredData = data.filter((row) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      row.equipment?.toLowerCase().includes(term) ||
+      false ||
+      row.item?.toLowerCase().includes(term) ||
+      false ||
+      row.description?.toLowerCase().includes(term) ||
+      false ||
+      row.reported_by_name?.toLowerCase().includes(term) ||
+      false ||
+      row.handler?.toLowerCase().includes(term) ||
+      false
+    )
+  })
+
   const loadData = async () => {
     setLoading(true)
     const supabase = getSupabaseClient()
+    if (!supabase) {
+      setData([])
+      setLoading(false)
+      return
+    }
 
     const { data: maintenanceData, error } = await supabase
       .from("maintenance")
@@ -222,8 +257,13 @@ export function MaintenanceManagementAdmin() {
   }
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (isPreviewMode) {
+      setData(PREVIEW_MAINTENANCE)
+      setLoading(false)
+    } else {
+      loadData()
+    }
+  }, [isPreviewMode])
 
   const handleAdd = () => {
     setFormData({
@@ -256,6 +296,10 @@ export function MaintenanceManagementAdmin() {
   const handleSave = async () => {
     try {
       const supabase = getSupabaseClient()
+      if (!supabase) {
+        alert("資料庫連線失敗")
+        return
+      }
       const saveData = {
         equipment: formData.equipment,
         item: formData.item,
@@ -290,6 +334,10 @@ export function MaintenanceManagementAdmin() {
 
     try {
       const supabase = getSupabaseClient()
+      if (!supabase) {
+        alert("資料庫連線失敗")
+        return
+      }
       const { error } = await supabase.from("maintenance").delete().eq("id", id)
       if (error) throw error
 
@@ -334,6 +382,16 @@ export function MaintenanceManagementAdmin() {
         </button>
       </div>
 
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="搜尋設備、項目、描述、報修人或處理人..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-3 rounded-xl theme-input outline-none"
+        />
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
@@ -350,8 +408,8 @@ export function MaintenanceManagementAdmin() {
             </tr>
           </thead>
           <tbody>
-            {data.length > 0 ? (
-              data.map((row, index) => {
+            {filteredData.length > 0 ? (
+              filteredData.map((row, index) => {
                 const statusInfo = getStatusLabel(row.status)
                 return (
                   <tr key={row.id || `new-${index}`} className="hover:bg-[var(--theme-accent-light)] transition-colors">
@@ -405,7 +463,7 @@ export function MaintenanceManagementAdmin() {
             ) : (
               <tr>
                 <td colSpan={9} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                  目前沒有維修紀錄
+                  {searchTerm ? "沒有符合條件的維修紀錄" : "目前沒有維修紀錄"}
                 </td>
               </tr>
             )}

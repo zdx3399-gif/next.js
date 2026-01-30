@@ -208,7 +208,7 @@ export function AiChatWindow({
           >
             住戶資訊
           </button>
-          <button
+{/*           <button
             onClick={() => setActiveTab("emergency")}
             className={`text-sm font-medium transition-colors ${
               activeTab === "emergency"
@@ -217,7 +217,7 @@ export function AiChatWindow({
             }`}
           >
             緊急協助
-          </button>
+          </button> */}
         </div>
         {activeTab === "functions" && (
           <div className="grid grid-cols-2 gap-2 mt-3 text-xs">

@@ -121,13 +121,25 @@ function AnnouncementFormModal({
   )
 }
 
-export function AnnouncementManagementAdmin() {
+// 預覽模式的模擬資料
+const PREVIEW_ANNOUNCEMENTS = [
+  { id: "preview-1", title: "社區年度大會通知", content: "本年度區分所有權人會議將於...", author_name: "管委會", status: "published", created_at: new Date().toISOString(), image_url: "" },
+  { id: "preview-2", title: "電梯保養通知", content: "電梯將於下週進行例行保養...", author_name: "管理員", status: "published", created_at: new Date(Date.now() - 86400000).toISOString(), image_url: "" },
+  { id: "preview-3", title: "停車場施工公告", content: "停車場將進行地坪修復工程...", author_name: "管委會", status: "draft", created_at: new Date(Date.now() - 2 * 86400000).toISOString(), image_url: "" },
+]
+
+interface AnnouncementManagementAdminProps {
+  isPreviewMode?: boolean
+}
+
+export function AnnouncementManagementAdmin({ isPreviewMode = false }: AnnouncementManagementAdminProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
   const [formData, setFormData] = useState<Partial<Announcement>>({})
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
 
   const loadAnnouncements = async () => {
     setLoading(true)
@@ -139,8 +151,13 @@ export function AnnouncementManagementAdmin() {
   }
 
   useEffect(() => {
-    loadAnnouncements()
-  }, [])
+    if (isPreviewMode) {
+      setAnnouncements(PREVIEW_ANNOUNCEMENTS as Announcement[])
+      setLoading(false)
+    } else {
+      loadAnnouncements()
+    }
+  }, [isPreviewMode])
 
   const handleAdd = () => {
     setEditingAnnouncement(null)
@@ -176,14 +193,27 @@ export function AnnouncementManagementAdmin() {
       }
 
       if (editingAnnouncement) {
-        await updateAnnouncement(editingAnnouncement.id, finalData)
+        const { error } = await updateAnnouncement(editingAnnouncement.id, finalData)
+        if (error) {
+          console.error("[v0] Failed to update announcement:", error)
+          alert(`更新失敗: ${error.message || "未知錯誤"}`)
+          return
+        }
+        alert("公告已更新")
       } else {
-        await createAnnouncement(finalData)
+        const { error } = await createAnnouncement(finalData)
+        if (error) {
+          console.error("[v0] Failed to create announcement:", error)
+          alert(`新增失敗: ${error.message || "未知錯誤"}`)
+          return
+        }
+        alert("公告已新增")
       }
       setIsModalOpen(false)
       loadAnnouncements()
     } catch (error) {
       console.error("Error saving announcement:", error)
+      alert("儲存失敗，請稍後再試")
     }
   }
 
@@ -193,6 +223,16 @@ export function AnnouncementManagementAdmin() {
       loadAnnouncements()
     }
   }
+
+  const filteredAnnouncements = announcements.filter((announcement) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      announcement.title?.toLowerCase().includes(term) ||
+      announcement.content?.toLowerCase().includes(term) ||
+      announcement.author_name?.toLowerCase().includes(term)
+    )
+  })
 
   return (
     <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
@@ -208,6 +248,16 @@ export function AnnouncementManagementAdmin() {
           <span className="material-icons text-xl">add</span>
           新增一筆
         </button>
+      </div>
+
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="搜尋標題、內容或作者..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-3 rounded-xl theme-input outline-none"
+        />
       </div>
 
       {loading ? (
@@ -228,8 +278,8 @@ export function AnnouncementManagementAdmin() {
               </tr>
             </thead>
             <tbody>
-              {announcements.length > 0 ? (
-                announcements.map((announcement) => (
+              {filteredAnnouncements.length > 0 ? (
+                filteredAnnouncements.map((announcement) => (
                   <tr key={announcement.id} className="hover:bg-[var(--theme-accent-light)] transition-colors">
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       {announcement.title}
@@ -277,7 +327,7 @@ export function AnnouncementManagementAdmin() {
               ) : (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                    目前沒有公告資料
+                    {searchTerm ? "沒有符合條件的公告資料" : "目前沒有公告資料"}
                   </td>
                 </tr>
               )}

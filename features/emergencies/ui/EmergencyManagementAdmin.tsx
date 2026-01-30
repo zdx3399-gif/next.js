@@ -1,20 +1,33 @@
 "use client"
 
 import { useEmergencies } from "../hooks/useEmergencies"
+import { useState } from "react"
 
 interface EmergencyManagementAdminProps {
   currentUserName?: string
+  isPreviewMode?: boolean
 }
 
 const emergencyTypes = [
   { icon: "local_hospital", title: "救護車 119", type: "救護車119", note: "醫療緊急狀況" },
   { icon: "report_problem", title: "報警 110", type: "報警110", note: "治安緊急狀況" },
   { icon: "favorite", title: "AED", type: "AED", note: "需要AED急救設備" },
-  { icon: "warning", title: "可疑人員", type: "可疑人員", note: "陌生人員闘入警告" },
+  { icon: "warning", title: "可疑人員", type: "可疑人員", note: "陌生人員闖入警告" },
 ]
 
-export function EmergencyManagementAdmin({ currentUserName }: EmergencyManagementAdminProps) {
-  const { emergencies, loading, confirmAndTrigger, deleteEmergency } = useEmergencies(true)
+// 預覽模式的模擬資料
+const PREVIEW_EMERGENCIES = [
+  { id: "preview-1", type: "救護車119", time: new Date().toISOString(), by: "王**", reported_by_name: "王**", note: "醫療緊急狀況" },
+  { id: "preview-2", type: "可疑人員", time: new Date(Date.now() - 3600000).toISOString(), by: "管理員", reported_by_name: "管理員", note: "陌生人員闖入警告" },
+]
+
+export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = false }: EmergencyManagementAdminProps) {
+  const { emergencies: realEmergencies, loading, confirmAndTrigger, deleteEmergency } = useEmergencies(true)
+
+  // 預覽模式使用模擬資料
+  const emergencies = isPreviewMode ? PREVIEW_EMERGENCIES : realEmergencies
+
+  const [searchTerm, setSearchTerm] = useState("")
 
   if (loading) {
     return (
@@ -23,6 +36,17 @@ export function EmergencyManagementAdmin({ currentUserName }: EmergencyManagemen
       </div>
     )
   }
+
+  const filteredEmergencies = emergencies.filter((emergency) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    const reportedBy = emergency.by || emergency.reported_by_name || ""
+    return (
+      emergency.type?.toLowerCase().includes(term) ||
+      reportedBy.toLowerCase().includes(term) ||
+      emergency.note?.toLowerCase().includes(term)
+    )
+  })
 
   return (
     <div className="space-y-6">
@@ -57,6 +81,16 @@ export function EmergencyManagementAdmin({ currentUserName }: EmergencyManagemen
           </h2>
         </div>
 
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="搜尋類別、發起人或備註..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full p-3 rounded-xl theme-input outline-none"
+          />
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
@@ -71,8 +105,8 @@ export function EmergencyManagementAdmin({ currentUserName }: EmergencyManagemen
               </tr>
             </thead>
             <tbody>
-              {emergencies.length > 0 ? (
-                emergencies.map((row) => (
+              {filteredEmergencies.length > 0 ? (
+                filteredEmergencies.map((row) => (
                   <tr key={row.id} className="hover:bg-[var(--theme-accent-light)] transition-colors">
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       {row.type}
@@ -81,7 +115,7 @@ export function EmergencyManagementAdmin({ currentUserName }: EmergencyManagemen
                       {row.time ? new Date(row.time).toLocaleString("zh-TW") : ""}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {row.by}
+                      {row.by || row.reported_by_name || "未知"}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       {row.note}
@@ -100,7 +134,7 @@ export function EmergencyManagementAdmin({ currentUserName }: EmergencyManagemen
               ) : (
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-[var(--theme-text-secondary)]">
-                    目前沒有緊急事件紀錄
+                    {searchTerm ? "沒有符合條件的緊急事件紀錄" : "目前沒有緊急事件紀錄"}
                   </td>
                 </tr>
               )}

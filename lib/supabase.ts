@@ -39,22 +39,17 @@ export function createTenantClient() {
   return createBrowserClient(config.url, config.anonKey)
 }
 
-// Get current Supabase client
 export function getSupabaseClient() {
   try {
-    return createTenantClient()
-  } catch (error) {
-    console.error("[v0] Supabase client error:", error)
-    // If tenant config is missing, redirect to auth page
-    if (
-      typeof window !== "undefined" &&
-      error instanceof Error &&
-      error.message.includes("Tenant configuration not found")
-    ) {
-      window.location.href = "/auth"
+    const config = getTenantConfigFromStorage()
+    if (!config) {
+      return null
     }
-    throw error
+    return createBrowserClient(config.url, config.anonKey)
+  } catch (error) {
+    console.error("Failed to create Supabase client:", error)
+    return null
   }
 }
 
-// Now all imports must use getSupabaseClient() function
+export const supabase = typeof window !== "undefined" ? getSupabaseClient() : null

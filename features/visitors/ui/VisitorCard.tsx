@@ -10,7 +10,7 @@ interface VisitorCardProps {
 }
 
 export function VisitorCard({ visitor, isAdmin, onCheckIn, onCheckOut }: VisitorCardProps) {
-  const statusConfig = {
+  const statusConfig: Record<string, { label: string; bgColor: string; textColor: string; borderColor: string }> = {
     reserved: {
       label: "已預約",
       bgColor: "bg-blue-500/20",
@@ -31,7 +31,7 @@ export function VisitorCard({ visitor, isAdmin, onCheckIn, onCheckOut }: Visitor
     },
   }
 
-  const config = statusConfig[visitor.status]
+  const config = statusConfig[visitor.status] || statusConfig.checked_out
 
   return (
     <div

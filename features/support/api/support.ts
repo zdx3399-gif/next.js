@@ -18,6 +18,10 @@ export interface ChatMessage {
 // 儲存對話紀錄（可選功能）
 export async function saveChatHistory(chat: Omit<ChatMessage, "id" | "created_at">): Promise<boolean> {
   const supabase = getSupabaseClient()
+  if (!supabase) {
+    console.error("Supabase client not available")
+    return false
+  }
   const { error } = await supabase.from("chat_history").insert([chat])
 
   if (error) {
@@ -31,6 +35,10 @@ export async function saveChatHistory(chat: Omit<ChatMessage, "id" | "created_at
 // 獲取使用者對話紀錄
 export async function fetchUserChatHistory(userId: string): Promise<ChatMessage[]> {
   const supabase = getSupabaseClient()
+  if (!supabase) {
+    console.error("Supabase client not available")
+    return []
+  }
   const { data, error } = await supabase
     .from("chat_history")
     .select("*")
@@ -75,7 +83,7 @@ export function getAIResponse(message: string): string {
     return "您可以在「訪客」頁面預約訪客來訪，並查看訪客紀錄。"
   }
   if (msg.includes("會議") || msg.includes("活動")) {
-    return "您可以在「會議/活動」頁面查看即將舉行的社區會議和活動。"
+    return "您可以在「會議記錄」頁面查看社區會議紀錄。"
   }
   if (msg.includes("緊急") || msg.includes("報警") || msg.includes("救護")) {
     return "緊急事件請使用首頁或「緊急事件」頁面的緊急按鈕。包括：救護車119、報警110、AED、可疑人員通報。"

@@ -71,7 +71,6 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
     if (selectedId && announcements.length > 0) {
       const announcement = announcements.find((a) => a.id === selectedId)
       if (announcement) {
-        console.log("[v0] Setting selected announcement:", announcement.title)
         setSelectedAnnouncement(announcement)
         sessionStorage.removeItem("selectedAnnouncementId")
       }
@@ -81,30 +80,42 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
   }, [announcements])
 
   const loadAnnouncements = async () => {
+    setLoading(true)
+    setError(null)
+
     try {
-      setLoading(true)
-      setError(null)
-      console.log("[v0] Loading announcements...")
       const supabase = getSupabaseClient()
-      const { data, error } = await supabase
+
+      if (!supabase) {
+        // No supabase client - just show empty state, don't treat as error
+        setAnnouncements([])
+        setLoading(false)
+        return
+      }
+
+      const { data, error: queryError } = await supabase
         .from("announcements")
         .select("*")
         .eq("status", "published")
         .order("created_at", { ascending: false })
 
-      if (error) {
-        console.error("[v0] Error loading announcements:", error)
-        throw error
-      }
-      console.log("[v0] Loaded announcements:", data?.length || 0)
-      setAnnouncements(data || [])
-      if (data && data.length > 0 && !selectedAnnouncement) {
-        setSelectedAnnouncement(data[0])
+      if (queryError) {
+        // Real database error
+        console.error("[v0] Database error loading announcements:", queryError.message)
+        setError(queryError.message)
+        setAnnouncements([])
+      } else {
+        setAnnouncements(data || [])
+        if (data && data.length > 0 && !selectedAnnouncement) {
+          setSelectedAnnouncement(data[0])
+        }
       }
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : "Failed to load announcements"
-      console.error("[v0] Failed to load announcements:", errorMsg)
+      // Unexpected error
+      const errorMsg = e instanceof Error ? e.message : "載入失敗"
+      console.error("[v0] Unexpected error loading announcements:", errorMsg)
       setError(errorMsg)
+      setAnnouncements([])
     } finally {
       setLoading(false)
     }
@@ -124,7 +135,6 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
       return
     }
 
-    console.log("[v0] Adding comment to announcement:", selectedAnnouncement.id)
     const comment: Comment = {
       id: `${Date.now()}-${Math.random()}`,
       announcement_id: selectedAnnouncement.id,
@@ -146,7 +156,6 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
   const handleToggleLike = () => {
     if (!selectedAnnouncement || !currentUser) return
 
-    console.log("[v0] Toggling like for announcement:", selectedAnnouncement.id)
     const updatedLikes = new Map(likes)
     const announcementLikes = updatedLikes.get(selectedAnnouncement.id) || new Set()
 
@@ -199,10 +208,7 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
             filteredAnnouncements.map((announcement) => (
               <button
                 key={announcement.id}
-                onClick={() => {
-                  console.log("[v0] Selected announcement:", announcement.id)
-                  setSelectedAnnouncement(announcement)
-                }}
+                onClick={() => setSelectedAnnouncement(announcement)}
                 className={`w-full text-left p-3 rounded-lg transition-all ${
                   selectedAnnouncement?.id === announcement.id
                     ? "bg-[var(--theme-accent-light)] border border-[var(--theme-accent)]"

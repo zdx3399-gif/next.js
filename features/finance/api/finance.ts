@@ -112,14 +112,30 @@ export async function updateFinanceRecord(
   const supabase = getSupabaseClient()
   if (!supabase) return { success: false, error: "Supabase not configured" }
 
-  const { room, ping_size, car_spots, moto_spots, monthly_fee, ...safeUpdates } = updates
+  console.log("[v0] updateFinanceRecord called with:", { id, updates })
 
+  const { room, ping_size, car_spots, moto_spots, monthly_fee, unit_id, ...safeUpdates } = updates
+
+  if (monthly_fee !== undefined && unit_id) {
+    console.log("[v0] Updating unit monthly_fee:", { unit_id, monthly_fee })
+    const { error: unitError } = await supabase.from("units").update({ monthly_fee }).eq("id", unit_id)
+
+    if (unitError) {
+      console.error("[v0] Error updating unit monthly_fee:", unitError)
+      return { success: false, error: unitError.message }
+    }
+    console.log("[v0] Unit monthly_fee updated successfully")
+  }
+
+  console.log("[v0] Updating fees table with:", safeUpdates)
   const { error } = await supabase.from("fees").update(safeUpdates).eq("id", id)
 
   if (error) {
+    console.error("[v0] Error updating fees:", error)
     return { success: false, error: error.message }
   }
 
+  console.log("[v0] Fees updated successfully")
   return { success: true }
 }
 

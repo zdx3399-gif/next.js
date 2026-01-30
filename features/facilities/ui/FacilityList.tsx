@@ -34,15 +34,37 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
   const [pointsHistory, setPointsHistory] = useState<PointsTransaction[]>([])
   const [lotteryBid, setLotteryBid] = useState<number>(0)
   const [activeTab, setActiveTab] = useState<"booking" | "my-bookings" | "facilities">("booking")
+  const [searchTerm, setSearchTerm] = useState("")
 
-  // 載入用戶點數資訊
+  const filteredFacilities = facilities.filter((facility) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      facility.name.toLowerCase().includes(term) ||
+      facility.description?.toLowerCase().includes(term) ||
+      false ||
+      facility.location?.toLowerCase().includes(term) ||
+      false
+    )
+  })
+
+  const filteredBookings = myBookings.filter((booking) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      booking.facilities?.name?.toLowerCase().includes(term) ||
+      false ||
+      booking.booking_date.includes(term) ||
+      booking.status.toLowerCase().includes(term)
+    )
+  })
+
   useEffect(() => {
     if (userId) {
       getUserPointsInfo(userId).then(setUserPoints)
     }
   }, [userId])
 
-  // 載入時段
   useEffect(() => {
     if (selectedFacility && selectedDate) {
       setLoadingSlots(true)
@@ -52,7 +74,6 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
     }
   }, [selectedFacility, selectedDate])
 
-  // 載入點數歷史
   const loadPointsHistory = async () => {
     if (userId) {
       const history = await getUserPointsHistory(userId)
@@ -61,7 +82,6 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
     }
   }
 
-  // 直接預約
   const handleDirectBooking = async () => {
     if (!userId || !selectedSlot) return
 
@@ -77,7 +97,6 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
     }
   }
 
-  // 抽籤登記
   const handleJoinLottery = async () => {
     if (!userId || !selectedSlot) return
 
@@ -89,7 +108,6 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
     }
   }
 
-  // 取消預約
   const handleCancel = async (bookingId: string) => {
     if (!userId) return
     if (!confirm("確定要取消此預約？")) return
@@ -102,7 +120,6 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
     }
   }
 
-  // 簽到
   const handleCheckIn = async (bookingId: string) => {
     if (!userId) return
 
@@ -113,7 +130,6 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
     }
   }
 
-  // 獲取狀態顏色和文字
   const getStatusDisplay = (status: string) => {
     const statusMap: Record<string, { color: string; text: string }> = {
       confirmed: { color: "bg-green-500/20 text-green-500", text: "已確認" },
@@ -135,7 +151,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {userPoints && (
         <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -221,7 +237,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
                 className="theme-select w-full p-3 rounded-lg"
               >
                 <option value="">請選擇設施</option>
-                {facilities.map((facility) => (
+                {filteredFacilities.map((facility) => (
                   <option key={facility.id} value={facility.id}>
                     {facility.name} - {facility.location || "無位置資訊"}
                     {facility.base_price ? ` (基礎 ${facility.base_price} 點)` : ""}
@@ -391,9 +407,20 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
             <span className="material-icons">list</span>
             我的預約記錄
           </h2>
+
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="搜尋設施名稱、日期或狀態..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+
           <div className="space-y-3">
-            {myBookings.length > 0 ? (
-              myBookings.map((booking) => {
+            {filteredBookings.length > 0 ? (
+              filteredBookings.map((booking) => {
                 const statusDisplay = getStatusDisplay(booking.status)
                 const bookingDateTime = new Date(`${booking.booking_date}T${booking.start_time}`)
                 const now = new Date()
@@ -462,7 +489,9 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
                 )
               })
             ) : (
-              <div className="text-center text-[var(--theme-text-muted)] py-8">目前沒有預約記錄</div>
+              <div className="text-center text-[var(--theme-text-muted)] py-8">
+                {searchTerm ? "沒有符合條件的預約記錄" : "目前沒有預約記錄"}
+              </div>
             )}
           </div>
         </div>
@@ -474,8 +503,19 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
             <span className="material-icons">meeting_room</span>
             可用設施
           </h2>
+
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="搜尋設施名稱、說明或位置..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {facilities.map((facility) => (
+            {filteredFacilities.map((facility) => (
               <div
                 key={facility.id}
                 className="bg-[var(--theme-bg-secondary)] border border-[var(--theme-border)] rounded-lg overflow-hidden hover:bg-[var(--theme-accent-light)] transition-all"
@@ -496,7 +536,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
                 <div className="p-4">
                   <div className="flex justify-between items-start">
                     <div className="text-[var(--theme-text-primary)] font-bold text-lg mb-2">{facility.name}</div>
-                    <div className="text-[var(--theme-accent)] font-bold">{facility.base_price || 10} 點</div>
+                    <div className="text-[var(--theme-accent)] font-bold">{facility.base_price || 10} 點起</div>
                   </div>
                   {facility.description && (
                     <div className="text-[var(--theme-text-muted)] text-sm mb-2">{facility.description}</div>
@@ -527,8 +567,10 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
                 </div>
               </div>
             ))}
-            {facilities.length === 0 && (
-              <div className="col-span-2 text-center text-[var(--theme-text-muted)] py-8">目前沒有可用設施</div>
+            {filteredFacilities.length === 0 && (
+              <div className="col-span-2 text-center text-[var(--theme-text-muted)] py-8">
+                {searchTerm ? "沒有符合條件的設施" : "目前沒有可用設施"}
+              </div>
             )}
           </div>
         </div>

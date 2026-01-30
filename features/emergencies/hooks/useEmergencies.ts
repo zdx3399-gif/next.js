@@ -50,7 +50,7 @@ export function useEmergencies(isAdmin = false) {
     }
   }
 
-  const deleteEmergency = async (id: number) => {
+  const deleteEmergency = async (id: string) => {
     if (!confirm("確定要刪除此緊急事件紀錄嗎？")) return
     try {
       await apiDeleteEmergency(id)

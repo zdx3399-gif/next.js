@@ -59,35 +59,46 @@ export function useFinanceAdmin() {
       due: "",
       invoice: "",
       paid: false,
+      monthly_fee: 0, // Added monthly_fee
     }
     setRecords((prev) => [...prev, newRow])
   }
 
-  const saveRecord = async (record: FinanceRecord, index: number) => {
+  const saveRecord = async (record: Omit<FinanceRecord, 'id'> & { id?: string }, index: number) => {
+    console.log("[v0] saveRecord called with:", { record, index })
+
     if (record.id) {
+      console.log("[v0] Updating existing record")
       const result = await updateFinanceRecord(record.id, {
         amount: record.amount,
         due: record.due,
         invoice: record.invoice,
         paid: record.paid,
         unit_id: record.unit_id,
+        monthly_fee: record.monthly_fee,
       })
       if (!result.success) {
+        console.error("[v0] Update failed:", result.error)
         alert("儲存失敗: " + result.error)
         return false
       }
+      console.log("[v0] Update successful")
     } else {
+      console.log("[v0] Creating new record")
       const result = await createFinanceRecord({
         amount: record.amount,
         due: record.due,
         invoice: record.invoice,
         paid: record.paid,
         unit_id: record.unit_id,
+        monthly_fee: record.monthly_fee,
       })
       if (!result.success) {
+        console.error("[v0] Create failed:", result.error)
         alert("新增失敗: " + result.error)
         return false
       }
+      console.log("[v0] Create successful, data:", result.data)
       if (result.data) {
         setRecords((prev) => {
           const updated = [...prev]
@@ -116,6 +127,7 @@ export function useFinanceAdmin() {
     updateRow,
     addRow,
     saveRecord,
-    removeRecord,
+    deleteRecord: removeRecord,
+    updateRecord: saveRecord,
   }
 }

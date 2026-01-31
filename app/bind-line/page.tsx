@@ -1,34 +1,35 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
 
 export default function BindLinePage() {
-  const router = useRouter();
-  const { user, profile, isLoading: authLoading, isLineBound, signIn, signUp, signOut, refreshProfile } = useAuth();
-  
   /**********************
    * State 區域
    **********************/
   const [liffObject, setLiffObject] = useState<any>(null);
   const [status, setStatus] = useState("載入中...");
-  const [lineProfile, setLineProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
 
   // 表單欄位
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  
-  // 切換登入/註冊模式
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
 
   const [isBinding, setIsBinding] = useState(false);
-  const [isFormLoading, setIsFormLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const bindingAttempted = useRef(false);
-  const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID || "2008678437-qt2KwvhO";
+  const LIFF_ID = "2008678437-qt2KwvhO";
+
+  /**********************
+   * 初始化 user 狀態
+   **********************/
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user");
+    if (savedUser) setUser(JSON.parse(savedUser));
+  }, []);
 
   /**********************
    * 初始化 LIFF
@@ -39,6 +40,7 @@ export default function BindLinePage() {
         const liff = (await import("@line/liff")).default;
         await liff.init({ liffId: LIFF_ID });
         setLiffObject(liff);
+        setStatus("請先登入或註冊帳號，再綁定 LINE");
         console.log("✅ LIFF 初始化成功");
       } catch (err) {
         console.error("❌ LIFF 初始化失敗", err);
@@ -50,38 +52,14 @@ export default function BindLinePage() {
   }, []);
 
   /**********************
-   * Update status when auth state changes
-   **********************/
-  useEffect(() => {
-    if (authLoading) return;
-    
-    if (!user) {
-      setStatus("請使用社區帳號登入以綁定 LINE");
-    } else if (isLineBound && profile) {
-      // Already bound - redirect to dashboard
-      setStatus("✓ 已綁定 LINE，正在跳轉...");
-      setLineProfile({
-        userId: profile.line_user_id,
-        displayName: profile.line_display_name,
-        pictureUrl: profile.line_avatar_url,
-        statusMessage: profile.line_status_message,
-      });
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1500);
-    } else if (user) {
-      setStatus("登入成功！正在綁定 LINE...");
-    }
-  }, [user, profile, isLineBound, authLoading]);
-
-  /**********************
    * 綁定邏輯（統一處理）
    **********************/
   const performBinding = async () => {
-    if (!liffObject || !user || isBinding || lineProfile) return;
+    if (!liffObject || !user || isBinding || profile) return;
 
     if (!user.id) {
       setStatus("使用者資料異常，請重新登入");
+      setUser(null);
       return;
     }
 
@@ -91,40 +69,31 @@ export default function BindLinePage() {
     setStatus("正在綁定 LINE...");
 
     try {
-      const liffProfile = await liffObject.getProfile();
+      const lineProfile = await liffObject.getProfile();
 
       const res = await fetch("/api/bind-line", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile_id: user.id,
-          line_user_id: liffProfile.userId,
-          line_display_name: liffProfile.displayName,
-          line_avatar_url: liffProfile.pictureUrl,
-          line_status_message: liffProfile.statusMessage,
+          line_user_id: lineProfile.userId,
+          line_display_name: lineProfile.displayName,
+          line_avatar_url: lineProfile.pictureUrl,
+          line_status_message: lineProfile.statusMessage,
         }),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        setLineProfile(liffProfile);
-        setStatus("✓ LINE 綁定成功！正在跳轉首頁...");
+        setProfile(lineProfile);
+        setStatus("✓ LINE 綁定成功！");
         bindingAttempted.current = true;
-        
-        // Refresh profile to get updated LINE info
-        await refreshProfile();
-        
-        // Redirect to dashboard immediately
-        setTimeout(() => {
-          router.push("/dashboard");
-        }, 1000);
       } else {
         setStatus(`綁定失敗：${data.message || "未知錯誤"}`);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "未知錯誤";
-      setStatus(`綁定失敗：${errorMessage}`);
+      setStatus(`綁定失敗：${err.message}`);
       console.error(err);
     } finally {
       setIsBinding(false);
@@ -138,18 +107,17 @@ export default function BindLinePage() {
     if (
       liffObject &&
       user &&
-      !isLineBound &&
       liffObject.isLoggedIn() &&
       !bindingAttempted.current &&
-      !lineProfile
+      !profile
     ) {
       console.log("🤖 自動執行綁定");
       performBinding();
     }
-  }, [liffObject, user, isLineBound]);
+  }, [liffObject, user]);
 
   /**********************
-   * 註冊並自動綁定 LINE
+   * 註冊
    **********************/
   const handleRegister = async () => {
     if (!email || !password) {
@@ -168,32 +136,44 @@ export default function BindLinePage() {
       return;
     }
 
-    setIsFormLoading(true);
+    setIsLoading(true);
     setStatus("註冊中...");
 
     try {
-      const result = await signUp(email, password, name || undefined, phone || undefined);
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          name: name || null,
+          phone: phone || null,
+        }),
+      });
 
-      if (result.success) {
+      const data = await res.json();
+
+      if (data.success && data.user) {
+        setUser(data.user);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        setStatus("✓ 註冊成功！請點擊綁定 LINE");
+
         setEmail("");
         setPassword("");
         setName("");
         setPhone("");
-        setStatus("✓ 註冊成功！正在綁定 LINE...");
-        // Auto-binding will be triggered by useEffect when user state changes
       } else {
-        setStatus(`註冊失敗：${result.error}`);
+        setStatus(`註冊失敗：${data.message}`);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "未知錯誤";
-      setStatus(`註冊失敗：${errorMessage}`);
+      setStatus(`註冊失敗：${err.message}`);
     } finally {
-      setIsFormLoading(false);
+      setIsLoading(false);
     }
   };
 
   /**********************
-   * 登入並自動綁定 LINE
+   * 登入
    **********************/
   const handleLogin = async () => {
     if (!email || !password) {
@@ -201,34 +181,53 @@ export default function BindLinePage() {
       return;
     }
 
-    setIsFormLoading(true);
+    setIsLoading(true);
     setStatus("登入中...");
 
     try {
-      const result = await signIn(email, password);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-      if (result.success) {
+      const data = await res.json();
+
+      if (data.success && data.user) {
+        setUser(data.user);
+        localStorage.setItem("user", JSON.stringify(data.user));
+
+        if (data.user.line_bound) {
+          setProfile({
+            userId: data.user.line_user_id,
+            displayName: data.user.line_display_name,
+            pictureUrl: data.user.line_avatar_url,
+            statusMessage: data.user.line_status_message,
+          });
+          setStatus("✓ 已綁定 LINE");
+          bindingAttempted.current = true;
+        } else {
+          setStatus("✓ 登入成功！請綁定 LINE");
+        }
+
         setEmail("");
         setPassword("");
-        setStatus("✓ 登入成功！正在綁定 LINE...");
-        // Auto-binding will be triggered by useEffect when user state changes
       } else {
-        setStatus(`登入失敗：${result.error}`);
+        setStatus(`登入失敗：${data.message}`);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "未知錯誤";
-      setStatus(`登入失敗：${errorMessage}`);
+      setStatus(`登入失敗：${err.message}`);
     } finally {
-      setIsFormLoading(false);
+      setIsLoading(false);
     }
   };
 
   /**********************
-   * 手動綁定（備用）
+   * 手動綁定
    **********************/
   const handleBindClick = () => {
     if (!user) {
-      setStatus("⚠️ 請先登入");
+      setStatus("⚠️ 請先登入或註冊");
       return;
     }
 
@@ -244,9 +243,10 @@ export default function BindLinePage() {
   /**********************
    * 登出
    **********************/
-  const handleLogout = async () => {
-    await signOut();
-    setLineProfile(null);
+  const handleLogout = () => {
+    setUser(null);
+    setProfile(null);
+    localStorage.removeItem("user");
     bindingAttempted.current = false;
     setStatus("已登出，請重新登入");
   };
@@ -260,7 +260,7 @@ export default function BindLinePage() {
     const ok = confirm("確定要解除綁定嗎?");
     if (!ok) return;
 
-    setIsFormLoading(true);
+    setIsLoading(true);
     setStatus("解除中...");
 
     try {
@@ -273,34 +273,18 @@ export default function BindLinePage() {
       const data = await res.json();
 
       if (data.success) {
-        setLineProfile(null);
+        setProfile(null);
         setStatus("✓ 已解除 LINE 綁定");
         bindingAttempted.current = false;
-        
-        // Refresh profile to clear LINE info
-        await refreshProfile();
       } else {
         setStatus(`解除失敗：${data.message}`);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "未知錯誤";
-      setStatus(`解除失敗：${errorMessage}`);
+      setStatus(`解除失敗：${err.message}`);
     } finally {
-      setIsFormLoading(false);
+      setIsLoading(false);
     }
   };
-
-  /**********************
-   * Loading State
-   **********************/
-  if (authLoading) {
-    return (
-      <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
-        <p className="mt-4 text-gray-600">載入中...</p>
-      </main>
-    );
-  }
 
   /**********************
    * UI
@@ -308,18 +292,9 @@ export default function BindLinePage() {
   return (
     <main className="flex flex-col items-center p-10 gap-6 min-h-screen bg-gray-50">
       <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
-        {/* LINE Logo */}
-        <div className="flex justify-center mb-4">
-          <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center">
-            <svg className="w-10 h-10 text-white" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 5.82 2 10.5c0 2.93 1.95 5.51 4.87 7.05-.19.63-.48 2.28-.55 2.64-.09.45.17.45.36.33.15-.1 2.38-1.58 3.35-2.22.64.1 1.3.15 1.97.15 5.52 0 10-3.82 10-8.5S17.52 2 12 2z"/>
-            </svg>
-          </div>
-        </div>
-        
         <h1 className="text-3xl font-bold text-center mb-2">LINE 帳號綁定</h1>
         <p className="text-center text-gray-600 mb-6">
-          使用您的社區帳號登入以綁定 LINE
+          註冊或登入後綁定您的 LINE 帳號
         </p>
 
         {/* 狀態訊息 */}
@@ -337,193 +312,150 @@ export default function BindLinePage() {
           {status}
         </div>
 
-        {/* 登入/註冊 切換標籤 */}
+        {/* 註冊 / 登入表單 */}
         {!user && (
           <div className="flex flex-col gap-4">
-            {/* 切換按鈕 */}
-            <div className="flex bg-gray-100 rounded-lg p-1 mb-2">
+            <input
+              type="text"
+              placeholder="姓名（選填）"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={isLoading}
+              className="border border-gray-300 px-4 py-3 rounded-lg"
+            />
+
+            <input
+              type="tel"
+              placeholder="電話（選填）"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              disabled={isLoading}
+              className="border border-gray-300 px-4 py-3 rounded-lg"
+            />
+
+            <input
+              type="email"
+              placeholder="Email *"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading}
+              className="border border-gray-300 px-4 py-3 rounded-lg"
+            />
+
+            <input
+              type="password"
+              placeholder="密碼（至少 6 個字元）*"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+              className="border border-gray-300 px-4 py-3 rounded-lg"
+            />
+
+            <div className="flex gap-4">
               <button
-                onClick={() => setIsRegisterMode(false)}
-                className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-                  !isRegisterMode 
-                    ? 'bg-white text-green-600 shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
+                onClick={handleRegister}
+                disabled={isLoading}
+                className="flex-1 bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 disabled:bg-gray-400 font-semibold"
               >
-                登入
+                {isLoading ? "處理中..." : "註冊"}
               </button>
+
               <button
-                onClick={() => setIsRegisterMode(true)}
-                className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isRegisterMode 
-                    ? 'bg-white text-blue-600 shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
+                onClick={handleLogin}
+                disabled={isLoading}
+                className="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400 font-semibold"
               >
-                註冊新帳號
+                {isLoading ? "處理中..." : "登入"}
               </button>
             </div>
+          </div>
+        )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                placeholder="請輸入 Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isFormLoading}
-                className="w-full border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
+        {/* 綁定按鈕 */}
+        {user && !profile && (
+          <div className="flex flex-col items-center gap-4">
+            <div className="bg-gray-50 p-4 rounded-lg w-full">
+              <p className="text-sm text-gray-600">已登入帳號</p>
+              <p className="font-semibold text-lg">{user.email}</p>
+              {user.name && <p className="text-gray-600">{user.name}</p>}
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                密碼
-              </label>
-              <input
-                type="password"
-                placeholder={isRegisterMode ? "設定密碼（至少 6 碼）" : "請輸入密碼"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isFormLoading}
-                onKeyDown={(e) => e.key === 'Enter' && (isRegisterMode ? handleRegister() : handleLogin())}
-                className="w-full border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* 註冊額外欄位 */}
-            {isRegisterMode && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    姓名 <span className="text-gray-400">(選填)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="請輸入姓名"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    disabled={isFormLoading}
-                    className="w-full border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    電話 <span className="text-gray-400">(選填)</span>
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="請輸入電話號碼"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    disabled={isFormLoading}
-                    className="w-full border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                </div>
-              </>
-            )}
 
             <button
-              onClick={isRegisterMode ? handleRegister : handleLogin}
-              disabled={isFormLoading}
-              className={`w-full py-3 rounded-lg font-semibold text-lg shadow-md transition-colors text-white ${
-                isRegisterMode 
-                  ? 'bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400'
-                  : 'bg-green-500 hover:bg-green-600 disabled:bg-gray-400'
-              }`}
+              onClick={handleBindClick}
+              disabled={isBinding || isLoading}
+              className="w-full py-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 font-semibold text-lg shadow-md"
             >
-              {isFormLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                  {isRegisterMode ? "註冊中..." : "登入中..."}
-                </span>
-              ) : (
-                isRegisterMode ? "註冊並綁定 LINE" : "登入並綁定 LINE"
-              )}
+              {isBinding ? "綁定中..." : "🔗 使用 LINE 綁定帳號"}
             </button>
-            
-            <p className="text-center text-sm text-gray-500 mt-2">
-              {isRegisterMode 
-                ? "註冊後將自動綁定您的 LINE 帳號" 
-                : "登入後將自動綁定您的 LINE 帳號"
-              }
-            </p>
+
+            <button
+              onClick={handleLogout}
+              className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+            >
+              登出
+            </button>
           </div>
         )}
 
-        {/* 綁定中狀態 */}
-        {user && !lineProfile && !isLineBound && (
-          <div className="flex flex-col items-center gap-4">
-            <div className="bg-gray-50 p-4 rounded-lg w-full text-center">
-              <p className="text-sm text-gray-600">已登入帳號</p>
-              <p className="font-semibold text-lg">{profile?.email || user.email}</p>
-              {profile?.name && <p className="text-gray-600">{profile.name}</p>}
-            </div>
-
-            {isBinding ? (
-              <div className="flex flex-col items-center gap-3">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500"></div>
-                <p className="text-gray-600">正在綁定 LINE...</p>
-              </div>
-            ) : (
-              <>
-                <button
-                  onClick={handleBindClick}
-                  disabled={isBinding || isFormLoading}
-                  className="w-full py-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 font-semibold text-lg shadow-md"
-                >
-                  🔗 點擊綁定 LINE
-                </button>
-                
-                <button
-                  onClick={handleLogout}
-                  className="px-6 py-2 text-gray-500 hover:text-gray-700"
-                >
-                  使用其他帳號
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* LINE 綁定成功 - 顯示並自動跳轉 */}
-        {(lineProfile || isLineBound) && (
+        {/* LINE Profile */}
+        {profile && (
           <div className="flex flex-col items-center">
             <div className="relative">
               <img
-                src={lineProfile?.pictureUrl || profile?.line_avatar_url}
+                src={profile.pictureUrl}
                 alt="LINE 大頭貼"
-                className="w-24 h-24 rounded-full border-4 border-green-500 shadow-lg"
+                className="w-32 h-32 rounded-full border-4 border-green-500 shadow-lg"
               />
-              <div className="absolute -bottom-1 -right-1 bg-green-500 text-white rounded-full p-1.5">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+              <div className="absolute -bottom-2 -right-2 bg-green-500 text-white rounded-full p-2">
+                <svg
+                  className="w-6 h-6"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </div>
             </div>
 
-            <p className="mt-3 font-bold text-xl">
-              {lineProfile?.displayName || profile?.line_display_name}
-            </p>
+            <p className="mt-4 font-bold text-xl">{profile.displayName}</p>
+
+            {profile.statusMessage && (
+              <p className="text-sm text-gray-500 italic mt-1">
+                "{profile.statusMessage}"
+              </p>
+            )}
 
             <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 w-full">
               <p className="text-green-700 font-semibold text-center">
                 ✓ LINE 綁定成功！
               </p>
-              <p className="text-sm text-gray-600 text-center mt-1">
-                正在跳轉至首頁...
-              </p>
+
+              {user && (
+                <p className="text-sm text-gray-600 text-center mt-2">
+                  已綁定至 {user.email}
+                </p>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 mt-4">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-500"></div>
-              <span className="text-gray-500 text-sm">跳轉中...</span>
+            <div className="flex gap-3 mt-6 w-full">
+              <button
+                onClick={handleUnbind}
+                disabled={isLoading}
+                className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-400"
+              >
+                解除綁定
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+              >
+                登出
+              </button>
             </div>
           </div>
         )}

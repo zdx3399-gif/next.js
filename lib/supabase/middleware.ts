@@ -44,8 +44,15 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Refresh session if expired
-  const { data: { user } } = await supabase.auth.getUser()
+  // Refresh session if expired - check Supabase Auth user
+  const { data: { user: supabaseUser } } = await supabase.auth.getUser()
+
+  // Also check for custom auth via cookie (for direct profiles table login)
+  const currentUserCookie = request.cookies.get('currentUser')?.value
+  const hasCustomAuth = !!currentUserCookie
+
+  // User is authenticated if either Supabase Auth OR custom auth is present
+  const isAuthenticated = !!supabaseUser || hasCustomAuth
 
   // Protected routes - redirect to auth if not logged in
   // Note: /bind-line is NOT protected because users need to register/login there first
@@ -54,7 +61,7 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith(path)
   )
 
-  if (isProtectedPath && !user) {
+  if (isProtectedPath && !isAuthenticated) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth'
     url.searchParams.set('redirect', request.nextUrl.pathname)
@@ -62,7 +69,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // If user is logged in and tries to access /auth, redirect to dashboard
-  if (user && request.nextUrl.pathname === '/auth') {
+  if (isAuthenticated && request.nextUrl.pathname === '/auth') {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

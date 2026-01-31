@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+
 
 export default function BindLinePage() {
+  const router = useRouter();
+
   /**********************
    * State 區域
    **********************/
@@ -87,8 +91,16 @@ export default function BindLinePage() {
 
       if (data.success) {
         setProfile(lineProfile);
-        setStatus("✓ LINE 綁定成功！");
+        setStatus("✓ LINE 綁定成功！正在跳轉...");
         bindingAttempted.current = true;
+        
+        // // Set cookie for middleware auth check
+        // Cookies.set("currentUser", "true", { expires: 7 });
+        
+        // Redirect to dashboard after 1.5 seconds
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 1500);
       } else {
         setStatus(`綁定失敗：${data.message || "未知錯誤"}`);
       }
@@ -197,6 +209,9 @@ export default function BindLinePage() {
         setUser(data.user);
         localStorage.setItem("currentUser", JSON.stringify(data.user));
 
+        // Set cookie for middleware auth check
+        Cookies.set("currentUser", "true", { expires: 7 });
+
         if (data.user.line_bound) {
           setProfile({
             userId: data.user.line_user_id,
@@ -204,8 +219,13 @@ export default function BindLinePage() {
             pictureUrl: data.user.line_avatar_url,
             statusMessage: data.user.line_status_message,
           });
-          setStatus("✓ 已綁定 LINE");
+          setStatus("✓ 已綁定 LINE，正在跳轉...");
           bindingAttempted.current = true;
+          
+          // Redirect to dashboard after 1.5 seconds
+          setTimeout(() => {
+            router.push("/dashboard");
+          }, 1500);
         } else {
           setStatus("✓ 登入成功！請綁定 LINE");
         }

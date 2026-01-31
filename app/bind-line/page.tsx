@@ -28,14 +28,6 @@ export default function BindLinePage() {
   const LIFF_ID = "2008678437-qt2KwvhO";
 
   /**********************
-   * 初始化 user 狀態 (使用與 auth/page.tsx 相同的 key)
-   **********************/
-  useEffect(() => {
-    const savedUser = localStorage.getItem("currentUser");
-    if (savedUser) setUser(JSON.parse(savedUser));
-  }, []);
-
-  /**********************
    * 初始化 LIFF
    **********************/
   useEffect(() => {
@@ -167,7 +159,6 @@ export default function BindLinePage() {
 
       if (data.success && data.user) {
         setUser(data.user);
-        localStorage.setItem("currentUser", JSON.stringify(data.user));
         setStatus("✓ 註冊成功！請點擊綁定 LINE");
 
         setEmail("");
@@ -207,10 +198,6 @@ export default function BindLinePage() {
 
       if (data.success && data.user) {
         setUser(data.user);
-        localStorage.setItem("currentUser", JSON.stringify(data.user));
-
-        // Set cookie for middleware auth check
-        Cookies.set("currentUser", "true", { expires: 7 });
 
         if (data.user.line_bound) {
           setProfile({
@@ -266,7 +253,6 @@ export default function BindLinePage() {
   const handleLogout = () => {
     setUser(null);
     setProfile(null);
-    localStorage.removeItem("currentUser");
     bindingAttempted.current = false;
     setStatus("已登出，請重新登入");
   };

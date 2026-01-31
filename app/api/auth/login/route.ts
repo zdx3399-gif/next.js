@@ -17,34 +17,57 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 使用 Supabase Auth 登入
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // 直接查詢 profiles 表（使用明文密碼比對，與 auth/page.tsx 相同）
+    const { data: user, error: queryError } = await supabase
+      .from('profiles')
+      .select(`
+        id,
+        email,
+        password,
+        name,
+        phone,
+        role,
+        status,
+        line_user_id,
+        line_display_name,
+        line_avatar_url,
+        line_status_message,
+        tenant_id,
+        unit_id,
+        created_at
+      `)
+      .eq('email', email)
+      .single();
 
-    if (error || !data.user) {
-      console.error('❌ 登入失敗:', error);
+    if (queryError || !user) {
+      console.error('❌ 查詢失敗或用戶不存在:', queryError);
       return NextResponse.json(
-        { success: false, message: '登入失敗，帳號或密碼錯誤' },
+        { success: false, message: 'Email 或密碼錯誤' },
         { status: 401 }
       );
     }
 
-    // 從 profiles 表查詢用戶資訊
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-
-    if (profileError || !profile) {
-      console.error('❌ 查詢 profile 失敗:', profileError);
+    // 檢查帳號狀態
+    if (user.status !== 'active') {
       return NextResponse.json(
-        { success: false, message: '查詢用戶資訊失敗' },
-        { status: 404 }
+        { success: false, message: '帳號已被停用，請聯繫管理員' },
+        { status: 403 }
       );
     }
+
+    // 驗證密碼（明文比對）
+    if (user.password !== password) {
+      return NextResponse.json(
+        { success: false, message: 'Email 或密碼錯誤' },
+        { status: 401 }
+      );
+    }
+
+    // 更新最後登入時間
+    await supabase
+      .from('profiles')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', user.id);
 
     console.log('✅ 登入成功:', email);
 
@@ -52,16 +75,20 @@ export async function POST(req: NextRequest) {
       success: true,
       message: '登入成功',
       user: {
-        id: profile.id,
-        email: profile.email,
-        name: profile.name,
-        phone: profile.phone,
-        role: profile.role,
-        line_user_id: profile.line_user_id,
-        line_display_name: profile.line_display_name,
-        line_avatar_url: profile.line_avatar_url,
-        line_status_message: profile.line_status_message,
-        line_bound: !!profile.line_user_id,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+        role: user.role,
+        status: user.status,
+        tenant_id: user.tenant_id,
+        unit_id: user.unit_id,
+        line_user_id: user.line_user_id,
+        line_display_name: user.line_display_name,
+        line_avatar_url: user.line_avatar_url,
+        line_status_message: user.line_status_message,
+        line_bound: !!user.line_user_id,
+        created_at: user.created_at
       },
     });
   } catch (error: any) {

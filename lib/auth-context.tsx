@@ -55,12 +55,21 @@ function getTenantConfig() {
   return stored ? JSON.parse(stored) : null
 }
 
+// Pages that should skip AuthProvider initialization
+const SKIP_AUTH_PAGES = ['/bind-line', '/auth']
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
+
+  // Check if current page should skip auth
+  const shouldSkipAuth = () => {
+    if (typeof window === 'undefined') return false
+    return SKIP_AUTH_PAGES.some(page => window.location.pathname.startsWith(page))
+  }
 
   // Create Supabase client
   const getSupabase = () => {
@@ -97,6 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Initialize auth state
   useEffect(() => {
+    // Skip auth initialization on certain pages (they have their own auth)
+    if (shouldSkipAuth()) {
+      setIsLoading(false)
+      return
+    }
+
     const supabase = getSupabase()
     
     // Get initial session

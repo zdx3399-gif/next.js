@@ -33,21 +33,9 @@ export default function AuthPage() {
     }
   }, [searchParams, router])
 
-  // 👇 LINE Login Function (New Addition)
+  // 👇 LINE Binding - Simply redirect to bind-line page
   const handleLineBind = () => {
-    const channelId = process.env.NEXT_PUBLIC_LINE_CHANNEL_ID
-    const redirectUri = process.env.NEXT_PUBLIC_LINE_CALLBACK_URL
-    const state = "random_state_string" // In production, use a secure random string
-    
-    if (!channelId || !redirectUri) {
-      alert("❌ 系統設定錯誤：缺少 LINE ID 或 Callback URL")
-      return
-    }
-
-    // Redirect to LINE Login Authorization
-    const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${channelId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=profile%20openid`
-    
-    window.location.href = lineAuthUrl
+    router.push("/bind-line")
   }
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {

@@ -1,10 +1,11 @@
-import { Client } from '@line/bot-sdk';
+import { Client, validateSignature } from '@line/bot-sdk';
 import { createClient } from '@supabase/supabase-js';
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
-import { generateAnswer, getImageUrlsByKeyword } from '../../../grokmain.cjs';
+import { chat } from '../../../grokmain.js';
 import 'dotenv/config';
 
 export const runtime = 'nodejs';
@@ -16,12 +17,32 @@ const lineConfig = {
 
 const client = new Client(lineConfig);// LINE Bot SDK 客戶端
 
-const IMAGE_KEYWORDS = ['圖片', '設施', '游泳池', '健身房', '大廳'];// 可擴充更多關鍵字
+// 移除圖片關鍵字攔截，讓所有查詢都進入 AI 處理
+// const IMAGE_KEYWORDS = ['圖片', '設施', '游泳池', '健身房', '大廳'];
 // 處理 LINE Webhook 請求
 export async function POST(req) {
   try {
     const rawBody = await req.text();// 取得原始請求體
     if (!rawBody) return new Response('Bad Request: Empty body', { status: 400 });
+
+    // 驗證 LINE signature（使用官方 SDK）
+    const signature = req.headers.get('x-line-signature');
+    console.log('[Debug] Channel Secret exists:', !!lineConfig.channelSecret);
+    console.log('[Debug] Signature exists:', !!signature);
+    console.log('[Debug] Body length:', rawBody.length);
+    
+    if (!signature) {
+      console.error('[Signature Error] No signature header');
+      return new Response('Unauthorized', { status: 401 });
+    }
+    
+    const isValid = validateSignature(rawBody, lineConfig.channelSecret, signature);
+    console.log('[Debug] Signature valid:', isValid);
+    
+    if (!isValid) {
+      console.error('[Signature Error] Invalid signature');
+      return new Response('Unauthorized', { status: 401 });
+    }
 
     let events;// 儲存事件陣列
     try {
@@ -211,20 +232,326 @@ export async function POST(req) {
           continue;
         }
 
-        // 2️⃣ 圖片關鍵字
-        if (IMAGE_KEYWORDS.some(kw => userText.includes(kw))) {
-          await client.replyMessage(replyToken, { type: 'text', text: '目前圖片查詢功能尚未啟用。' });
-          continue;
-        }
-
-        // 3️⃣ 其他 → Groq LLM
+        // 2️⃣ 其他問題 → 直接呼叫 chat 函數進行 AI 查詢
         try {
-          const answer = await generateAnswer(userText);
-          const replyMessage = typeof answer === 'string' ? answer.trim() : '目前沒有找到相關資訊，請查看社區公告。';
-          await client.replyMessage(replyToken, { type: 'text', text: replyMessage });
+          // LINE webhook event 的唯一 ID（有些版本欄位名稱不同）
+          const eventId = event.webhookEventId || event.id || `${userId}_${Date.now()}`;
+          console.log('[DEBUG] Event ID:', eventId);
+          console.log('[DEBUG] Event 完整資料:', JSON.stringify(event, null, 2));
+          
+          // 防重複：檢查此 eventId 是否已處理過
+          let chatLogId = null;
+          if (eventId) {
+            const { data: existingLog } = await supabase
+              .from('chat_log')
+              .select('id')
+              .eq('event_id', eventId)
+              .maybeSingle();
+            
+            if (existingLog) {
+              console.log('[防重複] eventId 已存在，跳過處理:', eventId);
+              continue;
+            }
+          }
+          
+          const result = await chat(userText);
+          
+          // ===== 處理追問澄清機制 =====
+          if (result.needsClarification) {
+            console.log('[追問] 觸發澄清機制');
+            
+            // 寫入 chat_log (需要追問的記錄)
+            const logData = {
+              raw_question: userText,
+              normalized_question: result.normalized_question || userText,
+              intent: result.intent || null,
+              intent_confidence: typeof result.intent_confidence === 'number' ? result.intent_confidence : null,
+              answered: false,
+              needs_clarification: true,
+              user_id: userId || null,
+              event_id: eventId || null,
+              created_at: new Date().toISOString(),
+            };
+            
+            const { data: insertData, error: insertError } = await supabase
+              .from('chat_log')
+              .insert([logData])
+              .select();
+            
+            if (!insertError && insertData?.[0]) {
+              chatLogId = insertData[0].id;
+              console.log('[追問] chatLogId 已記錄:', chatLogId);
+              
+              // 記錄澄清選項到 clarification_options 表
+              const clarificationRecords = result.clarificationOptions.map((opt, index) => ({
+                chat_log_id: chatLogId,
+                option_label: opt.label,
+                option_value: opt.value,
+                display_order: index
+              }));
+              
+              await supabase
+                .from('clarification_options')
+                .insert(clarificationRecords);
+            }
+            
+            // 建立 Quick Reply 訊息
+            const clarificationMessage = {
+              type: 'text',
+              text: result.clarificationMessage,
+              quickReply: {
+                items: result.clarificationOptions.map(opt => ({
+                  type: 'action',
+                  action: {
+                    type: 'postback',
+                    label: opt.label,
+                    data: `action=clarify&value=${opt.value}`,
+                    displayText: opt.label  // 用戶點擊後顯示的文字
+                  }
+                }))
+              }
+            };
+            
+            await client.replyMessage(replyToken, clarificationMessage);
+            continue;
+          }
+          
+          // ===== 正常回答流程 =====
+          const answer = result?.answer || '目前沒有找到相關資訊，請查看社區公告。';
+          
+          // 檢查是否為追問回應 (訊息以 clarify: 開頭)
+          let clarificationParentId = null;
+          if (userText.startsWith('clarify:')) {
+            // 查找最近一次 needs_clarification = true 的記錄
+            const { data: parentLog } = await supabase
+              .from('chat_log')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('needs_clarification', true)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            
+            if (parentLog) {
+              clarificationParentId = parentLog.id;
+              console.log('[追問] 這是澄清回應，parent_id:', clarificationParentId);
+              
+              // 更新 clarification_options，標記使用者選擇的選項
+              await supabase
+                .from('clarification_options')
+                .update({ selected: true, selected_at: new Date().toISOString() })
+                .eq('chat_log_id', clarificationParentId)
+                .eq('option_value', userText);
+            }
+          }
+
+          
+          // 寫入 chat_log
+          const logData = {
+            raw_question: userText,
+            normalized_question: result.normalized_question || userText,
+            intent: result.intent || null,
+            intent_confidence: typeof result.intent_confidence === 'number' ? result.intent_confidence : null,
+            answered: typeof result.answered === 'boolean' ? result.answered : (result.answer ? true : false),
+            needs_clarification: false,
+            clarification_parent_id: clarificationParentId,
+            user_id: userId || null,
+            event_id: eventId || null,
+            created_at: new Date().toISOString(),
+          };
+
+          
+          const { data: insertData, error: insertError } = await supabase
+            .from('chat_log')
+            .insert([logData])
+            .select();
+          
+          console.log('[DEBUG] Insert result:', insertData);
+          console.log('[DEBUG] Insert error:', insertError);
+          
+          if (!insertError && insertData?.[0]) {
+            chatLogId = insertData[0].id;
+            console.log('[DEBUG] chatLogId 已取得:', chatLogId);
+          } else {
+            console.error('[ERROR] 無法取得 chatLogId, insertError:', insertError);
+          }
+          
+          // 只有在有 chatLogId 時才建立回饋按鈕
+          let replyMessage;
+          if (chatLogId) {
+            // 建立帶回饋按鈕的訊息
+            replyMessage = {
+              type: 'text',
+              text: answer.trim() + '\n\n這個回答有幫助到你嗎？',
+              quickReply: {
+                items: [
+                  {
+                    type: 'action',
+                    action: {
+                      type: 'postback',
+                      label: '👍 有幫助',
+                      data: `action=feedback&type=helpful&chatLogId=${chatLogId}`,
+                      displayText: '👍 有幫助'
+                    }
+                  },
+                  {
+                    type: 'action',
+                    action: {
+                      type: 'postback',
+                      label: '🤔 不太清楚',
+                      data: `action=feedback&type=unclear&chatLogId=${chatLogId}`,
+                      displayText: '🤔 不太清楚'
+                    }
+                  },
+                  {
+                    type: 'action',
+                    action: {
+                      type: 'postback',
+                      label: '👎 沒幫助',
+                      data: `action=feedback&type=not_helpful&chatLogId=${chatLogId}`,
+                      displayText: '👎 沒幫助'
+                    }
+                  }
+                ]
+              }
+            };
+          } else {
+            // 沒有 chatLogId，只回覆純文字
+            console.warn('[WARNING] 沒有 chatLogId，只回覆純文字');
+            replyMessage = {
+              type: 'text',
+              text: answer.trim()
+            };
+          }
+          
+          await client.replyMessage(replyToken, replyMessage);
         } catch (err) {
           console.error('查詢 LLM API 失敗:', err);
-          await client.replyMessage(replyToken, { type: 'text', text: '查詢失敗，請稍後再試。' });
+          // 只在 replyToken 尚未使用時才回覆
+          try {
+            await client.replyMessage(replyToken, { type: 'text', text: '查詢失敗，請稍後再試。' });
+          } catch (replyErr) {
+            console.error('回覆錯誤訊息失敗 (可能 token 已使用):', replyErr.message);
+          }
+        }
+      }
+      
+      // --- 3. 處理 postback 事件（回饋按鈕 + 澄清選項） ---
+      if (event.type === 'postback') {
+        const data = event.postback.data;
+        const replyToken = event.replyToken;
+        
+        console.log('[DEBUG Postback] 原始 data:', data);
+        
+        // 解析 postback data
+        const params = new URLSearchParams(data);
+        const action = params.get('action');
+        
+        console.log('[DEBUG Postback] action:', action);
+        
+        // ===== 處理澄清選項 =====
+        if (action === 'clarify') {
+          const clarifyValue = params.get('value');
+          console.log('[DEBUG Postback] clarifyValue:', clarifyValue);
+          
+          try {
+            // 直接呼叫 chat 函數處理澄清選項
+            const result = await chat(clarifyValue);
+            
+            // 根據結果建立回覆訊息（帶回饋按鈕）
+            let replyMessage;
+            if (result.answer) {
+              replyMessage = {
+                type: 'text',
+                text: result.answer.trim()
+              };
+            } else {
+              replyMessage = {
+                type: 'text',
+                text: '抱歉，目前找不到相關資訊。'
+              };
+            }
+            
+            await client.replyMessage(replyToken, replyMessage);
+            continue;
+          } catch (err) {
+            console.error('[Postback Clarify Error]', err);
+            await client.replyMessage(replyToken, { 
+              type: 'text', 
+              text: '查詢失敗，請稍後再試。' 
+            });
+            continue;
+          }
+        }
+        
+        // ===== 處理回饋按鈕 =====
+        const chatLogId = params.get('chatLogId');
+        const feedbackType = params.get('type');
+        
+        console.log('[DEBUG Postback] chatLogId:', chatLogId, 'type:', typeof chatLogId);
+        console.log('[DEBUG Postback] feedbackType:', feedbackType);
+        
+        if (action === 'feedback' && chatLogId) {
+          const chatLogIdInt = parseInt(chatLogId);
+          console.log('[DEBUG Postback] chatLogIdInt:', chatLogIdInt);
+          
+          try {
+            // 記錄回饋到 chat_feedback
+            const { data: insertedFeedback, error: feedbackError } = await supabase
+              .from('chat_feedback')
+              .insert([{
+                chat_log_id: chatLogIdInt,
+                user_id: userId,
+                feedback_type: feedbackType,
+                created_at: new Date().toISOString()
+              }])
+              .select();
+            
+            console.log('[DEBUG Postback] Insert result:', insertedFeedback);
+            console.log('[DEBUG Postback] Insert error:', feedbackError);
+            
+            if (feedbackError) {
+              console.error('[Feedback Error]', feedbackError);
+            }
+            
+            // 更新 chat_log
+            const feedbackField = feedbackType === 'helpful' ? 'success_count' :
+                                 feedbackType === 'unclear' ? 'unclear_count' : 'fail_count';
+            
+            const { data: chatLog } = await supabase
+              .from('chat_log')
+              .select('id, feedback, success_count, unclear_count, fail_count')
+              .eq('id', chatLogId)
+              .single();
+            
+            const updateData = {
+              feedback: feedbackType,
+              [feedbackField]: (chatLog?.[feedbackField] || 0) + 1
+            };
+            
+            if (feedbackType === 'not_helpful') {
+              updateData.answered = false;
+            }
+            
+            await supabase
+              .from('chat_log')
+              .update(updateData)
+              .eq('id', chatLogId);
+            
+            // 回覆訊息
+            let responseText = '';
+            if (feedbackType === 'helpful') {
+              responseText = '感謝你的回饋！很高興能幫助到你 😊';
+            } else if (feedbackType === 'unclear') {
+              responseText = '好，我懂～讓我提供更多資訊給你。';
+            } else if (feedbackType === 'not_helpful') {
+              responseText = '了解，這題目前資料可能不完整 🙏\n我會回報給管理單位補齊資料。';
+            }
+            
+            await client.replyMessage(replyToken, { type: 'text', text: responseText });
+          } catch (err) {
+            console.error('[Postback Error]', err);
+          }
         }
       }
     }

@@ -1,6 +1,16 @@
-import { supabase } from '../../../supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
+  }
+  return createClient(url, anonKey);
+}
 
 export async function POST(req) {
+  const supabase = getSupabase();
   const { name } = await req.json();
   if (!name) {
     return new Response('No name provided', { status: 400 });

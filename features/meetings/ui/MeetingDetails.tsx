@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { getMeetingById, type Meeting } from "../api/meetings"
-import { exportMeetingToPDF } from "@/lib/export-pdf"
+import { exportMeetingToPDF, exportMeetingPDFViaAPI } from "@/lib/export-pdf"
 
 interface MeetingDetailsProps {
   meetingId: string
@@ -64,6 +64,23 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
       setTimeout(() => setExportMessage(""), 3000)
     } catch (error) {
       console.error("導出失敗:", error)
+      setExportMessage("❌ 導出失敗，請重試")
+      setTimeout(() => setExportMessage(""), 3000)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleExportPDFViaAPI = async () => {
+    if (!meeting) return
+    setExporting(true)
+    setExportMessage("正在生成 PDF...")
+    try {
+      const result = await exportMeetingPDFViaAPI(meeting.id)
+      setExportMessage(result.message)
+      setTimeout(() => setExportMessage(""), 3000)
+    } catch (error) {
+      console.error("API 導出失敗:", error)
       setExportMessage("❌ 導出失敗，請重試")
       setTimeout(() => setExportMessage(""), 3000)
     } finally {
@@ -158,14 +175,22 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
               <span className="material-icons">{exporting ? "hourglass_empty" : "download"}</span>
               {exporting ? "生成中..." : "快速導出 PDF"}
             </button>
+            <button
+              onClick={handleExportPDFViaAPI}
+              disabled={exporting}
+              className="flex items-center gap-2 px-4 py-3 rounded-lg bg-blue-600 text-white hover:opacity-90 transition-all font-semibold disabled:opacity-50"
+            >
+              <span className="material-icons">{exporting ? "hourglass_empty" : "cloud_download"}</span>
+              {exporting ? "生成中..." : "服務器導出"}
+            </button>
             {exportMessage && (
-              <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-info text-green-600 text-sm">
+              <div className="flex items-center gap-2 px-4 py-3 rounded-lg text-sm">
                 {exportMessage}
               </div>
             )}
           </div>
           <p className="text-sm text-[var(--theme-text-muted)] mt-2">
-            💡 快速導出當前會議信息為 PDF，包含標題、日期、地點、要點和備註。
+            💡 支持兩種方式導出：快速導出（瀏覽器生成）或服務器導出（後端生成）
           </p>
         </div>
       </div>

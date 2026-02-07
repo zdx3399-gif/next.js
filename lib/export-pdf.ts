@@ -192,14 +192,56 @@ export async function exportHTMLToPDF(elementId, fileName = 'document.pdf') {
     return {
       success: true,
       fileName,
-      message: '✅ PDF 已下載',
+      message: '✅ PDF exported successfully',
     }
   } catch (error) {
-    console.error('HTML to PDF 轉換失敗:', error)
+    console.error('HTML to PDF conversion failed:', error)
     return {
       success: false,
       error: error.message,
-      message: '❌ PDF 轉換失敗',
+      message: '❌ PDF export failed',
     }
   }
 }
+
+/**
+ * 透過後端 API 生成 PDF
+ * @param {string} meetingId - 會議 ID
+ */
+export async function exportMeetingPDFViaAPI(meetingId) {
+  try {
+    const response = await fetch('/api/meeting/export-pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ meetingId }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`)
+    }
+
+    // 建立下載鏈接
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `meeting_${meetingId.substring(0, 8)}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(link)
+
+    return {
+      success: true,
+      message: '✅ PDF exported successfully via API',
+    }
+  } catch (error) {
+    console.error('API export failed:', error)
+    return {
+      success: false,
+      error: error.message,
+      message: '❌ PDF export failed',
+    }
+  }

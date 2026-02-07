@@ -39,35 +39,31 @@ export async function createMeeting(
   meeting: Omit<Meeting, "id" | "created_at">,
   userId?: string,
 ): Promise<Meeting | null> {
-  // 路由通過 API 以觸發 LINE 通知
-  const res = await fetch("/api/meeting", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...meeting,
-      created_by: userId,
-    }),
-  })
+  const supabase = getSupabaseClient()
+  // 先保存會議到資料庫
+  const { data, error } = await supabase
+    .from("meetings")
+    .insert([{ ...meeting, created_by: userId }])
+    .select()
+    .single()
 
-  if (!res.ok) {
-    const error = await res.json()
+  if (error) {
     console.error("Error creating meeting:", error)
     return null
   }
 
-  const data = await res.json()
-  // 返回會議物件，需要包含足夠的資訊
-  return {
-    id: data.id,
-    topic: meeting.topic,
-    time: meeting.time,
-    location: meeting.location,
-    notes: meeting.notes,
-    key_takeaways: meeting.key_takeaways,
-    pdf_file_url: meeting.pdf_file_url,
-    created_by: userId,
-    created_at: new Date().toISOString(),
+  // 異步發送 LINE 通知（不阻塞主流程）
+  if (data?.id) {
+    fetch("/api/meeting/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        meeting: data,
+      }),
+    }).catch((err) => console.error("Failed to send meeting notifications:", err))
   }
+
+  return data
 }
 
 export async function updateMeeting(id: string, meeting: Partial<Meeting>): Promise<Meeting | null> {

@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js"
-import { Client } from "@line/bot-sdk"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -15,35 +14,10 @@ function getSupabase() {
   return createClient(url, serviceRoleKey || anonKey)
 }
 
-function getLineClient() {
-  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
-  const channelSecret = process.env.LINE_CHANNEL_SECRET
-
-  if (!channelAccessToken || !channelSecret) {
-    throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN or LINE_CHANNEL_SECRET")
-  }
-  return new Client({ channelAccessToken, channelSecret })
-}
-
-// 重試函數
-async function retryPush(client, lineUserId, message, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      await client.pushMessage(lineUserId, message)
-      return true
-    } catch (e) {
-      if (i === maxRetries - 1) throw e
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-    }
-  }
-  return false
-}
-
-// POST: 新增會議記錄並發送通知
+// POST: 保存新增會議到資料庫（不發送通知）
 export async function POST(req) {
   try {
     const supabase = getSupabase()
-    const client = getLineClient()
 
     const body = await req.json()
     const { topic, time, location, key_takeaways, notes, pdf_file_url, created_by } = body
@@ -74,9 +48,16 @@ export async function POST(req) {
       return Response.json({ error: error.message }, { status: 500 })
     }
 
-    // 發送 LINE 通知給所有有綁定的住戶
-    try {
-      const { data: lineUsers } = await supabase.from("line_users").select("line_user_id, display_name")
+    return Response.json({ success: true, id: meeting.id })
+  } catch (err) {
+    console.error("[meeting] POST error:", err)
+    return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 })
+  }
+}
+
+export async function GET() {
+  return Response.json({ error: "Method Not Allowed" }, { status: 405 })
+}
 
       if (lineUsers && lineUsers.length > 0) {
         const formatDate = new Date(time).toLocaleString("zh-TW", { hour12: false })

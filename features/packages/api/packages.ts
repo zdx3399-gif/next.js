@@ -91,12 +91,20 @@ export async function fetchPackages(room?: string, isAdmin = false, userUnitId?:
   }
 
   const packages: Package[] = packagesData.map((pkg: any) => {
+    // 優先使用資料庫上儲存的 recipient_name / recipient_room（server route 或 insert 時可能已寫入）
     const recipientName =
-      (pkg.recipient_id ? recipientNamesMap[pkg.recipient_id] : null) ||
-      (pkg.unit_id ? unitOwnerMap[pkg.unit_id] : null) ||
-      ""
+      (pkg.recipient_name && pkg.recipient_name !== "")
+        ? pkg.recipient_name
+        : (pkg.recipient_id ? recipientNamesMap[pkg.recipient_id] : null) ||
+          (pkg.unit_id ? unitOwnerMap[pkg.unit_id] : null) ||
+          ""
 
-    const recipientRoom = pkg.unit_id ? unitsMap[pkg.unit_id] : ""
+    const recipientRoom =
+      (pkg.recipient_room && pkg.recipient_room !== "")
+        ? pkg.recipient_room
+        : pkg.unit_id
+        ? unitsMap[pkg.unit_id]
+        : ""
 
     return {
       id: pkg.id,
@@ -133,14 +141,35 @@ export async function addPackage(packageData: AddPackageData): Promise<Package |
 
   let unitId = packageData.unit_id
   if (!unitId && packageData.recipient_room) {
-    const { data: unitData } = await supabase
-      .from("units")
-      .select("id")
-      .eq("unit_code", packageData.recipient_room)
-      .single()
+    const normalize = (s: string) => (s || "").toString().trim()
+    const variants = [
+      normalize(packageData.recipient_room),
+      normalize(packageData.recipient_room).replace(/\s+/g, ""),
+      normalize(packageData.recipient_room).replace(/\s+/g, "-"),
+    ]
 
-    if (unitData) {
-      unitId = unitData.id
+    let found: any = null
+    for (const v of variants) {
+      if (!v) continue
+      const { data: exact1 } = await supabase.from("units").select("id").eq("unit_code", v).limit(1)
+      if (exact1 && exact1.length > 0) {
+        found = exact1[0]
+        break
+      }
+      const { data: exact2 } = await supabase.from("units").select("id").eq("unit_number", v).limit(1)
+      if (exact2 && exact2.length > 0) {
+        found = exact2[0]
+        break
+      }
+      const { data: like } = await supabase.from("units").select("id").ilike("unit_code", `%${v}%`).limit(1)
+      if (like && like.length > 0) {
+        found = like[0]
+        break
+      }
+    }
+
+    if (found) {
+      unitId = found.id
     }
   }
 
@@ -153,6 +182,14 @@ export async function addPackage(packageData: AddPackageData): Promise<Package |
 
   if (unitId) {
     insertData.unit_id = unitId
+  }
+
+  // 如果前端有提供收件人或房號，也把原始欄位存起來，避免 unit_id 無法比對時前端顯示為空
+  if (packageData.recipient_name) {
+    insertData.recipient_name = packageData.recipient_name
+  }
+  if (packageData.recipient_room) {
+    insertData.recipient_room = packageData.recipient_room
   }
 
   console.log("[v0] Adding package with data:", insertData)

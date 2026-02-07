@@ -33,20 +33,9 @@ export default function AuthPage() {
     }
   }, [searchParams, router])
 
+  // 👇 LINE Binding - Simply redirect to bind-line page
   const handleLineBind = () => {
-    const channelId = process.env.NEXT_PUBLIC_LINE_CHANNEL_ID
-    const redirectUri = process.env.NEXT_PUBLIC_LINE_CALLBACK_URL
-    const state = "random_state_string" // In production, use a secure random string
-
-    if (!channelId || !redirectUri) {
-      alert("❌ 系統設定錯誤：缺少 LINE ID 或 Callback URL")
-      return
-    }
-
-    // Redirect to LINE Login Authorization
-    const lineAuthUrl = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${channelId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=profile%20openid`
-
-    window.location.href = lineAuthUrl
+    router.push("/bind-line")
   }
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -121,7 +110,7 @@ export default function AuthPage() {
         throw new Error(result.error)
       }
 
-      setSuccessMessage("註冊成功！請使用新���號登入。")
+      setSuccessMessage("註冊成功！請使用新帳號登入。")
 
       setTimeout(() => {
         setIsLoginMode(true)
@@ -373,6 +362,7 @@ export default function AuthPage() {
           </button>
         </div>
 
+        {/* 👇 BIND LINE BUTTON (New Addition) */}
         <div className="mt-6 pt-6 border-t" style={{ borderColor: "var(--theme-border)" }}>
           <button
             onClick={handleLineBind}

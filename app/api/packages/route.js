@@ -42,15 +42,39 @@ export async function POST(req) {
 
     if (test === true) return Response.json({ message: "Test success" });
 
-    // Find the Unit ID
-    const { data: unit, error: unitError } = await supabase
-      .from("units")
-      .select("id")
-      .or(`unit_code.eq.${recipient_room},unit_number.eq.${recipient_room}`)
-      .single();
+    // Find the Unit ID with normalization + fallback strategies
+    const normalize = (s) => (s || "").toString().trim()
+    const tryVariants = [
+      normalize(recipient_room),
+      normalize(recipient_room).replace(/\s+/g, ""),
+      normalize(recipient_room).replace(/\s+/g, "-"),
+    ]
 
-    if (unitError || !unit) {
-      return Response.json({ error: "Room not found in database" }, { status: 404 });
+    let foundUnit = null
+    for (const v of tryVariants) {
+      if (!v) continue
+      // exact match unit_code
+      const { data: exact1 } = await supabase.from("units").select("id").eq("unit_code", v).limit(1)
+      if (exact1 && exact1.length > 0) {
+        foundUnit = exact1[0]
+        break
+      }
+      // exact match unit_number
+      const { data: exact2 } = await supabase.from("units").select("id").eq("unit_number", v).limit(1)
+      if (exact2 && exact2.length > 0) {
+        foundUnit = exact2[0]
+        break
+      }
+      // fuzzy match on unit_code
+      const { data: like } = await supabase.from("units").select("id").ilike("unit_code", `%${v}%`).limit(1)
+      if (like && like.length > 0) {
+        foundUnit = like[0]
+        break
+      }
+    }
+
+    if (!foundUnit) {
+      return Response.json({ error: "Room not found in database" }, { status: 404 })
     }
 
     // Save package
@@ -62,7 +86,7 @@ export async function POST(req) {
         recipient_room,
         tracking_number: tracking_number || null,
         arrived_at,
-        unit_id: unit.id,
+        unit_id: foundUnit.id,
         status: "pending",
       })
       .select("id")
@@ -70,16 +94,45 @@ export async function POST(req) {
 
     if (insertError) throw insertError;
 
-    // Find LINE User ID
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("line_user_id")
-      .eq("unit_id", unit.id)
-      .single();
+    // Find LINE User ID: first try profiles.unit_id, otherwise fallback to household_members -> profiles
+    let lineUserId = null
 
-    // Send LINE Notification
-    if (!profileError && profile?.line_user_id) {
-      const time = new Date(arrived_at).toLocaleString("zh-TW", { hour12: false });
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, line_user_id")
+        .eq("unit_id", foundUnit.id)
+        .limit(1)
+
+      if (!profileError && profile && profile.length > 0 && profile[0].line_user_id) {
+        lineUserId = profile[0].line_user_id
+      }
+    } catch (e) {
+      console.warn("profiles by unit_id query failed:", e)
+    }
+
+    // fallback: find household_members with profile_id, then lookup profiles for line_user_id
+    if (!lineUserId) {
+      try {
+        const { data: members } = await supabase
+          .from("household_members")
+          .select("profile_id")
+          .eq("unit_id", foundUnit.id)
+          .limit(10)
+
+        const profileIds = (members || []).map((m) => m.profile_id).filter(Boolean)
+        if (profileIds.length > 0) {
+          const { data: profiles2 } = await supabase.from("profiles").select("id, line_user_id").in("id", profileIds)
+          const found = (profiles2 || []).find((p) => p.line_user_id)
+          if (found) lineUserId = found.line_user_id
+        }
+      } catch (e) {
+        console.warn("fallback household_members->profiles query failed:", e)
+      }
+    }
+
+    if (lineUserId) {
+      const time = new Date(arrived_at).toLocaleString("zh-TW", { hour12: false })
 
       const flexMessage = {
         type: "flex",
@@ -99,9 +152,15 @@ export async function POST(req) {
             ],
           },
         },
-      };
+      }
 
-      await client.pushMessage(profile.line_user_id, flexMessage);
+      try {
+        await client.pushMessage(lineUserId, flexMessage)
+      } catch (e) {
+        console.error("Failed to push LINE message:", e)
+      }
+    } else {
+      console.info("No line_user_id found for unit:", foundUnit.id)
     }
 
     return Response.json({ success: true, id: insertedPackage?.id });

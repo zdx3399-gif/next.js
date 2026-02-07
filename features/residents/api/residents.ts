@@ -151,8 +151,30 @@ export async function fetchResidentsByRoom(room: string): Promise<Resident[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
 
-  // 先查詢 unit_id
-  const { data: units } = await supabase.from("units").select("id").eq("unit_code", room).limit(1)
+  // 先嘗試以 unit_code 或 unit_number 精確比對 room（UI 可能傳不同格式）
+  let unitsResult: any = null
+  try {
+    const res = await supabase
+      .from("units")
+      .select("id")
+      .or(`unit_code.eq.${room},unit_number.eq.${room}`)
+      .limit(1)
+    unitsResult = res
+  } catch (e) {
+    console.warn("Exact unit match failed, will try fallback:", e)
+  }
+
+  let units = unitsResult?.data || []
+
+  // 若找不到，再用模糊比對 unit_code（容錯不同分隔或格式）
+  if ((!units || units.length === 0) && room) {
+    try {
+      const { data: unitsLike } = await supabase.from("units").select("id").ilike("unit_code", `%${room}%`).limit(1)
+      units = unitsLike || []
+    } catch (e) {
+      console.warn("Fuzzy unit match failed:", e)
+    }
+  }
 
   if (!units || units.length === 0) {
     return []

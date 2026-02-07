@@ -42,34 +42,59 @@ export async function POST(req) {
 
     if (test === true) return Response.json({ message: "Test success" });
 
-    // Find the Unit ID with normalization + fallback strategies
-    const normalize = (s) => (s || "").toString().trim()
-    const tryVariants = [
-      normalize(recipient_room),
-      normalize(recipient_room).replace(/\s+/g, ""),
-      normalize(recipient_room).replace(/\s+/g, "-"),
-    ]
+    // Find the Unit ID with ENHANCED normalization + fallback strategies
+    // 強化房號正規化：移除所有空格、"棟"、"樓"、"F"、"室" 等中文字，轉大寫
+    const normalizeRoom = (s) => {
+      if (!s) return ""
+      return s
+        .toString()
+        .trim()
+        .toUpperCase()
+        .replace(/[棟樓室層\s]/g, "") // 移除中文字和空格
+        .replace(/F/gi, "") // 移除 F
+        .replace(/-/g, "") // 暫時移除連字號以便比對
+    }
 
+    const normalized = normalizeRoom(recipient_room)
     let foundUnit = null
-    for (const v of tryVariants) {
-      if (!v) continue
-      // exact match unit_code
-      const { data: exact1 } = await supabase.from("units").select("id").eq("unit_code", v).limit(1)
-      if (exact1 && exact1.length > 0) {
-        foundUnit = exact1[0]
-        break
+
+    // 策略 1: 直接精確比對（原始格式）
+    const { data: exact1 } = await supabase
+      .from("units")
+      .select("id, unit_code")
+      .or(`unit_code.eq.${recipient_room},unit_number.eq.${recipient_room}`)
+      .limit(1)
+    if (exact1 && exact1.length > 0) {
+      foundUnit = exact1[0]
+      console.log(`[packages] Found unit by exact match: ${exact1[0].unit_code}`)
+    }
+
+    // 策略 2: 查找所有 units，用正規化比對
+    if (!foundUnit) {
+      const { data: allUnits } = await supabase.from("units").select("id, unit_code, unit_number")
+      if (allUnits && allUnits.length > 0) {
+        for (const u of allUnits) {
+          const normCode = normalizeRoom(u.unit_code)
+          const normNum = normalizeRoom(u.unit_number)
+          if (normCode === normalized || normNum === normalized) {
+            foundUnit = u
+            console.log(`[packages] Found unit by normalized match: ${u.unit_code} (input: ${recipient_room})`)
+            break
+          }
+        }
       }
-      // exact match unit_number
-      const { data: exact2 } = await supabase.from("units").select("id").eq("unit_number", v).limit(1)
-      if (exact2 && exact2.length > 0) {
-        foundUnit = exact2[0]
-        break
-      }
-      // fuzzy match on unit_code
-      const { data: like } = await supabase.from("units").select("id").ilike("unit_code", `%${v}%`).limit(1)
-      if (like && like.length > 0) {
-        foundUnit = like[0]
-        break
+    }
+
+    // 策略 3: 模糊比對（包含關係）
+    if (!foundUnit) {
+      const { data: likeUnits } = await supabase
+        .from("units")
+        .select("id, unit_code")
+        .ilike("unit_code", `%${recipient_room}%`)
+        .limit(1)
+      if (likeUnits && likeUnits.length > 0) {
+        foundUnit = likeUnits[0]
+        console.log(`[packages] Found unit by fuzzy match: ${likeUnits[0].unit_code}`)
       }
     }
 
@@ -94,61 +119,142 @@ export async function POST(req) {
 
     if (insertError) throw insertError;
 
-    // Find LINE User ID: first try profiles.unit_id, otherwise fallback to household_members -> profiles
+    // Find LINE User ID with ENHANCED multi-strategy lookup
     let lineUserId = null
+    let lineDisplayName = null
 
+    // 策略 1: 從 profiles 表直接查找（根據 unit_id）
     try {
-      const { data: profile, error: profileError } = await supabase
+      const { data: directProfiles } = await supabase
         .from("profiles")
-        .select("id, line_user_id")
+        .select("id, line_user_id, line_display_name")
         .eq("unit_id", foundUnit.id)
-        .limit(1)
 
-      if (!profileError && profile && profile.length > 0 && profile[0].line_user_id) {
-        lineUserId = profile[0].line_user_id
+      if (directProfiles && directProfiles.length > 0) {
+        const profileWithLine = directProfiles.find((p) => p.line_user_id)
+        if (profileWithLine) {
+          lineUserId = profileWithLine.line_user_id
+          lineDisplayName = profileWithLine.line_display_name || null
+          console.log(`[LINE] Found via profiles.unit_id: ${lineDisplayName || lineUserId}`)
+        }
       }
     } catch (e) {
-      console.warn("profiles by unit_id query failed:", e)
+      console.warn("[LINE] profiles by unit_id query failed:", e)
     }
 
-    // fallback: find household_members with profile_id, then lookup profiles for line_user_id
+    // 策略 2: 從 household_members → profiles 查找（更全面）
     if (!lineUserId) {
       try {
         const { data: members } = await supabase
           .from("household_members")
-          .select("profile_id")
+          .select("profile_id, name")
           .eq("unit_id", foundUnit.id)
-          .limit(10)
 
         const profileIds = (members || []).map((m) => m.profile_id).filter(Boolean)
+        console.log(`[LINE] Found ${profileIds.length} household members for unit ${foundUnit.id}`)
+
         if (profileIds.length > 0) {
-          const { data: profiles2 } = await supabase.from("profiles").select("id, line_user_id").in("id", profileIds)
-          const found = (profiles2 || []).find((p) => p.line_user_id)
-          if (found) lineUserId = found.line_user_id
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, line_user_id, line_display_name, name")
+            .in("id", profileIds)
+
+          const profileWithLine = (profiles || []).find((p) => p.line_user_id)
+          if (profileWithLine) {
+            lineUserId = profileWithLine.line_user_id
+            lineDisplayName = profileWithLine.line_display_name || profileWithLine.name || null
+            console.log(
+              `[LINE] Found via household_members->profiles: ${lineDisplayName || lineUserId}`,
+            )
+          } else {
+            console.warn(
+              `[LINE] Found ${profiles?.length || 0} profiles but none have line_user_id bound`,
+            )
+          }
         }
       } catch (e) {
-        console.warn("fallback household_members->profiles query failed:", e)
+        console.warn("[LINE] household_members->profiles query failed:", e)
       }
     }
 
+    // 策略 3: 如果仍找不到，記錄詳細訊息
+    if (!lineUserId) {
+      console.warn(
+        `[LINE] No LINE user found for unit ${foundUnit.id} (${foundUnit.unit_code}). Please bind LINE account first.`,
+      )
+    }
+
+    // Send LINE notification if found
     if (lineUserId) {
       const time = new Date(arrived_at).toLocaleString("zh-TW", { hour12: false })
 
       const flexMessage = {
         type: "flex",
-        altText: "📦 Package Notification",
+        altText: `📦 您有新包裹到達 - ${courier}`,
         contents: {
           type: "bubble",
+          hero: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "📦 包裹到達通知",
+                weight: "bold",
+                size: "xl",
+                color: "#ffffff",
+              },
+            ],
+            backgroundColor: "#0084ff",
+            paddingAll: "20px",
+          },
           body: {
             type: "box",
             layout: "vertical",
             contents: [
-              { type: "text", text: "📦 Package Notification", weight: "bold", size: "lg" },
+              {
+                type: "text",
+                text: `收件人：${recipient_name}`,
+                margin: "md",
+                size: "md",
+                weight: "bold",
+              },
+              {
+                type: "text",
+                text: `房號：${recipient_room}`,
+                margin: "sm",
+                color: "#666666",
+              },
               { type: "separator", margin: "md" },
-              { type: "text", text: `Recipient: ${recipient_name}`, margin: "md" },
-              { type: "text", text: `Room: ${recipient_room}`, margin: "sm" },
-              { type: "text", text: `Courier: ${courier}`, margin: "sm" },
-              { type: "text", text: `Time: ${time}`, margin: "sm" },
+              {
+                type: "text",
+                text: `快遞公司：${courier}`,
+                margin: "md",
+                color: "#333333",
+              },
+              {
+                type: "text",
+                text: tracking_number ? `追蹤號：${tracking_number}` : "追蹤號：無",
+                margin: "sm",
+                color: "#666666",
+                size: "sm",
+              },
+              {
+                type: "text",
+                text: `到達時間：${time}`,
+                margin: "sm",
+                color: "#666666",
+                size: "sm",
+              },
+              { type: "separator", margin: "md" },
+              {
+                type: "text",
+                text: "請儘速至管理處領取包裹🎁",
+                margin: "md",
+                color: "#0084ff",
+                weight: "bold",
+                align: "center",
+              },
             ],
           },
         },
@@ -156,11 +262,12 @@ export async function POST(req) {
 
       try {
         await client.pushMessage(lineUserId, flexMessage)
+        console.log(`[LINE] Notification sent successfully to ${lineDisplayName || lineUserId}`)
       } catch (e) {
-        console.error("Failed to push LINE message:", e)
+        console.error("[LINE] Failed to push LINE message:", e.message || e)
       }
     } else {
-      console.info("No line_user_id found for unit:", foundUnit.id)
+      console.info(`[LINE] No line_user_id found for unit: ${foundUnit.id} (${foundUnit.unit_code})`)
     }
 
     return Response.json({ success: true, id: insertedPackage?.id });

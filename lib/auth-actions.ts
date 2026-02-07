@@ -147,13 +147,33 @@ export async function authenticateUser(email: string, password: string) {
       body: JSON.stringify({ email, password }),
     })
 
-    const result = await response.json()
-
-    if (!result.success) {
-      console.error("[v0] Login API failed:", result.message)
+    // 檢查 HTTP 狀態碼
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[v0] API returned error status:", response.status, errorText)
       return {
         success: false,
-        error: result.message || "登入失敗，請檢查您的帳號密碼",
+        error: `API 錯誤 (${response.status}): ${errorText}`,
+      }
+    }
+
+    // 嘗試解析 JSON
+    let result
+    try {
+      result = await response.json()
+    } catch (parseError) {
+      console.error("[v0] Failed to parse JSON response:", parseError)
+      return {
+        success: false,
+        error: "API 回應格式錯誤",
+      }
+    }
+
+    if (!result || !result.success) {
+      console.error("[v0] Login API failed:", result?.message)
+      return {
+        success: false,
+        error: result?.message || "登入失敗，請檢查您的帳號密碼",
       }
     }
 
@@ -227,13 +247,33 @@ export async function registerUser(
       }),
     })
 
-    const result = await response.json()
-
-    if (!result.success) {
-      console.error("[v0] Register API failed:", result.message)
+    // 檢查 HTTP 狀態碼
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[v0] Register API returned error status:", response.status, errorText)
       return {
         success: false,
-        error: result.message || "註冊失敗，請稍後再試",
+        error: `API 錯誤 (${response.status}): ${errorText}`,
+      }
+    }
+
+    // 嘗試解析 JSON
+    let result
+    try {
+      result = await response.json()
+    } catch (parseError) {
+      console.error("[v0] Failed to parse register JSON response:", parseError)
+      return {
+        success: false,
+        error: "API 回應格式錯誤",
+      }
+    }
+
+    if (!result || !result.success) {
+      console.error("[v0] Register API failed:", result?.message)
+      return {
+        success: false,
+        error: result?.message || "註冊失敗，請稍後再試",
       }
     }
 

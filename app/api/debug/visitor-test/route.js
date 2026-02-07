@@ -4,11 +4,11 @@ import { Client } from "@line/bot-sdk"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export async function GET(req: Request) {
-  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
+export async function GET(req) {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
   const client = new Client({
-    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN!,
-    channelSecret: process.env.LINE_CHANNEL_SECRET!,
+    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+    channelSecret: process.env.LINE_CHANNEL_SECRET,
   })
 
   try {
@@ -98,7 +98,7 @@ export async function GET(req: Request) {
       message: "Test visitor reservation notification sent",
       lineUserId,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error:", error)
     return Response.json(
       {

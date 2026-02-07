@@ -26,6 +26,100 @@ function getLineClient() {
   return new Client({ channelAccessToken, channelSecret });
 }
 
+async function findLineUserByUnit(supabase, unitId) {
+  let lineUserId = null;
+  let lineDisplayName = null;
+
+  // Strategy 1: profiles by unit_id
+  try {
+    const { data: directProfiles, error: directError } = await supabase
+      .from("profiles")
+      .select("id, line_user_id, line_display_name, name")
+      .eq("unit_id", unitId);
+
+    if (directError) throw directError;
+
+    if (directProfiles && directProfiles.length > 0) {
+      const profileWithLine = directProfiles.find((p) => p.line_user_id);
+      if (profileWithLine) {
+        return {
+          lineUserId: profileWithLine.line_user_id,
+          lineDisplayName: profileWithLine.line_display_name || profileWithLine.name || null,
+        };
+      }
+
+      const profileIds = directProfiles.map((p) => p.id).filter(Boolean);
+      if (profileIds.length > 0) {
+        const { data: lineUsers, error: lineUsersError } = await supabase
+          .from("line_users")
+          .select("line_user_id, display_name, profile_id")
+          .in("profile_id", profileIds);
+
+        if (lineUsersError) throw lineUsersError;
+
+        const lineUser = (lineUsers || []).find((u) => u.line_user_id);
+        if (lineUser) {
+          return {
+            lineUserId: lineUser.line_user_id,
+            lineDisplayName: lineUser.display_name || null,
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[LINE] profiles/line_users lookup failed:", e);
+  }
+
+  // Strategy 2: household_members -> profiles
+  try {
+    const { data: members, error: membersError } = await supabase
+      .from("household_members")
+      .select("profile_id, name")
+      .eq("unit_id", unitId);
+
+    if (membersError) throw membersError;
+
+    const profileIds = (members || []).map((m) => m.profile_id).filter(Boolean);
+    console.log(`[LINE] Found ${profileIds.length} household members for unit ${unitId}`);
+
+    if (profileIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, line_user_id, line_display_name, name")
+        .in("id", profileIds);
+
+      if (profilesError) throw profilesError;
+
+      const profileWithLine = (profiles || []).find((p) => p.line_user_id);
+      if (profileWithLine) {
+        return {
+          lineUserId: profileWithLine.line_user_id,
+          lineDisplayName: profileWithLine.line_display_name || profileWithLine.name || null,
+        };
+      }
+
+      const { data: lineUsers, error: lineUsersError } = await supabase
+        .from("line_users")
+        .select("line_user_id, display_name, profile_id")
+        .in("profile_id", profileIds);
+
+      if (lineUsersError) throw lineUsersError;
+
+      const lineUser = (lineUsers || []).find((u) => u.line_user_id);
+      if (lineUser) {
+        return {
+          lineUserId: lineUser.line_user_id,
+          lineDisplayName: lineUser.display_name || null,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn("[LINE] household_members lookup failed:", e);
+  }
+
+  return { lineUserId, lineDisplayName };
+}
+
 // 1. ADDING A NEW PACKAGE (POST)
 export async function POST(req) {
   try {
@@ -119,65 +213,9 @@ export async function POST(req) {
 
     if (insertError) throw insertError;
 
-    // Find LINE User ID with ENHANCED multi-strategy lookup
-    let lineUserId = null
-    let lineDisplayName = null
+    // Find LINE User ID with multi-strategy lookup (profiles + line_users)
+    const { lineUserId, lineDisplayName } = await findLineUserByUnit(supabase, foundUnit.id)
 
-    // 策略 1: 從 profiles 表直接查找（根據 unit_id）
-    try {
-      const { data: directProfiles } = await supabase
-        .from("profiles")
-        .select("id, line_user_id, line_display_name")
-        .eq("unit_id", foundUnit.id)
-
-      if (directProfiles && directProfiles.length > 0) {
-        const profileWithLine = directProfiles.find((p) => p.line_user_id)
-        if (profileWithLine) {
-          lineUserId = profileWithLine.line_user_id
-          lineDisplayName = profileWithLine.line_display_name || null
-          console.log(`[LINE] Found via profiles.unit_id: ${lineDisplayName || lineUserId}`)
-        }
-      }
-    } catch (e) {
-      console.warn("[LINE] profiles by unit_id query failed:", e)
-    }
-
-    // 策略 2: 從 household_members → profiles 查找（更全面）
-    if (!lineUserId) {
-      try {
-        const { data: members } = await supabase
-          .from("household_members")
-          .select("profile_id, name")
-          .eq("unit_id", foundUnit.id)
-
-        const profileIds = (members || []).map((m) => m.profile_id).filter(Boolean)
-        console.log(`[LINE] Found ${profileIds.length} household members for unit ${foundUnit.id}`)
-
-        if (profileIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("id, line_user_id, line_display_name, name")
-            .in("id", profileIds)
-
-          const profileWithLine = (profiles || []).find((p) => p.line_user_id)
-          if (profileWithLine) {
-            lineUserId = profileWithLine.line_user_id
-            lineDisplayName = profileWithLine.line_display_name || profileWithLine.name || null
-            console.log(
-              `[LINE] Found via household_members->profiles: ${lineDisplayName || lineUserId}`,
-            )
-          } else {
-            console.warn(
-              `[LINE] Found ${profiles?.length || 0} profiles but none have line_user_id bound`,
-            )
-          }
-        }
-      } catch (e) {
-        console.warn("[LINE] household_members->profiles query failed:", e)
-      }
-    }
-
-    // 策略 3: 如果仍找不到，記錄詳細訊息
     if (!lineUserId) {
       console.warn(
         `[LINE] No LINE user found for unit ${foundUnit.id} (${foundUnit.unit_code}). Please bind LINE account first.`,
@@ -326,55 +364,11 @@ export async function PATCH(req) {
 
     // 發送「已領取」LINE 通知
     if (packageData.unit_id) {
-      let lineUserId = null;
-      let lineDisplayName = null;
+      const { lineUserId, lineDisplayName } = await findLineUserByUnit(
+        supabase,
+        packageData.unit_id,
+      )
 
-      // 策略 1: 從 profiles 表查找
-      try {
-        const { data: directProfiles } = await supabase
-          .from("profiles")
-          .select("id, line_user_id, line_display_name")
-          .eq("unit_id", packageData.unit_id);
-
-        if (directProfiles && directProfiles.length > 0) {
-          const profileWithLine = directProfiles.find((p) => p.line_user_id);
-          if (profileWithLine) {
-            lineUserId = profileWithLine.line_user_id;
-            lineDisplayName = profileWithLine.line_display_name || null;
-          }
-        }
-      } catch (e) {
-        console.warn("[PATCH LINE] profiles query failed:", e);
-      }
-
-      // 策略 2: 從 household_members → profiles 查找
-      if (!lineUserId) {
-        try {
-          const { data: members } = await supabase
-            .from("household_members")
-            .select("profile_id")
-            .eq("unit_id", packageData.unit_id);
-
-          const profileIds = (members || []).map((m) => m.profile_id).filter(Boolean);
-
-          if (profileIds.length > 0) {
-            const { data: profiles } = await supabase
-              .from("profiles")
-              .select("id, line_user_id, line_display_name, name")
-              .in("id", profileIds);
-
-            const profileWithLine = (profiles || []).find((p) => p.line_user_id);
-            if (profileWithLine) {
-              lineUserId = profileWithLine.line_user_id;
-              lineDisplayName = profileWithLine.line_display_name || profileWithLine.name || null;
-            }
-          }
-        } catch (e) {
-          console.warn("[PATCH LINE] household_members query failed:", e);
-        }
-      }
-
-      // 發送通知
       if (lineUserId) {
         const pickupTime = new Date().toLocaleString("zh-TW", { hour12: false });
 
@@ -453,9 +447,7 @@ export async function PATCH(req) {
 
         try {
           await client.pushMessage(lineUserId, flexMessage);
-          console.log(
-            `[PATCH LINE] Pickup notification sent to ${lineDisplayName || lineUserId}`,
-          );
+          console.log(`[PATCH LINE] Pickup notification sent to ${lineDisplayName || lineUserId}`);
         } catch (e) {
           console.error("[PATCH LINE] Failed to send notification:", e.message || e);
         }

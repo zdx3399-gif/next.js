@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
       line_secret_preview: lineSecret ? `${lineSecret.substring(0, 10)}...` : null,
       supabase_url_exists: !!process.env.SUPABASE_URL,
       supabase_key_exists: !!process.env.SUPABASE_ANON_KEY,
+      supabase_service_role_exists: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

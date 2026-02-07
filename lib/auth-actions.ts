@@ -128,59 +128,22 @@ function parseUnitInput(input: string): ParsedUnit {
   }
 }
 
+import { performLogin } from "./auth-service"
+
 // Server action to detect user tenant and authenticate
 export async function authenticateUser(email: string, password: string) {
   console.log("[v0] Starting authentication for email:", email)
 
   try {
-    // 使用相對路徑，自動支持所有環境（localhost、Vercel preview、Vercel production）
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    })
+    // 直接調用共享的登入邏輯（不用 HTTP fetch，避免 server-side 相對路徑問題）
+    const result = await performLogin(email, password)
 
-    // 檢查 Content-Type，偵測 HTML 回應（Vercel Protect）
-    const contentType = response.headers.get("content-type") || ""
-    if (contentType.includes("text/html")) {
-      console.error(
-        "[v0] API 返回 HTML（被 Vercel Protect 攔截）。請在 Vercel Dashboard 關閉 'Require Authentication' 或為 /api/* 新增例外。",
-      )
+    // 檢查登入是否成功
+    if (!result.success || !result.user) {
+      console.error("[v0] Login failed:", result.error)
       return {
         success: false,
-        error:
-          "伺服器要求驗證（Vercel Protect 啟用中）。\n\n請告知管理者在 Vercel Dashboard 關閉 'Require Authentication' 或為 /api/* 路由新增例外。",
-      }
-    }
-
-    // 嘗試解析 JSON
-    let result
-    try {
-      result = await response.json()
-    } catch (parseError) {
-      const errorText = await response.text()
-      console.error("[v0] Failed to parse JSON response:", parseError, errorText)
-      if (errorText.startsWith("<")) {
-        return {
-          success: false,
-          error:
-            "伺服器要求驗證（Vercel Protect 啟用中）。\n\n請告知管理者在 Vercel Dashboard 關閉 'Require Authentication' 或為 /api/* 路由新增例外。",
-        }
-      }
-      return {
-        success: false,
-        error: "API 回應格式錯誤",
-      }
-    }
-
-    // 檢查 HTTP 狀態碼
-    if (!response.ok) {
-      console.error("[v0] API returned error status:", response.status)
-      return {
-        success: false,
-        error: result?.message || `API 錯誤 (${response.status})`,
+        error: result.error || result.message || "登入失敗",
       }
     }
 
@@ -204,7 +167,7 @@ export async function authenticateUser(email: string, password: string) {
         name: result.user.name,
         role: result.user.role,
         phone: result.user.phone,
-        room: result.user.room || "",
+        room: "", // 暫時留空，後續可從 unit_id 查詢
         unit_id: result.user.unit_id,
         status: result.user.status,
       },

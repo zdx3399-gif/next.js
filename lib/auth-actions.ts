@@ -133,8 +133,13 @@ export async function authenticateUser(email: string, password: string) {
   console.log("[v0] Starting authentication for email:", email)
   
   try {
+    // 安全地拼接 API URL（移除結尾斜線，確保不產生雙斜線）
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "")
+    const apiUrl = `${baseUrl}/api/auth/login`
+    console.log("[v0] Calling API:", apiUrl)
+    
     // 調用新的 /api/auth/login API
-    const response = await fetch(process.env.NEXT_PUBLIC_API_URL + "/api/auth/login", {
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -200,8 +205,13 @@ export async function registerUser(
     console.log(`[v0] Registering user:`, email)
     console.log("[v0] Input data:", { email, name, phone, unitNumber, role, relationship })
 
+    // 安全地拼接 API URL（移除結尾斜線，確保不產生雙斜線）
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "")
+    const apiUrl = `${baseUrl}/api/auth/register`
+    console.log("[v0] Calling API:", apiUrl)
+
     // 調用新的 /api/auth/register API
-    const response = await fetch(process.env.NEXT_PUBLIC_API_URL + "/api/auth/register", {
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -52,15 +52,26 @@ export async function createMeeting(
     return null
   }
 
-  // 異步發送 LINE 通知（不阻塞主流程）
+  // 同步發送 LINE 通知（確保在 serverless 環境中完成）
   if (data?.id) {
-    fetch("/api/meeting/notify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        meeting: data,
-      }),
-    }).catch((err) => console.error("Failed to send meeting notifications:", err))
+    try {
+      const notifyRes = await fetch("/api/meeting/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meeting: data,
+        }),
+      })
+      
+      if (!notifyRes.ok) {
+        const notifyError = await notifyRes.json()
+        console.warn("Meeting notification response:", notifyError)
+        // 不因為通知失敗而中斷會議建立
+      }
+    } catch (err) {
+      console.warn("Meeting notification fetch error:", err)
+      // 不因為通知失敗而中斷會議建立
+    }
   }
 
   return data

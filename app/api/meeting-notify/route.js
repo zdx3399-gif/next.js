@@ -2,9 +2,16 @@
 import * as line from '@line/bot-sdk';
 
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-
-import { supabase } from '../../../supabaseClient';
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY");
+  }
+  return createClient(url, anonKey);
+}
 
 // 你的 LINE Channel Access Token
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -13,6 +20,7 @@ const LINE_TARGET_ID = process.env.LINE_TARGET_ID;
 
 export async function POST(req) {
   try {
+    const supabase = getSupabase();
     const data = await req.json();// 取得請求中的 JSON 資料 // 解析請求中的 JSON 資料
     const { topic, time, location, key_takeaways, notes, pdf_file_url, created_by } = data;
     if (!topic || !time || !location || !key_takeaways) {

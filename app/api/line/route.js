@@ -1,12 +1,12 @@
 import { Client, validateSignature } from '@line/bot-sdk';
 import { createClient } from '@supabase/supabase-js';
+import { chat } from '@/lib/ai-chat';
+import 'dotenv/config';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
-import { chat } from '../../../grokmain.js';
-import 'dotenv/config';
 
 export const runtime = 'nodejs';
 

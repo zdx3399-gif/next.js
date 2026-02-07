@@ -1,7 +1,7 @@
 import "dotenv/config"
 import { Client } from "@line/bot-sdk"
 import { createClient } from "@supabase/supabase-js"
-import { generateAnswer } from "../../../grokmain.cjs"
+import { generateAnswer } from "@/lib/ai-chat"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"

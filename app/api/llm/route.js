@@ -1,11 +1,18 @@
+import { chat } from '@/lib/ai-chat';
+import { createClient } from '@supabase/supabase-js';
 
-
-
-import { chat } from '../../../grokmain.js';
-import { supabase } from '../../../supabaseClient';
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY");
+  }
+  return createClient(url, anonKey);
+}
 
 export async function POST(req) {
   try {
+    const supabase = getSupabase();
     const { query, userId, eventId } = await req.json();
     if (!query) {
       return new Response(JSON.stringify({ error: '缺少 query 參數' }), { status: 400 });

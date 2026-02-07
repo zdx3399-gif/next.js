@@ -78,66 +78,58 @@ export async function createVisitorReservation(
   unitId?: string,
   reservedById?: string,
 ): Promise<void> {
-  const supabase = getSupabaseClient()
-  if (!supabase) throw new Error("Supabase not configured")
+  const res = await fetch("/api/visitor", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: reservation.name,
+      phone: reservation.phone,
+      purpose: reservation.purpose,
+      reservation_time: reservation.reservation_time,
+      unit_id: unitId,
+      reserved_by: reservedBy,
+      reserved_by_id: reservedById,
+    }),
+  })
 
-  const insertData: Record<string, unknown> = {
-    name: reservation.name,
-    phone: reservation.phone,
-    purpose: reservation.purpose,
-    reservation_time: reservation.reservation_time,
-    status: "reserved",
-  }
-
-  if (unitId) {
-    insertData.unit_id = unitId
-  }
-
-  if (reservedById) {
-    insertData.reserved_by_id = reservedById
-  }
-
-  const { error } = await supabase.from("visitors").insert([insertData])
-
-  if (error) {
+  if (!res.ok) {
+    const error = await res.json()
     console.error("Error creating reservation:", error)
-    throw error
+    throw new Error(error.error || "Failed to create reservation")
   }
 }
 
 export async function checkInVisitor(visitorId: string): Promise<void> {
-  const supabase = getSupabaseClient()
-  if (!supabase) throw new Error("Supabase not configured")
+  const res = await fetch("/api/visitor", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      visitor_id: visitorId,
+      action: "check_in",
+    }),
+  })
 
-  const { error } = await supabase
-    .from("visitors")
-    .update({
-      status: "checked_in",
-      checked_in_at: new Date().toISOString(),
-    })
-    .eq("id", visitorId)
-
-  if (error) {
+  if (!res.ok) {
+    const error = await res.json()
     console.error("Error checking in visitor:", error)
-    throw error
+    throw new Error(error.error || "Failed to check in visitor")
   }
 }
 
 export async function checkOutVisitor(visitorId: string): Promise<void> {
-  const supabase = getSupabaseClient()
-  if (!supabase) throw new Error("Supabase not configured")
+  const res = await fetch("/api/visitor", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      visitor_id: visitorId,
+      action: "check_out",
+    }),
+  })
 
-  const { error } = await supabase
-    .from("visitors")
-    .update({
-      status: "checked_out",
-      checked_out_at: new Date().toISOString(),
-    })
-    .eq("id", visitorId)
-
-  if (error) {
+  if (!res.ok) {
+    const error = await res.json()
     console.error("Error checking out visitor:", error)
-    throw error
+    throw new Error(error.error || "Failed to check out visitor")
   }
 }
 

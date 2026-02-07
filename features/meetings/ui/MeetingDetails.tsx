@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { getMeetingById, type Meeting } from "../api/meetings"
+import { exportMeetingToPDF } from "@/lib/export-pdf"
 
 interface MeetingDetailsProps {
   meetingId: string
@@ -11,6 +12,8 @@ interface MeetingDetailsProps {
 export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
   const [meeting, setMeeting] = useState<Meeting | null>(null)
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
+  const [exportMessage, setExportMessage] = useState("")
 
   useEffect(() => {
     const loadMeeting = async () => {
@@ -48,6 +51,23 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+    }
+  }
+
+  const handleQuickExportPDF = async () => {
+    if (!meeting) return
+    setExporting(true)
+    setExportMessage("正在生成 PDF...")
+    try {
+      const result = await exportMeetingToPDF(meeting)
+      setExportMessage(result.message)
+      setTimeout(() => setExportMessage(""), 3000)
+    } catch (error) {
+      console.error("導出失敗:", error)
+      setExportMessage("❌ 導出失敗，請重試")
+      setTimeout(() => setExportMessage(""), 3000)
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -122,6 +142,32 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
             </button>
           </div>
         )}
+
+        {/* Quick Export PDF Section */}
+        <div className="border-t border-[var(--theme-border)] pt-4">
+          <h4 className="text-lg font-semibold text-[var(--theme-accent)] mb-3 flex items-center gap-2">
+            <span className="material-icons">save_as</span>
+            匯出為 PDF
+          </h4>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={handleQuickExportPDF}
+              disabled={exporting}
+              className="flex items-center gap-2 px-4 py-3 rounded-lg bg-green-600 text-white hover:opacity-90 transition-all font-semibold disabled:opacity-50"
+            >
+              <span className="material-icons">{exporting ? "hourglass_empty" : "download"}</span>
+              {exporting ? "生成中..." : "快速導出 PDF"}
+            </button>
+            {exportMessage && (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-info text-green-600 text-sm">
+                {exportMessage}
+              </div>
+            )}
+          </div>
+          <p className="text-sm text-[var(--theme-text-muted)] mt-2">
+            💡 快速導出當前會議信息為 PDF，包含標題、日期、地點、要點和備註。
+          </p>
+        </div>
       </div>
     </div>
   )

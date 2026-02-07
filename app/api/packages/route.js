@@ -261,13 +261,23 @@ export async function POST(req) {
       }
 
       try {
+        console.log(`[LINE] Attempting to send notification to ${lineDisplayName || lineUserId}`)
+        console.log(`[LINE] Message preview: 收件人=${recipient_name}, 房號=${recipient_room}, 快遞=${courier}`)
+        
         await client.pushMessage(lineUserId, flexMessage)
-        console.log(`[LINE] Notification sent successfully to ${lineDisplayName || lineUserId}`)
+        console.log(`[LINE] ✅ Notification sent successfully to ${lineDisplayName || lineUserId}`)
       } catch (e) {
-        console.error("[LINE] Failed to push LINE message:", e.message || e)
+        console.error("[LINE] ❌ Failed to push LINE message:")
+        console.error("[LINE] Error type:", e.constructor.name)
+        console.error("[LINE] Error message:", e.message || e)
+        console.error("[LINE] Full error:", JSON.stringify(e, null, 2))
+        
+        // 不因 LINE 發送失敗而中斷包裹儲存
+        // 包裹已經成功儲存，只記錄 LINE 錯誤
       }
     } else {
-      console.info(`[LINE] No line_user_id found for unit: ${foundUnit.id} (${foundUnit.unit_code})`)
+      console.warn(`[LINE] ⚠️ No line_user_id found for unit: ${foundUnit.id} (${foundUnit.unit_code})`)
+      console.warn(`[LINE] Please ask the resident to bind LINE account via /bind-line page`)
     }
 
     return Response.json({ success: true, id: insertedPackage?.id });
@@ -281,6 +291,7 @@ export async function POST(req) {
 export async function PATCH(req) {
   try {
     const supabase = getSupabase();
+    const client = getLineClient();
 
     const body = await req.json();
     const { packageId, picked_up_by } = body;
@@ -289,6 +300,19 @@ export async function PATCH(req) {
       return Response.json({ error: "Package ID and Picker Name required" }, { status: 400 });
     }
 
+    // 先查詢包裹資訊（需要通知用）
+    const { data: packageData, error: fetchError } = await supabase
+      .from("packages")
+      .select("id, courier, recipient_name, recipient_room, tracking_number, unit_id, arrived_at")
+      .eq("id", packageId)
+      .single();
+
+    if (fetchError || !packageData) {
+      console.error("[PATCH] Package not found:", fetchError);
+      return Response.json({ error: "Package not found" }, { status: 404 });
+    }
+
+    // 更新包裹狀態
     const { error } = await supabase
       .from("packages")
       .update({
@@ -299,6 +323,146 @@ export async function PATCH(req) {
       .eq("id", packageId);
 
     if (error) throw error;
+
+    // 發送「已領取」LINE 通知
+    if (packageData.unit_id) {
+      let lineUserId = null;
+      let lineDisplayName = null;
+
+      // 策略 1: 從 profiles 表查找
+      try {
+        const { data: directProfiles } = await supabase
+          .from("profiles")
+          .select("id, line_user_id, line_display_name")
+          .eq("unit_id", packageData.unit_id);
+
+        if (directProfiles && directProfiles.length > 0) {
+          const profileWithLine = directProfiles.find((p) => p.line_user_id);
+          if (profileWithLine) {
+            lineUserId = profileWithLine.line_user_id;
+            lineDisplayName = profileWithLine.line_display_name || null;
+          }
+        }
+      } catch (e) {
+        console.warn("[PATCH LINE] profiles query failed:", e);
+      }
+
+      // 策略 2: 從 household_members → profiles 查找
+      if (!lineUserId) {
+        try {
+          const { data: members } = await supabase
+            .from("household_members")
+            .select("profile_id")
+            .eq("unit_id", packageData.unit_id);
+
+          const profileIds = (members || []).map((m) => m.profile_id).filter(Boolean);
+
+          if (profileIds.length > 0) {
+            const { data: profiles } = await supabase
+              .from("profiles")
+              .select("id, line_user_id, line_display_name, name")
+              .in("id", profileIds);
+
+            const profileWithLine = (profiles || []).find((p) => p.line_user_id);
+            if (profileWithLine) {
+              lineUserId = profileWithLine.line_user_id;
+              lineDisplayName = profileWithLine.line_display_name || profileWithLine.name || null;
+            }
+          }
+        } catch (e) {
+          console.warn("[PATCH LINE] household_members query failed:", e);
+        }
+      }
+
+      // 發送通知
+      if (lineUserId) {
+        const pickupTime = new Date().toLocaleString("zh-TW", { hour12: false });
+
+        const flexMessage = {
+          type: "flex",
+          altText: `✅ 包裹已被領取 - ${packageData.courier}`,
+          contents: {
+            type: "bubble",
+            hero: {
+              type: "box",
+              layout: "vertical",
+              contents: [
+                {
+                  type: "text",
+                  text: "✅ 包裹已領取通知",
+                  weight: "bold",
+                  size: "xl",
+                  color: "#ffffff",
+                },
+              ],
+              backgroundColor: "#06c755",
+              paddingAll: "20px",
+            },
+            body: {
+              type: "box",
+              layout: "vertical",
+              contents: [
+                {
+                  type: "text",
+                  text: `收件人：${packageData.recipient_name}`,
+                  margin: "md",
+                  size: "md",
+                  weight: "bold",
+                },
+                {
+                  type: "text",
+                  text: `房號：${packageData.recipient_room}`,
+                  margin: "sm",
+                  color: "#666666",
+                },
+                { type: "separator", margin: "md" },
+                {
+                  type: "text",
+                  text: `快遞公司：${packageData.courier}`,
+                  margin: "md",
+                  color: "#333333",
+                },
+                {
+                  type: "text",
+                  text: packageData.tracking_number
+                    ? `追蹤號：${packageData.tracking_number}`
+                    : "追蹤號：無",
+                  margin: "sm",
+                  color: "#666666",
+                  size: "sm",
+                },
+                { type: "separator", margin: "md" },
+                {
+                  type: "text",
+                  text: `領取人：${picked_up_by}`,
+                  margin: "md",
+                  color: "#06c755",
+                  weight: "bold",
+                },
+                {
+                  type: "text",
+                  text: `領取時間：${pickupTime}`,
+                  margin: "sm",
+                  color: "#666666",
+                  size: "sm",
+                },
+              ],
+            },
+          },
+        };
+
+        try {
+          await client.pushMessage(lineUserId, flexMessage);
+          console.log(
+            `[PATCH LINE] Pickup notification sent to ${lineDisplayName || lineUserId}`,
+          );
+        } catch (e) {
+          console.error("[PATCH LINE] Failed to send notification:", e.message || e);
+        }
+      } else {
+        console.warn(`[PATCH LINE] No LINE user found for unit ${packageData.unit_id}`);
+      }
+    }
 
     return Response.json({ success: true });
   } catch (err) {

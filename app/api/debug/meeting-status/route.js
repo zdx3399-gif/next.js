@@ -31,13 +31,22 @@ export async function GET(req) {
 
     // 檢查會議數量
     try {
-      const { data: meetings, error: meetingError } = await supabase.from("meetings").select("id, topic, time")
+      const { data: meetings, error: meetingError } = await supabase
+        .from("meetings")
+        .select("id, topic, time, location, key_takeaways")
+        .order("time", { ascending: false })
 
       if (meetingError) {
         diagnostics.database.meetingError = meetingError.message
       } else {
         diagnostics.database.meetingCount = meetings?.length || 0
-        diagnostics.database.meetings = meetings?.slice(0, 3)
+        diagnostics.database.meetings = (meetings || []).slice(0, 5).map((m) => ({
+          id: m.id,
+          topic: m.topic,
+          time: m.time,
+          location: m.location,
+          takeaways: m.key_takeaways?.length || 0,
+        }))
       }
     } catch (e) {
       diagnostics.database.meetingError = e.message

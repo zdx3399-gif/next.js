@@ -3,12 +3,29 @@
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
+interface Meeting {
+  title?: string
+  meeting_date?: string | Date
+  location?: string
+  key_takeaways?: string[]
+  notes?: string
+  description?: string
+  attendees?: string[]
+  created_at?: string
+  id?: string
+}
+
+interface ExportResult {
+  success: boolean
+  fileName?: string
+  message: string
+  error?: string
+}
+
 /**
  * 生成會議 PDF
- * @param {Object} meeting - 會議對象
- * @param {string} elementId - HTML 元素 ID (可選，用於渲染特定內容)
  */
-export async function exportMeetingToPDF(meeting, elementId = null) {
+export async function exportMeetingToPDF(meeting: Meeting, elementId: string | null = null): Promise<ExportResult> {
   try {
     const {
       title,
@@ -17,18 +34,16 @@ export async function exportMeetingToPDF(meeting, elementId = null) {
       key_takeaways,
       notes,
       description,
-      attendees,
-      created_at,
     } = meeting
 
-    // 建立 PDF （使用 Chinese 字體，但需要在 jsPDF 配置中設定）
+    // 建立 PDF
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4',
     })
 
-    // 使用標準字體，並手動管理字體編碼
+    // 使用標準字體
     pdf.setFont('helvetica')
 
     // 標題
@@ -134,21 +149,20 @@ export async function exportMeetingToPDF(meeting, elementId = null) {
       message: '✅ PDF exported successfully',
     }
   } catch (error) {
-    console.error('PDF generation failed:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('PDF generation failed:', errorMessage)
     return {
       success: false,
-      error: error.message,
+      error: errorMessage,
       message: '❌ PDF export failed',
     }
   }
 }
 
 /**
- * 使用 HTML 元素生成 PDF（更複雜的版本）
- * @param {string} elementId - HTML 元素 ID
- * @param {string} fileName - 下載文件名
+ * 使用 HTML 元素生成 PDF (更複雜的版本)
  */
-export async function exportHTMLToPDF(elementId, fileName = 'document.pdf') {
+export async function exportHTMLToPDF(elementId: string, fileName: string = 'document.pdf'): Promise<ExportResult> {
   try {
     const element = document.getElementById(elementId)
     if (!element) {
@@ -195,10 +209,11 @@ export async function exportHTMLToPDF(elementId, fileName = 'document.pdf') {
       message: '✅ PDF exported successfully',
     }
   } catch (error) {
-    console.error('HTML to PDF conversion failed:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('HTML to PDF conversion failed:', errorMessage)
     return {
       success: false,
-      error: error.message,
+      error: errorMessage,
       message: '❌ PDF export failed',
     }
   }
@@ -206,9 +221,8 @@ export async function exportHTMLToPDF(elementId, fileName = 'document.pdf') {
 
 /**
  * 透過後端 API 生成 PDF
- * @param {string} meetingId - 會議 ID
  */
-export async function exportMeetingPDFViaAPI(meetingId) {
+export async function exportMeetingPDFViaAPI(meetingId: string): Promise<ExportResult> {
   try {
     const response = await fetch('/api/meeting/export-pdf', {
       method: 'POST',
@@ -238,10 +252,12 @@ export async function exportMeetingPDFViaAPI(meetingId) {
       message: '✅ PDF exported successfully via API',
     }
   } catch (error) {
-    console.error('API export failed:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('API export failed:', errorMessage)
     return {
       success: false,
-      error: error.message,
+      error: errorMessage,
       message: '❌ PDF export failed',
     }
   }
+}

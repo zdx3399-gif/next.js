@@ -8,11 +8,13 @@ export const dynamic = "force-dynamic";
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !anonKey) {
     throw new Error("supabaseUrl is required. Missing SUPABASE_URL or SUPABASE_ANON_KEY.");
   }
-  return createClient(url, anonKey);
+  // 使用 service role key（如果有）以繞過 RLS；否則用 anon key
+  return createClient(url, serviceRoleKey || anonKey);
 }
 
 // ✅ LINE client 也延後建立

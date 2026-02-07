@@ -3,12 +3,22 @@
 /**
  * 統一的 API 客戶端
  * 所有前端對後端 API 的請求都通過這個文件
+ * 支持相對路徑（開發與生產都使用）
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+// 使用相對路徑以避免跨域與代理問題
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || ""
 
 interface FetchOptions extends RequestInit {
   params?: Record<string, any>
+}
+
+/**
+ * 偵測是否為 HTML 回應（通常代表 Vercel Protect 或其他保護機制返回驗證頁面）
+ */
+function isHtmlResponse(text: string): boolean {
+  const trimmed = text.trim().substring(0, 100)
+  return trimmed.startsWith("<") || trimmed.includes("<html") || trimmed.includes("<!DOCTYPE")
 }
 
 async function apiCall<T = any>(endpoint: string, options: FetchOptions = {}): Promise<T> {
@@ -40,7 +50,33 @@ async function apiCall<T = any>(endpoint: string, options: FetchOptions = {}): P
     ...fetchOptions,
   })
 
-  const data = await response.json()
+  // 先檢查 Content-Type，偵測 HTML 回應（可能是 Vercel Protect）
+  const contentType = response.headers.get("content-type") || ""
+  let data: any
+
+  if (contentType.includes("text/html")) {
+    // HTML 回應 = 可能被 Vercel Protect 攔截
+    const htmlText = await response.text()
+    console.error(
+      "[v0] API 返回 HTML（可能被 Vercel Protect 攔截）。請在 Vercel 關閉 'Require Authentication' 或為 /api/* 路徑新增例外。",
+    )
+    throw new Error(
+      "伺服器要求驗證（Vercel Protect 啟用中）。請告知管理者在 Vercel Dashboard 關閉 'Require Authentication' 或為 API 路由新增例外。",
+    )
+  }
+
+  try {
+    data = await response.json()
+  } catch (parseError) {
+    const responseText = await response.text()
+    if (isHtmlResponse(responseText)) {
+      console.error("[v0] API 返回非 JSON 的 HTML 內容（Vercel Protect）")
+      throw new Error(
+        "伺服器要求驗證（Vercel Protect 啟用中）。請告知管理者在 Vercel Dashboard 關閉 'Require Authentication' 或為 API 路由新增例外。",
+      )
+    }
+    throw new Error(`API 回應格式錯誤: ${responseText.substring(0, 100)}`)
+  }
 
   if (!response.ok) {
     throw new Error(data.message || data.error || `API error: ${response.status}`)

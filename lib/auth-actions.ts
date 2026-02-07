@@ -131,15 +131,10 @@ function parseUnitInput(input: string): ParsedUnit {
 // Server action to detect user tenant and authenticate
 export async function authenticateUser(email: string, password: string) {
   console.log("[v0] Starting authentication for email:", email)
-  
+
   try {
-    // 安全地拼接 API URL（移除結尾斜線，確保不產生雙斜線）
-    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "")
-    const apiUrl = `${baseUrl}/api/auth/login`
-    console.log("[v0] Calling API:", apiUrl)
-    
-    // 調用新的 /api/auth/login API
-    const response = await fetch(apiUrl, {
+    // 使用相對路徑，自動支持所有環境（localhost、Vercel preview、Vercel production）
+    const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -147,13 +142,16 @@ export async function authenticateUser(email: string, password: string) {
       body: JSON.stringify({ email, password }),
     })
 
-    // 檢查 HTTP 狀態碼
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("[v0] API returned error status:", response.status, errorText)
+    // 檢查 Content-Type，偵測 HTML 回應（Vercel Protect）
+    const contentType = response.headers.get("content-type") || ""
+    if (contentType.includes("text/html")) {
+      console.error(
+        "[v0] API 返回 HTML（被 Vercel Protect 攔截）。請在 Vercel Dashboard 關閉 'Require Authentication' 或為 /api/* 新增例外。",
+      )
       return {
         success: false,
-        error: `API 錯誤 (${response.status}): ${errorText}`,
+        error:
+          "伺服器要求驗證（Vercel Protect 啟用中）。\n\n請告知管理者在 Vercel Dashboard 關閉 'Require Authentication' 或為 /api/* 路由新增例外。",
       }
     }
 
@@ -162,18 +160,27 @@ export async function authenticateUser(email: string, password: string) {
     try {
       result = await response.json()
     } catch (parseError) {
-      console.error("[v0] Failed to parse JSON response:", parseError)
+      const errorText = await response.text()
+      console.error("[v0] Failed to parse JSON response:", parseError, errorText)
+      if (errorText.startsWith("<")) {
+        return {
+          success: false,
+          error:
+            "伺服器要求驗證（Vercel Protect 啟用中）。\n\n請告知管理者在 Vercel Dashboard 關閉 'Require Authentication' 或為 /api/* 路由新增例外。",
+        }
+      }
       return {
         success: false,
         error: "API 回應格式錯誤",
       }
     }
 
-    if (!result || !result.success) {
-      console.error("[v0] Login API failed:", result?.message)
+    // 檢查 HTTP 狀態碼
+    if (!response.ok) {
+      console.error("[v0] API returned error status:", response.status)
       return {
         success: false,
-        error: result?.message || "登入失敗，請檢查您的帳號密碼",
+        error: result?.message || `API 錯誤 (${response.status})`,
       }
     }
 

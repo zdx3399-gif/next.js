@@ -3,9 +3,22 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: NextRequest) {
   try {
+    // DEBUG: 檢查環境變數是否存在
+    console.log('[DEBUG] Environment variables:');
+    console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? '✅ Set' : '❌ UNDEFINED');
+    console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? '✅ Set' : '❌ UNDEFINED');
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+      console.error('[CRITICAL] Missing Supabase environment variables');
+      return NextResponse.json(
+        { success: false, message: 'Server configuration error - missing Supabase credentials' },
+        { status: 500 }
+      );
+    }
+
     const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY
     );
 
     const { email, password } = await req.json();

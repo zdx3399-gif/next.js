@@ -39,18 +39,35 @@ export async function createMeeting(
   meeting: Omit<Meeting, "id" | "created_at">,
   userId?: string,
 ): Promise<Meeting | null> {
-  const supabase = getSupabaseClient()
-  const { data, error } = await supabase
-    .from("meetings")
-    .insert([{ ...meeting, created_by: userId }])
-    .select()
-    .single()
+  // 路由通過 API 以觸發 LINE 通知
+  const res = await fetch("/api/meeting", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...meeting,
+      created_by: userId,
+    }),
+  })
 
-  if (error) {
+  if (!res.ok) {
+    const error = await res.json()
     console.error("Error creating meeting:", error)
     return null
   }
-  return data
+
+  const data = await res.json()
+  // 返回會議物件，需要包含足夠的資訊
+  return {
+    id: data.id,
+    topic: meeting.topic,
+    time: meeting.time,
+    location: meeting.location,
+    notes: meeting.notes,
+    key_takeaways: meeting.key_takeaways,
+    pdf_file_url: meeting.pdf_file_url,
+    created_by: userId,
+    created_at: new Date().toISOString(),
+  }
 }
 
 export async function updateMeeting(id: string, meeting: Partial<Meeting>): Promise<Meeting | null> {

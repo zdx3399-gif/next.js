@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { getSupabaseClient } from "@/lib/supabase"
 import { DispatchModal } from "./DispatchModal"
+import { CompleteModal } from "./CompleteModal"
 
 interface MaintenanceRow {
   id: string | null
@@ -161,6 +162,10 @@ export function MaintenanceManagementAdmin() {
   const [isDispatchOpen, setIsDispatchOpen] = useState(false)
   const [selectedMaintenanceId, setSelectedMaintenanceId] = useState<string | null>(null)
 
+  // Complete modal state
+  const [isCompleteOpen, setIsCompleteOpen] = useState(false)
+  const [selectedForComplete, setSelectedForComplete] = useState<{ id: string; estimatedCost?: number } | null>(null)
+
   const loadData = async () => {
     setLoading(true)
     const supabase = getSupabaseClient()
@@ -294,6 +299,12 @@ export function MaintenanceManagementAdmin() {
     setIsDispatchOpen(true)
   }
 
+  const handleComplete = (id: string | null, estimatedCost?: number) => {
+    if (!id) return
+    setSelectedForComplete({ id, estimatedCost })
+    setIsCompleteOpen(true)
+  }
+
   const getStatusLabel = (status: string) => {
     const labels: Record<string, { text: string; class: string }> = {
       open: { text: "待處理", class: "bg-yellow-500/20 text-yellow-500" },
@@ -372,13 +383,24 @@ export function MaintenanceManagementAdmin() {
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)]">
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => handleDispatch(row.id)}
-                          className="p-2 rounded-lg border border-blue-500 text-blue-500 hover:bg-blue-500/10 transition-all"
-                          title="派工"
-                        >
-                          <span className="material-icons text-lg">assignment_ind</span>
-                        </button>
+                        {row.status === 'open' && (
+                          <button
+                            onClick={() => handleDispatch(row.id)}
+                            className="p-2 rounded-lg border border-blue-500 text-blue-500 hover:bg-blue-500/10 transition-all"
+                            title="派工"
+                          >
+                            <span className="material-icons text-lg">assignment_ind</span>
+                          </button>
+                        )}
+                        {row.status === 'progress' && (
+                          <button
+                            onClick={() => handleComplete(row.id, row.cost)}
+                            className="p-2 rounded-lg border border-green-500 text-green-500 hover:bg-green-500/10 transition-all"
+                            title="結案"
+                          >
+                            <span className="material-icons text-lg">check_circle</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEdit(index)}
                           className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
@@ -422,6 +444,14 @@ export function MaintenanceManagementAdmin() {
         isOpen={isDispatchOpen}
         onClose={() => setIsDispatchOpen(false)}
         maintenanceId={selectedMaintenanceId || ""}
+        onSuccess={loadData}
+      />
+
+      <CompleteModal
+        isOpen={isCompleteOpen}
+        onClose={() => setIsCompleteOpen(false)}
+        maintenanceId={selectedForComplete?.id || ""}
+        estimatedCost={selectedForComplete?.estimatedCost}
         onSuccess={loadData}
       />
     </div>

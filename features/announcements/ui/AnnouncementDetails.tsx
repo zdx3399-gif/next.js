@@ -2,6 +2,32 @@
 
 import { useEffect, useState } from "react"
 import { getSupabaseClient } from "@/lib/supabase"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+
+interface HelpHintProps {
+  title: string
+  description: string
+}
+
+function HelpHint({ title, description }: HelpHintProps) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-accent-light)] text-[var(--theme-accent)] text-xs font-semibold leading-none hover:border-[var(--theme-accent)] hover:opacity-90 transition-all"
+          aria-label={`${title}說明`}
+        >
+          ?
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="z-[220] w-80 text-sm">
+        <div className="font-semibold mb-1">{title}</div>
+        <div className="text-[var(--theme-text-muted)] leading-relaxed">{description}</div>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 interface Comment {
   id: string
@@ -182,6 +208,20 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
   return (
     <div className="flex gap-4 h-[600px]">
       <div className="w-1/3 flex flex-col gap-3 border-r border-[var(--theme-border)] pr-4 overflow-hidden">
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--theme-text-primary)] text-sm font-medium">公告列表</span>
+          <HelpHint
+            title="住戶公告列表"
+            description="這裡會顯示已發布公告。點選任一公告可在右側看完整內容；可先用下方搜尋快速找到你關心的主題。"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+          <HelpHint
+            title="住戶搜尋"
+            description="輸入關鍵字可篩選公告標題與內容，例如『停水』『電梯』『活動』。找不到時可清空關鍵字查看全部。"
+          />
+        </div>
         <input
           type="text"
           placeholder="搜尋公告..."
@@ -232,7 +272,13 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
           <>
             <div className="flex-1 overflow-y-auto">
               <div className="mb-4">
-                <h3 className="text-2xl font-bold text-[var(--theme-accent)] mb-2">{selectedAnnouncement.title}</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-2xl font-bold text-[var(--theme-accent)]">{selectedAnnouncement.title}</h3>
+                  <HelpHint
+                    title="公告詳情"
+                    description="此區顯示完整公告內容與圖片。建議先確認日期與內容是否仍適用，再依公告指示進行後續動作。"
+                  />
+                </div>
                 <div className="flex gap-4 text-[var(--theme-text-muted)] text-sm mb-4">
                   <div>發布者: {selectedAnnouncement.author}</div>
                   <div>{new Date(selectedAnnouncement.created_at).toLocaleDateString("zh-TW")}</div>
@@ -252,6 +298,13 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
               </div>
 
               <div className="mb-6 pb-4 border-b border-[var(--theme-border)]">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[var(--theme-text-primary)] text-sm">按讚</span>
+                  <HelpHint
+                    title="住戶按讚"
+                    description="按讚可表達你對公告的認同或回饋，數字會顯示社區關注度。再次點擊可取消按讚。"
+                  />
+                </div>
                 <button
                   onClick={handleToggleLike}
                   disabled={!currentUser}
@@ -267,7 +320,13 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
               </div>
 
               <div>
-                <h4 className="text-lg font-bold text-[var(--theme-accent)] mb-4">留言 ({currentComments.length})</h4>
+                <div className="flex items-center gap-2 mb-4">
+                  <h4 className="text-lg font-bold text-[var(--theme-accent)]">留言 ({currentComments.length})</h4>
+                  <HelpHint
+                    title="住戶留言"
+                    description="可在此提問或回覆公告內容。留言請避免個資與不當文字；若違反規範，可能被管理員限制留言權限。"
+                  />
+                </div>
                 <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
                   {currentComments.length > 0 ? (
                     currentComments.map((comment) => (
@@ -301,6 +360,13 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
                   </div>
                 ) : (
                   <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[var(--theme-text-primary)] text-sm">新增留言</span>
+                      <HelpHint
+                        title="住戶發送留言"
+                        description="輸入內容後可按 Enter 或點『發送』。建議一句重點一行，方便管理員與其他住戶閱讀。"
+                      />
+                    </div>
                     <input
                       type="text"
                       placeholder="新增留言..."

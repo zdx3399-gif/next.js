@@ -2,6 +2,7 @@
 
 import { useEmergencies } from "../hooks/useEmergencies"
 import { useState } from "react"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface EmergencyManagementAdminProps {
   currentUserName?: string
@@ -56,6 +57,7 @@ export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = fals
           <h2 className="flex gap-2 items-center text-[var(--theme-danger)] text-xl">
             <span className="material-icons">emergency</span>
             緊急事件
+            <HelpHint title="管理端緊急通報" description="可由管理端主動發起通報，並同步通知相關人員。" />
           </h2>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -78,10 +80,15 @@ export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = fals
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
             <span className="material-icons">history</span>
             緊急事件紀錄
+            <HelpHint title="管理端紀錄" description="查看通報歷史、發起人與備註，供事後追蹤與稽核。" />
           </h2>
         </div>
 
         <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[var(--theme-text-primary)] text-sm">搜尋紀錄</span>
+            <HelpHint title="管理端搜尋" description="可依類別、發起人或備註快速查詢事件。" align="center" />
+          </div>
           <input
             type="text"
             placeholder="搜尋類別、發起人或備註..."
@@ -92,16 +99,20 @@ export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = fals
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full min-w-[980px] border-collapse">
             <thead>
               <tr className="bg-[var(--theme-accent-light)]">
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">類別</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">時間</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  發起人
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">類別</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap">時間<HelpHint title="管理端時間欄" description="顯示事件建立時間，建議搭配監視器時間軸比對。" align="center" /></span>
                 </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">備註</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap">發起人<HelpHint title="管理端發起人欄" description="顯示住戶姓名或管理端帳號，便於回訪確認。" align="center" /></span>
+                </th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">備註</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap">操作<HelpHint title="管理端操作欄" description="僅在確認已結案或誤報時再刪除，避免影響追溯。" align="center" /></span>
+                </th>
               </tr>
             </thead>
             <tbody>

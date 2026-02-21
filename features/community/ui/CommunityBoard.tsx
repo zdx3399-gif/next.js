@@ -7,6 +7,7 @@ import { PostDetailView } from "./PostDetailView"
 import { ReportDialog } from "./ReportDialog"
 import { useCommunityPosts, useReports } from "../hooks/useCommunity"
 import type { User } from "@/features/profile/api/profile"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface CommunityBoardProps {
   currentUser: User | null
@@ -43,6 +44,13 @@ export function CommunityBoard({ currentUser }: CommunityBoardProps) {
 
   return (
     <div>
+      <div className="mb-4 flex items-center gap-2">
+        <span className="text-[var(--theme-text-primary)] text-sm font-medium">住戶社區討論</span>
+        <HelpHint
+          title="住戶端社區討論"
+          description="可瀏覽貼文、查看詳情、發文與檢舉。發文前請遵守社區規範與禮貌原則。"
+        />
+      </div>
       {view === "list" ? (
         <CommunityPostList
           currentUser={currentUser}

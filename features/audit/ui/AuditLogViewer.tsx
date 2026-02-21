@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getSupabaseClient } from "@/lib/supabase"
 import { ACTION_TYPE_LABELS, TARGET_TYPE_LABELS } from "@/lib/audit"
 import type { User } from "@/features/profile/api/profile"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface AuditLog {
   id: string
@@ -167,6 +168,10 @@ export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-2 mr-2">
+          <span className="text-xs text-[var(--theme-text-secondary)]">稽核查詢</span>
+          <HelpHint title="管理端稽核查詢" description="可依關鍵字、動作類型與目標類型快速定位紀錄。" align="center" />
+        </div>
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -210,6 +215,10 @@ export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
       </div>
 
       {/* Stats */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-[var(--theme-text-secondary)]">統計摘要</span>
+        <HelpHint title="管理端統計摘要" description="顯示近期稽核數量與重點操作分布，便於快速監控。" align="center" />
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="p-3 text-center">
           <div className="text-2xl font-bold text-[var(--theme-accent)]">{logs.length}</div>
@@ -266,6 +275,7 @@ export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
                     </Badge>
                     <Badge variant="outline">{targetTypeLabels[log.target_type] || log.target_type}</Badge>
                     <Badge variant="secondary">{log.operator_role}</Badge>
+                    <HelpHint title="管理端稽核欄位" description="可快速辨識操作動作、目標類型與執行角色。" align="center" />
                   </div>
 
                   <p className="text-[var(--theme-text-primary)] font-medium mb-2">{log.reason || "(未填寫原因)"}</p>
@@ -295,6 +305,10 @@ export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
 
                     {expandedLogs.has(log.id) && (
                       <div className="mt-2 space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-[var(--theme-text-secondary)]">
+                          <span>詳細資料</span>
+                          <HelpHint title="管理端詳細資料" description="展開可查看前後狀態差異與附加資料，供稽核追溯。" align="center" />
+                        </div>
                         {renderStateDiff(log.before_state, log.after_state)}
 
                         {log.additional_data && Object.keys(log.additional_data).length > 0 && (

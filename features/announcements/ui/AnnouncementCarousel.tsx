@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import type { Announcement } from "../api/announcements"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface AnnouncementCarouselProps {
   announcements: Announcement[]
@@ -45,6 +46,10 @@ export function AnnouncementCarousel({
 
   return (
     <section className="mb-6 sm:mb-8">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-xs text-[var(--theme-text-secondary)]">公告輪播</span>
+        <HelpHint title="住戶端公告輪播" description="可點標題查看完整公告，輪播會自動切換最新重點。" align="center" />
+      </div>
       <div className="relative w-full h-[350px] sm:h-[600px] overflow-hidden rounded-2xl shadow-2xl group">
         {announcements.map((announcement, idx) => {
           const announcementLikesArray = likes.filter((like) => like.announcement_id === announcement.id)

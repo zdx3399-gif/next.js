@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useRef, useState, useEffect } from "react"
 import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface User {
   id?: string
@@ -139,6 +140,7 @@ export function AiChatWindow({
         <div className="flex gap-2 items-center text-[var(--theme-accent)] font-bold pointer-events-none">
           <span className="material-icons">smart_toy</span>
           AI 助理
+          <HelpHint title="住戶端 AI 助理" description="可詢問常見流程、快速帶入常用問題，協助你找到功能入口。" align="center" />
           <span className="text-xs text-[var(--theme-text-muted)] font-normal ml-2">(可拖曳移動)</span>
         </div>
         <button
@@ -180,6 +182,7 @@ export function AiChatWindow({
             placeholder="輸入訊息..."
             className="theme-input flex-1 p-2 rounded-lg"
           />
+          <HelpHint title="住戶端訊息輸入" description="輸入問題後送出；也可點下方快捷按鈕自動帶入文字。" align="center" />
           <button
             onClick={sendMessage}
             className="p-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg font-bold hover:opacity-90 transition-all disabled:opacity-500 disabled:cursor-not-allowed"
@@ -188,6 +191,7 @@ export function AiChatWindow({
           </button>
         </div>
         <div className="flex justify-center gap-4 mt-3">
+          <HelpHint title="住戶端分頁" description="常用功能：快捷提問；住戶資訊：查看目前帳號資料。" align="center" />
           <button
             onClick={() => setActiveTab("functions")}
             className={`text-sm font-medium transition-colors ${
@@ -219,6 +223,12 @@ export function AiChatWindow({
             緊急協助
           </button> */}
         </div>
+        {activeTab === "functions" && (
+          <div className="flex items-center gap-2 mt-3 text-xs text-[var(--theme-text-muted)]">
+            <span>常用問題快捷鍵</span>
+            <HelpHint title="住戶端快捷提問" description="點擊按鈕會把問題填入輸入框，可再送出。" align="center" />
+          </div>
+        )}
         {activeTab === "functions" && (
           <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
             <button

@@ -7,6 +7,7 @@ import { KnowledgeCardItem } from "./KnowledgeCardItem"
 import { useKnowledgeCards, useVoteCard } from "../hooks/useKMS"
 import type { User } from "@/features/profile/api/profile"
 import { Search, Plus } from "lucide-react"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface KnowledgeCardListProps {
   currentUser: User | null
@@ -59,6 +60,10 @@ export function KnowledgeCardList({ currentUser, onSelectCard, onCreateCard }: K
       {/* Improved search bar with create button */}
       <div className="flex gap-3">
         <div className="relative flex-1">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">搜尋知識卡</span>
+            <HelpHint title="住戶端知識庫搜尋" description="可輸入關鍵字快速找到流程、規章與常見問題。" align="center" />
+          </div>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={searchQuery}
@@ -77,6 +82,10 @@ export function KnowledgeCardList({ currentUser, onSelectCard, onCreateCard }: K
 
       {/* Cleaner category pills */}
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex items-center gap-2 shrink-0 pr-2">
+          <span className="text-xs text-muted-foreground">分類</span>
+          <HelpHint title="住戶端分類篩選" description="可依包裹、訪客、報修等分類縮小查詢範圍。" align="center" />
+        </div>
         {categories.map((cat) => (
           <Button
             key={cat.value || "all"}
@@ -95,6 +104,10 @@ export function KnowledgeCardList({ currentUser, onSelectCard, onCreateCard }: K
       </div>
 
       {/* Using new KnowledgeCardItem component in grid layout */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">知識卡列表</span>
+        <HelpHint title="住戶端知識卡" description="點選「查看詳情」可閱讀完整步驟，並可回饋是否有幫助。" align="center" />
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {cards.length === 0 ? (
           <div className="col-span-full text-center py-16 text-muted-foreground">

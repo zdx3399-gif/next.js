@@ -1,6 +1,7 @@
 "use client"
 
 import type { Visitor } from "../api/visitors"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface VisitorCardProps {
   visitor: Visitor
@@ -52,7 +53,7 @@ export function VisitorCard({ visitor, isAdmin, onCheckIn, onCheckOut }: Visitor
         <div
           className={`px-3 py-1 rounded-full text-sm font-bold whitespace-nowrap ml-2 ${config.bgColor} ${config.textColor}`}
         >
-          {config.label}
+          <span className="inline-flex items-center gap-1">{config.label}<HelpHint title="訪客狀態" description="顯示訪客目前流程狀態：預約、訪客中、已離開。" align="center" /></span>
         </div>
       </div>
 
@@ -68,20 +69,26 @@ export function VisitorCard({ visitor, isAdmin, onCheckIn, onCheckOut }: Visitor
         </div>
 
         {isAdmin && visitor.status === "reserved" && onCheckIn && (
-          <button
-            onClick={() => onCheckIn(visitor.id)}
-            className="px-4 py-2 bg-[#4caf50] text-white rounded-lg text-sm font-bold hover:opacity-90 transition-all"
-          >
-            訪客簽到
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onCheckIn(visitor.id)}
+              className="px-4 py-2 bg-[#4caf50] text-white rounded-lg text-sm font-bold hover:opacity-90 transition-all"
+            >
+              訪客簽到
+            </button>
+            <HelpHint title="管理端簽到" description="訪客到達時點擊簽到，開始訪客中狀態。" align="center" />
+          </div>
         )}
         {isAdmin && visitor.status === "checked_in" && onCheckOut && (
-          <button
-            onClick={() => onCheckOut(visitor.id)}
-            className="px-4 py-2 bg-[#f44336] text-white rounded-lg text-sm font-bold hover:opacity-90 transition-all"
-          >
-            訪客簽退
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onCheckOut(visitor.id)}
+              className="px-4 py-2 bg-[#f44336] text-white rounded-lg text-sm font-bold hover:opacity-90 transition-all"
+            >
+              訪客簽退
+            </button>
+            <HelpHint title="管理端簽退" description="訪客離開時點擊簽退，完成一筆訪客流程。" align="center" />
+          </div>
         )}
       </div>
     </div>

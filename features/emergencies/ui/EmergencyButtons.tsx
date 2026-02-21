@@ -1,6 +1,7 @@
 "use client"
 
 import { useEmergencies } from "../hooks/useEmergencies"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface EmergencyButtonsProps {
   userName?: string
@@ -67,6 +68,10 @@ export function EmergencyButtons({ userName, onTrigger, variant = "full" }: Emer
       <h2 className="flex gap-2 items-center text-[#f44336] mb-5 text-xl">
         <span className="material-icons">emergency</span>
         緊急事件
+        <HelpHint
+          title="住戶端緊急事件"
+          description="遇到緊急狀況可立即通報管理端。請依實際情境點選最接近的類別，避免誤報。"
+        />
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
         {emergencyTypes.map((emergency) => (
@@ -79,7 +84,10 @@ export function EmergencyButtons({ userName, onTrigger, variant = "full" }: Emer
           </div>
         ))}
       </div>
-      <div className="text-[var(--theme-text-muted)] text-sm text-center">點擊上方按鈕可立即通知管理員和相關單位</div>
+      <div className="text-[var(--theme-text-muted)] text-sm text-center flex items-center justify-center gap-2">
+        點擊上方按鈕可立即通知管理員和相關單位
+        <HelpHint title="住戶端通報提醒" description="系統會保留通報時間與發起人。若為誤觸，請盡快聯繫管理室說明。" align="center" />
+      </div>
     </div>
   )
 }

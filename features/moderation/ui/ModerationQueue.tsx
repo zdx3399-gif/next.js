@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useModerationQueue } from "../hooks/useModeration"
 import type { User } from "@/features/profile/api/profile"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface ModerationQueueProps {
   currentUser: User
@@ -72,6 +73,11 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex gap-2 items-center overflow-x-auto pb-2">
+        <HelpHint
+          title="管理端佇列篩選"
+          description="佇列狀態邏輯：\n• 待處理（pending）：新進案件，尚未開始審核。\n• 審核中（in_review）：已進入人工處理流程。\n• 已處理（resolved）：已完成處置並結案。\n\n優先級邏輯：urgent > high > medium > low，建議先處理緊急與高風險案件。"
+          align="center"
+        />
         <div className="flex gap-2">
           <Button
             onClick={() => setStatusFilter("pending")}
@@ -144,6 +150,11 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
                     <div className="flex gap-2 items-center mb-2 flex-wrap">
                       <Badge className={priorityBadge.className}>{priorityBadge.label}</Badge>
                       <Badge variant="outline">{getItemTypeLabel(item.item_type)}</Badge>
+                      <HelpHint
+                        title="管理端案件標籤"
+                        description="案件標籤說明：\n• 優先級：決定處理先後。\n• 內容類型：貼文 / 留言 / 檢舉。\n• 已指派：已有審核人員接手。\n• 逾期：已超過 due_at 或系統標記 overdue。"
+                        align="center"
+                      />
                       {item.assigned_to && (
                         <Badge variant="secondary" className="flex gap-1 items-center">
                           <span className="material-icons text-xs">person</span>
@@ -181,9 +192,12 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
                   </div>
 
                   {!item.assigned_to && item.status === "pending" && (
-                    <Button size="sm" onClick={(e) => handleAssignToMe(item.id, e)} className="shrink-0">
-                      指派給我
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" onClick={(e) => handleAssignToMe(item.id, e)} className="shrink-0">
+                        指派給我
+                      </Button>
+                      <HelpHint title="管理端指派" description="先指派再處理可避免多人重複作業。" align="center" />
+                    </div>
                   )}
                 </div>
               </Card>

@@ -5,6 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { useMaintenance } from "../hooks/useMaintenance"
 import type { MaintenanceFormData } from "../api/maintenance"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface MaintenanceFormProps {
   userId?: string
@@ -53,10 +54,21 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
       <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
         <span className="material-icons">build</span>
         提交維修申請
+        <HelpHint
+          title="住戶端報修申請"
+          description="填寫報修資料後送出，管理端會依內容安排處理。建議資訊越完整越好，可加速派工。"
+        />
       </h2>
       <form onSubmit={onFormSubmit} className="space-y-4 max-w-2xl">
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">維修類型</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">維修類型</label>
+            <HelpHint
+              title="住戶端維修類型"
+              description="先分類問題類型（如水電、門窗），可幫助管理端快速指派對應處理人員。"
+              align="center"
+            />
+          </div>
           <select
             value={form.type}
             onChange={(e) => setForm({ ...form, type: e.target.value })}
@@ -69,7 +81,14 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
           </select>
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">位置</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">位置</label>
+            <HelpHint
+              title="住戶端位置"
+              description="請填寫明確位置（棟別/樓層/區域），可減少現場尋找時間。"
+              align="center"
+            />
+          </div>
           <input
             type="text"
             value={form.location}
@@ -80,7 +99,14 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
           />
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">問題描述</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">問題描述</label>
+            <HelpHint
+              title="住戶端問題描述"
+              description="建議描述『何時發生、異常現象、影響範圍』，有助於先行判斷嚴重程度。"
+              align="center"
+            />
+          </div>
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -90,7 +116,14 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
           />
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">上傳照片（選填）</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">上傳照片（選填）</label>
+            <HelpHint
+              title="住戶端照片"
+              description="附上現場照片可提高判斷效率，管理端可更快安排適當工具與人力。"
+              align="center"
+            />
+          </div>
           <input
             type="file"
             accept="image/*"

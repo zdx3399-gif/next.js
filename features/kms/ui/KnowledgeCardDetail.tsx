@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useKnowledgeCardDetail } from "../hooks/useKMS"
 import type { User } from "@/features/profile/api/profile"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface KnowledgeCardDetailProps {
   cardId: string
@@ -65,6 +66,7 @@ export function KnowledgeCardDetail({ cardId, currentUser, onBack, onEdit }: Kno
           <span className="material-icons">arrow_back</span>
           返回列表
         </Button>
+        <HelpHint title="住戶端知識詳情" description="此頁面提供完整流程、注意事項與聯絡資訊，建議依序閱讀。" align="center" />
         {canEdit && onEdit && (
           <Button onClick={() => onEdit(card.id)} className="flex gap-2 items-center ml-auto">
             <span className="material-icons">edit</span>
@@ -100,6 +102,7 @@ export function KnowledgeCardDetail({ cardId, currentUser, onBack, onEdit }: Kno
             <h2 className="font-bold text-lg mb-3 flex gap-2 items-center text-[var(--theme-text-primary)]">
               <span className="material-icons">list</span>
               操作步驟
+              <HelpHint title="住戶端操作步驟" description="依步驟順序操作可降低錯誤，若情況不同可詢問管理室。" align="center" />
             </h2>
             <ol className="list-decimal list-inside space-y-2">
               {card.steps.map((step: string, index: number) => (
@@ -145,7 +148,7 @@ export function KnowledgeCardDetail({ cardId, currentUser, onBack, onEdit }: Kno
 
         {/* Vote */}
         <div className="border-t pt-4">
-          <p className="text-sm text-[var(--theme-text-secondary)] mb-3">這個知識卡對您有幫助嗎？</p>
+          <p className="text-sm text-[var(--theme-text-secondary)] mb-3 flex items-center gap-2">這個知識卡對您有幫助嗎？<HelpHint title="住戶端回饋" description="你的回饋會幫助系統調整內容品質與排序。" align="center" /></p>
           <div className="flex gap-2">
             <Button onClick={() => handleVote("helpful")} variant="outline" className="flex gap-2 items-center">
               <span className="material-icons text-green-600">thumb_up</span>
@@ -164,6 +167,7 @@ export function KnowledgeCardDetail({ cardId, currentUser, onBack, onEdit }: Kno
             <h2 className="font-bold text-lg mb-3 flex gap-2 items-center text-[var(--theme-text-primary)]">
               <span className="material-icons">history</span>
               版本歷史 ({versions.length})
+              <HelpHint title="住戶端版本歷史" description="可查看內容更新紀錄，確保使用最新規則。" align="center" />
             </h2>
             <div className="space-y-2">
               {versions.map((v, index) => (

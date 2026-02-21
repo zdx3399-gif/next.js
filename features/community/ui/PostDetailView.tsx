@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { usePostDetail, useUserInteractions } from "../hooks/useCommunity"
 import type { User } from "@/features/profile/api/profile"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface PostDetailViewProps {
   postId: string
@@ -121,6 +122,10 @@ export function PostDetailView({ postId, currentUser, onBack, onReport }: PostDe
         <span className="material-icons">arrow_back</span>
         返回列表
       </Button>
+      <div className="flex items-center gap-2 text-xs text-[var(--theme-text-secondary)]">
+        <span>貼文詳情</span>
+        <HelpHint title="住戶端貼文詳情" description="可閱讀全文、互動與留言，必要時可提出檢舉。" align="center" />
+      </div>
 
       {/* Post Content */}
       <Card className="p-6">
@@ -155,6 +160,7 @@ export function PostDetailView({ postId, currentUser, onBack, onReport }: PostDe
 
         {/* Actions */}
         <div className="flex gap-2 items-center border-t pt-4">
+          <HelpHint title="住戶端互動區" description="按讚、收藏與有幫助可反映內容品質。" align="center" />
           <Button
             variant={isLiked ? "default" : "outline"}
             size="sm"
@@ -202,6 +208,7 @@ export function PostDetailView({ postId, currentUser, onBack, onReport }: PostDe
         <h2 className="text-xl font-bold mb-4 flex gap-2 items-center text-[var(--theme-text-primary)]">
           <span className="material-icons">comment</span>
           留言 ({comments.length})
+          <HelpHint title="住戶端留言區" description="可參與討論，留言時請遵守社區規範。" align="center" />
         </h2>
 
         {/* Add Comment */}

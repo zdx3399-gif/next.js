@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useFacilitiesAdmin } from "../hooks/useFacilities"
 import type { Facility } from "../api/facilities"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface FacilityFormModalProps {
   isOpen: boolean
@@ -32,7 +33,7 @@ function FacilityFormModal({
       <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
-          <h3 className="text-lg font-bold text-[var(--theme-accent)]">{isEditing ? "編輯設施" : "新增設施"}</h3>
+          <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">{isEditing ? "編輯設施" : "新增設施"}<HelpHint title="管理端設施編輯" description="可建立或更新設施屬性，影響住戶可預約規則。" /></h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors">
             <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
           </button>
@@ -41,7 +42,7 @@ function FacilityFormModal({
         {/* Form Content */}
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">設施名稱</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">設施名稱<HelpHint title="管理端設施名稱" description="住戶端顯示名稱，建議明確易懂。" align="center" /></label>
             <input
               type="text"
               value={formData.name || ""}
@@ -51,7 +52,7 @@ function FacilityFormModal({
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">說明</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">說明<HelpHint title="管理端設施說明" description="描述使用限制與注意事項。" align="center" /></label>
             <textarea
               value={formData.description || ""}
               onChange={(e) => onChange("description", e.target.value)}
@@ -61,7 +62,7 @@ function FacilityFormModal({
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">位置</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">位置<HelpHint title="管理端設施位置" description="填寫實際位置，便於住戶到場。" align="center" /></label>
             <input
               type="text"
               value={formData.location || ""}
@@ -73,6 +74,7 @@ function FacilityFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">容納人數</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端容納人數" description="設定單時段最大人數。" align="center" /></div>
               <input
                 type="number"
                 value={formData.capacity || 1}
@@ -83,6 +85,7 @@ function FacilityFormModal({
             </div>
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">基礎點數</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端基礎點數" description="一般時段的預約點數基準。" align="center" /></div>
               <input
                 type="number"
                 value={formData.base_price || 10}
@@ -95,6 +98,7 @@ function FacilityFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">冷卻時間（小時）</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端冷卻時間" description="同戶再次預約同設施需間隔時數。" align="center" /></div>
               <input
                 type="number"
                 value={formData.cool_down_hours || 24}
@@ -105,6 +109,7 @@ function FacilityFormModal({
             </div>
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">同時預約上限</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端同時預約上限" description="每戶同時可持有的預約數量上限。" align="center" /></div>
               <input
                 type="number"
                 value={formData.max_concurrent_bookings || 2}
@@ -115,7 +120,7 @@ function FacilityFormModal({
             </div>
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">圖片</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">圖片<HelpHint title="管理端設施圖片" description="上傳後可提升住戶辨識度。" align="center" /></label>
             <input
               type="file"
               accept="image/*"
@@ -132,6 +137,7 @@ function FacilityFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">狀態</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端可用狀態" description="不可用時住戶將無法預約。" align="center" /></div>
               <select
                 value={String(formData.available)}
                 onChange={(e) => onChange("available", e.target.value === "true")}
@@ -143,6 +149,7 @@ function FacilityFormModal({
             </div>
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">熱門時段抽籤</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端抽籤" description="開啟後熱門時段可改為抽籤機制。" align="center" /></div>
               <select
                 value={String(formData.is_lottery_enabled)}
                 onChange={(e) => onChange("is_lottery_enabled", e.target.value === "true")}
@@ -337,6 +344,7 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
             <span className="material-icons">meeting_room</span>
             設施管理
+            <HelpHint title="管理端設施管理" description="管理設施資料與預約規則，直接影響住戶端可見內容。" />
           </h2>
           <button
             onClick={handleAdd}
@@ -348,6 +356,10 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
         </div>
 
         <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[var(--theme-text-primary)] text-sm">搜尋設施</span>
+            <HelpHint title="管理端設施搜尋" description="可用名稱或位置快速定位設施。" />
+          </div>
           <input
             type="text"
             placeholder="搜尋設施名稱或位置..."
@@ -358,20 +370,16 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full min-w-[980px] border-collapse">
             <thead>
               <tr className="bg-[var(--theme-accent-light)]">
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  設施名稱
-                </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">位置</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  基礎點數
-                </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">冷卻</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">抽籤</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">設施名稱<HelpHint title="設施名稱欄" description="顯示設施名稱。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">位置<HelpHint title="設施位置欄" description="顯示設施所在位置。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">基礎點數<HelpHint title="基礎點數欄" description="顯示預約此設施的基本點數。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">冷卻<HelpHint title="冷卻欄" description="顯示同戶再次預約需間隔時數。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">抽籤<HelpHint title="抽籤欄" description="顯示是否啟用熱門時段抽籤機制。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">狀態<HelpHint title="狀態欄" description="顯示設施是否可供預約。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">操作<HelpHint title="操作欄" description="可編輯或刪除設施資料。" align="center" /></span></th>
               </tr>
             </thead>
             <tbody>
@@ -444,10 +452,15 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
             <span className="material-icons">event</span>
             預約紀錄
+            <HelpHint title="管理端預約紀錄" description="查詢住戶預約、簽到與狀態，支援客服與稽核。" />
           </h2>
         </div>
 
         <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[var(--theme-text-primary)] text-sm">搜尋預約</span>
+            <HelpHint title="管理端預約搜尋" description="可依設施、預約人、房號或狀態查詢。" />
+          </div>
           <input
             type="text"
             placeholder="搜尋設施、預約人、房號或狀態..."
@@ -458,18 +471,16 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full min-w-[980px] border-collapse">
             <thead>
               <tr className="bg-[var(--theme-accent-light)]">
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">設施</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  預約人
-                </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">日期</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">時間</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">點數</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">簽到</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">設施<HelpHint title="預約設施欄" description="顯示預約的設施名稱。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">預約人<HelpHint title="預約人欄" description="顯示住戶姓名與房號。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">日期<HelpHint title="預約日期欄" description="顯示預約日期。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">時間<HelpHint title="預約時間欄" description="顯示時段範圍。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">點數<HelpHint title="點數欄" description="顯示此筆預約消耗點數。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">簽到<HelpHint title="簽到欄" description="顯示簽到時間，未簽到則為空。" align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">狀態<HelpHint title="預約狀態欄" description="顯示預約目前狀態。" align="center" /></span></th>
               </tr>
             </thead>
             <tbody>

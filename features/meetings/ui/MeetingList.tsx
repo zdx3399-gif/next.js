@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useMeetings } from "../hooks/useMeetings"
 import { MeetingDetails } from "./MeetingDetails"
+import { HelpHint } from "@/components/ui/help-hint"
 
 export function MeetingList() {
   const { meetings, loading, error } = useMeetings()
@@ -47,9 +48,20 @@ export function MeetingList() {
       <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
         <span className="material-icons">event</span>
         會議/活動
+        <HelpHint
+          title="住戶端會議/活動"
+          description="可查閱社區會議與活動資訊，點選卡片可進入詳情查看重點與附件。"
+        />
       </h2>
 
       <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+          <HelpHint
+            title="住戶端會議搜尋"
+            description="可用主題、地點或日期關鍵字快速找出指定會議。"
+          />
+        </div>
         <input
           type="text"
           placeholder="搜尋會議主題、地點或日期..."
@@ -81,6 +93,11 @@ export function MeetingList() {
                   <p className="text-[var(--theme-accent)] flex items-center gap-2 mt-1">
                     <span className="material-icons text-sm">list</span>
                     {meeting.key_takeaways.length} 項重點摘要
+                    <HelpHint
+                      title="住戶端重點摘要"
+                      description="顯示該會議整理出的重點決議數量，進入詳情可查看完整內容。"
+                      align="center"
+                    />
                   </p>
                 )}
                 {meeting.pdf_file_url && (

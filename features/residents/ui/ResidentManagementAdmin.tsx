@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useResidents } from "../hooks/useResidents"
 import type { Resident } from "../api/residents"
+import { HelpHint } from "@/components/ui/help-hint"
 
 const getRelationshipLabel = (relationship?: string): string => {
   const labels: Record<string, string> = {
@@ -45,7 +46,7 @@ function ResidentFormModal({
       <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
-          <h3 className="text-lg font-bold text-[var(--theme-accent)]">{isEditing ? "編輯住戶資料" : "新增住戶"}</h3>
+          <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">{isEditing ? "編輯住戶資料" : "新增住戶"}<HelpHint title="管理端住戶表單" description="維護住戶基本資料、角色與關係，用於系統權限與通知。" /></h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors">
             <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
           </button>
@@ -55,7 +56,7 @@ function ResidentFormModal({
         <div className="p-4 space-y-4">
           {/* 姓名 */}
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">姓名</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">姓名<HelpHint title="管理端姓名" description="輸入住戶真實姓名，供查詢與通知使用。" align="center" /></label>
             <input
               type="text"
               value={resident.name || ""}
@@ -67,7 +68,7 @@ function ResidentFormModal({
 
           {/* 房號 */}
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">位置</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">位置<HelpHint title="管理端房號/位置" description="建議格式一致，如 A棟 10樓 1001室，方便搜尋。" align="center" /></label>
             <input
               type="text"
               value={resident.room || ""}
@@ -79,7 +80,7 @@ function ResidentFormModal({
 
           {/* 電話 */}
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">電話</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">電話<HelpHint title="管理端電話" description="緊急聯絡或公告通知時使用。" align="center" /></label>
             <input
               type="text"
               value={resident.phone || ""}
@@ -91,7 +92,7 @@ function ResidentFormModal({
 
           {/* Email */}
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">Email</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">Email<HelpHint title="管理端 Email" description="用於帳號通知、重設密碼與重要訊息寄送。" align="center" /></label>
             <input
               type="email"
               value={resident.email || ""}
@@ -103,7 +104,7 @@ function ResidentFormModal({
 
           {/* 身分 */}
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">身分</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">身分<HelpHint title="管理端身分" description="決定後台可見功能範圍，請依職責分配。" align="center" /></label>
             <select
               value={resident.role || "resident"}
               onChange={(e) => onChange("role", e.target.value)}
@@ -117,7 +118,7 @@ function ResidentFormModal({
 
           {/* 關係 */}
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">關係</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">關係<HelpHint title="管理端住戶關係" description="區分戶主、成員與租客，便於統計與權責管理。" align="center" /></label>
             <select
               value={resident.relationship || "household_member"}
               onChange={(e) => onChange("relationship", e.target.value)}
@@ -257,6 +258,7 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
           <span className="material-icons">people</span>
           住戶/人員管理
+          <HelpHint title="管理端住戶管理" description="集中維護住戶與工作人員資料，支援搜尋、編輯與刪除。" />
         </h2>
         <button
           onClick={handleOpenAddModal}
@@ -268,6 +270,10 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
       </div>
 
       <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[var(--theme-text-primary)] text-sm">搜尋住戶資料</span>
+          <HelpHint title="管理端住戶搜尋" description="可依姓名、房號、電話或 Email 快速定位。" align="center" />
+        </div>
         <input
           type="text"
           placeholder="搜尋姓名、房號、電話或 Email..."
@@ -278,16 +284,16 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
+        <table className="w-full min-w-[1280px] border-collapse">
           <thead>
             <tr className="bg-[var(--theme-accent-light)]">
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">姓名</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">房號</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">電話</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">Email</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">身分</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">關係</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">姓名<HelpHint title="管理端姓名欄" description="顯示住戶或人員姓名。" align="center" /></span></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">房號<HelpHint title="管理端房號欄" description="顯示住戶所屬房號或位置。" align="center" /></span></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">電話<HelpHint title="管理端電話欄" description="顯示聯絡電話，供通知或聯繫使用。" align="center" /></span></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">Email<HelpHint title="管理端 Email 欄" description="顯示電子郵件，供帳號通知使用。" align="center" /></span></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">身分<HelpHint title="管理端身分欄" description="顯示該帳號在系統中的角色。" align="center" /></span></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">關係<HelpHint title="管理端關係欄" description="顯示與該戶的關係類型。" align="center" /></span></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">操作<HelpHint title="管理端操作" description="可編輯或刪除資料，刪除前請先確認是否仍在住。" align="center" /></span></th>
             </tr>
           </thead>
           <tbody>

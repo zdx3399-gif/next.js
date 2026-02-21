@@ -13,6 +13,7 @@ import {
   type TimeSlot,
   type PointsTransaction,
 } from "../api/facilities"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface FacilityListProps {
   userId?: string
@@ -158,7 +159,9 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
             <div className="flex items-center gap-6">
               <div>
                 <div className="text-[var(--theme-text-muted)] text-sm">點數餘額</div>
-                <div className="text-2xl font-bold text-[var(--theme-accent)]">{userPoints.points_balance} 點</div>
+                <div className="text-2xl font-bold text-[var(--theme-accent)] flex items-center gap-2">{userPoints.points_balance} 點
+                  <HelpHint title="住戶端點數餘額" description="預約設施會扣點，取消或退款會回補。請留意餘額是否足夠。" align="center" />
+                </div>
               </div>
               <div className="h-10 w-px bg-[var(--theme-border)]" />
               <div>
@@ -222,12 +225,19 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
             <span className="material-icons">event_available</span>
             預約設施
+            <HelpHint
+              title="住戶端設施預約"
+              description="依序選擇設施、日期與時段後確認預約。熱門時段可能需抽籤。"
+            />
           </h2>
 
           <div className="space-y-4 max-w-3xl">
             {/* 選擇設施 */}
             <div>
-              <label className="block text-[var(--theme-text-primary)] mb-2 font-medium">選擇設施</label>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="block text-[var(--theme-text-primary)] font-medium">選擇設施</label>
+                <HelpHint title="住戶端選擇設施" description="先選擇要使用的設施，系統會載入該設施可預約時段。" align="center" />
+              </div>
               <select
                 value={selectedFacility}
                 onChange={(e) => {
@@ -248,7 +258,10 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
 
             {/* 選擇日期 */}
             <div>
-              <label className="block text-[var(--theme-text-primary)] mb-2 font-medium">選擇日期</label>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="block text-[var(--theme-text-primary)] font-medium">選擇日期</label>
+                <HelpHint title="住戶端選擇日期" description="目前可預約未來 14 天時段，超出範圍無法選取。" align="center" />
+              </div>
               <input
                 type="date"
                 value={selectedDate}
@@ -266,7 +279,10 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
             {/* 時段列表 */}
             {selectedFacility && selectedDate && (
               <div>
-                <label className="block text-[var(--theme-text-primary)] mb-2 font-medium">選擇時段</label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-[var(--theme-text-primary)] font-medium">選擇時段</label>
+                  <HelpHint title="住戶端時段" description="顯示可預約時段與所需點數，尖峰時段點數會較高。" align="center" />
+                </div>
                 {loadingSlots ? (
                   <div className="text-center py-4 text-[var(--theme-text-muted)]">載入時段中...</div>
                 ) : timeSlots.length > 0 ? (
@@ -335,6 +351,10 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
                 <h3 className="font-bold text-[var(--theme-accent)] mb-3">
                   確認預約：{selectedSlot.start_time} - {selectedSlot.end_time}
                 </h3>
+                <div className="mb-2 inline-flex items-center gap-2">
+                  <span className="text-xs text-[var(--theme-text-muted)]">預約規則</span>
+                  <HelpHint title="住戶端預約規則" description="請留意取消、簽到與未到場規則，違規可能影響帳號狀態。" align="center" />
+                </div>
 
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
@@ -406,6 +426,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
             <span className="material-icons">list</span>
             我的預約記錄
+            <HelpHint title="住戶端我的預約" description="可查看歷史預約與目前狀態，符合條件時可簽到或取消。" />
           </h2>
 
           <div className="mb-4">
@@ -502,6 +523,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
             <span className="material-icons">meeting_room</span>
             可用設施
+            <HelpHint title="住戶端設施總覽" description="可查看設施說明、位置、容量、點數與是否支援抽籤。" />
           </h2>
 
           <div className="mb-4">
@@ -580,7 +602,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-hidden">
             <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
-              <h3 className="text-lg font-bold text-[var(--theme-accent)]">點數交易紀錄</h3>
+              <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">點數交易紀錄<HelpHint title="住戶端點數紀錄" description="記錄點數加減來源，包含預約扣款、退款與管理員調整。" /></h3>
               <button
                 onClick={() => setShowPointsHistory(false)}
                 className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors"

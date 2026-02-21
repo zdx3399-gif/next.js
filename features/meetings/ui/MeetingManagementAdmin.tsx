@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useMeetings } from "../hooks/useMeetings"
 import type { Meeting } from "../api/meetings"
 import { uploadMeetingPDF } from "../api/meetings"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface MeetingFormModalProps {
   isOpen: boolean
@@ -75,8 +76,12 @@ function MeetingFormModal({
       <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
-          <h3 className="text-lg font-bold text-[var(--theme-accent)]">
+          <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">
             {isEditing ? "編輯會議/活動" : "新增會議/活動"}
+            <HelpHint
+              title="管理端會議編輯"
+              description="可建立或更新會議資料、重點摘要與附件，供住戶端查看。"
+            />
           </h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors">
             <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
@@ -86,7 +91,7 @@ function MeetingFormModal({
         {/* Form Content */}
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">會議主題</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">會議主題<HelpHint title="管理端會議主題" description="填寫會議名稱，住戶端列表會優先顯示此欄。" align="center" /></label>
             <input
               type="text"
               value={formData.topic || ""}
@@ -96,7 +101,7 @@ function MeetingFormModal({
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">時間</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">時間<HelpHint title="管理端會議時間" description="設定會議舉辦時間，供住戶安排出席。" align="center" /></label>
             <input
               type="datetime-local"
               value={formData.time || ""}
@@ -105,7 +110,7 @@ function MeetingFormModal({
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">地點</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">地點<HelpHint title="管理端會議地點" description="填寫明確地點，降低住戶到場錯誤。" align="center" /></label>
             <input
               type="text"
               value={formData.location || ""}
@@ -118,6 +123,7 @@ function MeetingFormModal({
           <div>
             <label className="block text-[var(--theme-text-primary)] font-medium mb-2">
               重點摘要 (3-5 項重要決議事項)
+              <span className="inline-flex ml-2 align-middle"><HelpHint title="管理端重點摘要" description="建議整理 3-5 項決議重點，方便住戶快速閱讀。" align="center" /></span>
             </label>
             <div className="space-y-2">
               {(formData.key_takeaways || []).map((item, index) => (
@@ -192,7 +198,7 @@ function MeetingFormModal({
           </div>
 
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">完整會議記錄 (PDF)</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">完整會議記錄 (PDF)<HelpHint title="管理端會議 PDF" description="可上傳完整簽章版會議記錄，供住戶下載留存。" align="center" /></label>
             <input
               type="file"
               accept="application/pdf"
@@ -214,7 +220,7 @@ function MeetingFormModal({
           </div>
 
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">備註</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">備註<HelpHint title="管理端備註" description="補充說明或注意事項，可在住戶端詳情查看。" align="center" /></label>
             <textarea
               value={formData.notes || ""}
               onChange={(e) => onChange("notes", e.target.value)}
@@ -363,6 +369,10 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
           <span className="material-icons">event</span>
           會議/活動管理
+          <HelpHint
+            title="管理端會議/活動管理"
+            description="集中管理會議活動內容，包含新增、編輯、刪除與附件維護。"
+          />
         </h2>
         <button
           onClick={handleAdd}
@@ -374,6 +384,10 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
       </div>
 
       <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+          <HelpHint title="管理端會議搜尋" description="可用主題、地點或日期快速找到會議資料。" />
+        </div>
         <input
           type="text"
           placeholder="搜尋會議主題、地點或日期..."
@@ -384,17 +398,17 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
+        <table className="w-full min-w-[980px] border-collapse">
           <thead>
             <tr className="bg-[var(--theme-accent-light)]">
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">主題</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">時間</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">地點</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                重點摘要
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>主題</span><HelpHint title="主題欄" description="會議主題名稱。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>時間</span><HelpHint title="時間欄" description="會議舉辦時間。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>地點</span><HelpHint title="地點欄" description="會議舉辦地點。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                <div className="inline-flex items-center gap-2 whitespace-nowrap"><span>重點摘要</span><HelpHint title="重點摘要欄" description="顯示重點項目數量。" /></div>
               </th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">PDF</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>PDF</span><HelpHint title="PDF 欄" description="顯示是否已上傳完整會議檔。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>操作</span><HelpHint title="操作欄" description="可編輯或刪除會議資料。" /></div></th>
             </tr>
           </thead>
           <tbody>

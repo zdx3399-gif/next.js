@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ThumbsUp, ThumbsDown, ExternalLink, Shield, CheckCircle2 } from "lucide-react"
 import { useState } from "react"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface KnowledgeCardItemProps {
   card: {
@@ -89,6 +90,7 @@ export function KnowledgeCardItem({ card, onVote, onView }: KnowledgeCardItemPro
         {/* Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-border/40">
           <div className="flex items-center gap-1">
+            <HelpHint title="住戶端知識互動" description="可對內容回饋有幫助/沒幫助，幫助系統優化排序。" align="center" />
             <Button
               variant="ghost"
               size="sm"

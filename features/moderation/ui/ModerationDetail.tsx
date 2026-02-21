@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useModerationItemDetail } from "../hooks/useModeration"
 import type { User } from "@/features/profile/api/profile"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface ModerationDetailProps {
   itemId: string
@@ -83,6 +84,10 @@ export function ModerationDetail({ itemId, currentUser, onBack, onResolved }: Mo
         <span className="material-icons">arrow_back</span>
         返回列表
       </Button>
+      <div className="flex items-center gap-2 text-xs text-[var(--theme-text-secondary)]">
+        <span>審核詳情頁</span>
+        <HelpHint title="管理端審核詳情" description="此頁可比對內容、檢舉資訊並做最終處理。" align="center" />
+      </div>
 
       {/* AI Risk Summary */}
       {queueItem.ai_risk_summary && (
@@ -103,6 +108,7 @@ export function ModerationDetail({ itemId, currentUser, onBack, onResolved }: Mo
         <h2 className="font-bold text-lg mb-4 flex gap-2 items-center text-[var(--theme-text-primary)]">
           <span className="material-icons">article</span>
           內容詳情
+          <HelpHint title="管理端內容詳情" description="請先閱讀原文與上下文，再決定是否通過、遮蔽或下架。" align="center" />
         </h2>
 
         {queueItem.item_type === "post" && (
@@ -161,11 +167,12 @@ export function ModerationDetail({ itemId, currentUser, onBack, onResolved }: Mo
         <h2 className="font-bold text-lg mb-4 flex gap-2 items-center text-[var(--theme-text-primary)]">
           <span className="material-icons">gavel</span>
           處理決定
+          <HelpHint title="管理端處理決定" description="所有處理都應填寫清楚理由，供後續追溯。" align="center" />
         </h2>
 
         <div className="space-y-4">
           <div>
-            <Label>處理動作</Label>
+            <Label className="flex items-center gap-2">處理動作<HelpHint title="管理端處理動作" description="依案件類型提供不同選項：\n• 一般內容（貼文/留言）：通過發布、遮蔽部分內容、下架。\n• 檢舉案件：檢舉成立或駁回檢舉。\n\n建議先比對內容上下文與檢舉理由，再選擇最小必要處置。" align="center" /></Label>
             <Select value={action} onValueChange={setAction}>
               <SelectTrigger>
                 <SelectValue />
@@ -193,7 +200,7 @@ export function ModerationDetail({ itemId, currentUser, onBack, onResolved }: Mo
           )}
 
           <div>
-            <Label>處理原因</Label>
+            <Label className="flex items-center gap-2">處理原因<HelpHint title="管理端處理原因" description="建議至少包含：\n• 違規或通過的判斷依據。\n• 參考規範或社群準則。\n• 為何選擇此處置（通過 / 遮蔽 / 下架 / 檢舉結論）。\n\n此欄位會影響後續稽核與申訴可追溯性。" align="center" /></Label>
             <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}

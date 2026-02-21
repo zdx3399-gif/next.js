@@ -3,6 +3,7 @@
 import { useVisitors } from "../hooks/useVisitors"
 import { VisitorCard } from "./VisitorCard"
 import type { Visitor } from "../api/visitors"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface VisitorManagementAdminProps {
   currentUser?: any
@@ -54,11 +55,22 @@ export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: V
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
           <span className="material-icons">how_to_reg</span>
           訪客管理 (警衛)
+          <HelpHint
+            title="管理端訪客管理"
+            description="管理端可查詢預約、執行訪客簽到/簽退，並保留訪客歷史，支援門禁與服務台作業。"
+          />
         </h2>
       </div>
 
       {/* 搜尋欄 */}
       <div className="flex gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+          <HelpHint
+            title="管理端訪客搜尋"
+            description="可用姓名、房號或電話快速篩選，協助警衛在尖峰時段快速核對。"
+          />
+        </div>
         <input
           type="text"
           placeholder="搜尋訪客姓名、房號或電話..."
@@ -74,6 +86,10 @@ export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: V
           <h3 className="flex gap-2 items-center text-blue-500 font-bold text-lg mb-4">
             <span className="material-icons">event</span>
             預約訪客 ({reservedVisitors.length})
+            <HelpHint
+              title="管理端預約訪客"
+              description="顯示尚未簽到的預約資料。可在核對身份後執行簽到。"
+            />
           </h3>
           <div className="space-y-3">
             {reservedVisitors.length > 0 ? (
@@ -93,6 +109,10 @@ export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: V
           <h3 className="flex gap-2 items-center text-yellow-500 font-bold text-lg mb-4">
             <span className="material-icons">how_to_reg</span>
             訪客中 ({checkedInVisitors.length})
+            <HelpHint
+              title="管理端訪客中"
+              description="顯示已進入社區但尚未簽退訪客，離開時請執行簽退完成流程。"
+            />
           </h3>
           <div className="space-y-3">
             {checkedInVisitors.length > 0 ? (
@@ -112,6 +132,10 @@ export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: V
           <h3 className="flex gap-2 items-center text-green-500 font-bold text-lg mb-4">
             <span className="material-icons">history</span>
             訪客歷史 ({historyVisitors.length})
+            <HelpHint
+              title="管理端訪客歷史"
+              description="保留完整訪客進出紀錄，便於事後查詢、客服回覆與安全稽核。"
+            />
           </h3>
           <div className="space-y-3">
             {historyVisitors.length > 0 ? (

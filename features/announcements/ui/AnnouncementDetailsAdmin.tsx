@@ -2,6 +2,32 @@
 
 import { useEffect, useState } from "react"
 import { getSupabaseClient } from "@/lib/supabase"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+
+interface HelpHintProps {
+  title: string
+  description: string
+}
+
+function HelpHint({ title, description }: HelpHintProps) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-accent-light)] text-[var(--theme-accent)] text-xs font-semibold leading-none hover:border-[var(--theme-border-accent)] hover:opacity-90 transition-all"
+          aria-label={`${title}說明`}
+        >
+          ?
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="z-[220] w-80 text-sm">
+        <div className="font-semibold mb-1">{title}</div>
+        <div className="text-[var(--theme-text-secondary)] leading-relaxed">{description}</div>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 interface Comment {
   id: string
@@ -204,6 +230,20 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
     <div className="flex gap-4 h-[600px]">
       {/* Announcements List - Use theme variables */}
       <div className="w-1/3 flex flex-col gap-3 border-r border-[var(--theme-border)] pr-4 overflow-hidden">
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--theme-text-primary)] text-sm font-medium">公告清單（管理）</span>
+          <HelpHint
+            title="管理端公告清單"
+            description="顯示目前已發布公告。可搭配搜尋快速定位指定公告，點選後於右側進行留言管理與互動檢視。"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+          <HelpHint
+            title="管理端搜尋"
+            description="可用關鍵字篩選公告標題與內容，適合在大量公告中快速找到要處理的公告。"
+          />
+        </div>
         <input
           type="text"
           placeholder="搜尋公告..."
@@ -258,7 +298,13 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
             <div className="flex-1 overflow-y-auto">
               {/* Announcement Header */}
               <div className="mb-4">
-                <h3 className="text-2xl font-bold text-[var(--theme-accent)] mb-2">{selectedAnnouncement.title}</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-2xl font-bold text-[var(--theme-accent)]">{selectedAnnouncement.title}</h3>
+                  <HelpHint
+                    title="管理端公告詳情"
+                    description="此區可檢視公告完整呈現效果（標題、發布資訊、圖片與內容），方便管理者做內容稽核。"
+                  />
+                </div>
                 <div className="flex gap-4 text-[var(--theme-text-secondary)] text-sm mb-4">
                   <div>發布者: {selectedAnnouncement.author}</div>
                   <div>{new Date(selectedAnnouncement.created_at).toLocaleDateString("zh-TW")}</div>
@@ -281,6 +327,13 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
 
               {/* Like Section */}
               <div className="mb-6 pb-4 border-b border-[var(--theme-border)]">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[var(--theme-text-primary)] text-sm">按讚統計</span>
+                  <HelpHint
+                    title="管理端按讚統計"
+                    description="可快速查看住戶對該公告的關注度。若互動偏低，可考慮調整標題或發布方式。"
+                  />
+                </div>
                 <button
                   onClick={handleToggleLike}
                   disabled={!currentUser}
@@ -297,7 +350,13 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
 
               {bannedUsers.size > 0 && (
                 <div className="mb-6 pb-4 border-b border-[var(--theme-border)]">
-                  <h4 className="text-sm font-bold text-red-500 mb-2">已禁言用戶</h4>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="text-sm font-bold text-red-500">已禁言用戶</h4>
+                    <HelpHint
+                      title="管理端禁言名單"
+                      description="列出目前被限制留言的住戶，可於此直接解除禁言。建議保留明確管理標準，避免爭議。"
+                    />
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {Array.from(bannedUsers).map((userName) => (
                       <div
@@ -320,7 +379,13 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
 
               {/* Comments Section */}
               <div>
-                <h4 className="text-lg font-bold text-[var(--theme-accent)] mb-4">留言 ({currentComments.length})</h4>
+                <div className="flex items-center gap-2 mb-4">
+                  <h4 className="text-lg font-bold text-[var(--theme-accent)]">留言 ({currentComments.length})</h4>
+                  <HelpHint
+                    title="管理端留言審查"
+                    description="可刪除不當留言，並針對違規用戶執行禁言或解除禁言。建議先判斷是否違反社區規範再處理。"
+                  />
+                </div>
                 <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
                   {currentComments.length > 0 ? (
                     currentComments.map((comment) => (
@@ -378,6 +443,13 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
                   </div>
                 ) : (
                   <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[var(--theme-text-primary)] text-sm">管理端留言輸入</span>
+                      <HelpHint
+                        title="管理端發送留言"
+                        description="管理者可直接回覆住戶留言。建議用正式且可追蹤的文字，避免模糊指示。"
+                      />
+                    </div>
                     <input
                       type="text"
                       placeholder="新增留言..."

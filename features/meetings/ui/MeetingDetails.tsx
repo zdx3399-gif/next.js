@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { getMeetingById, type Meeting } from "../api/meetings"
 import { exportMeetingToPDF, exportMeetingPDFViaAPI } from "@/lib/export-pdf"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface MeetingDetailsProps {
   meetingId: string
@@ -98,6 +99,10 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
           <span className="material-icons">event</span>
           會議詳情
+          <HelpHint
+            title="住戶端會議詳情"
+            description="此頁可查看會議時間地點、重點摘要、備註與完整記錄檔案。"
+          />
         </h2>
       </div>
 
@@ -123,6 +128,11 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
             <h4 className="text-lg font-semibold text-[var(--theme-accent)] mb-3 flex items-center gap-2">
               <span className="material-icons">fact_check</span>
               重點摘要
+              <HelpHint
+                title="住戶端重點摘要內容"
+                description="列出會議決議重點，方便快速掌握結論。"
+                align="center"
+              />
             </h4>
             <ul className="space-y-2">
               {meeting.key_takeaways.map((item, index) => (
@@ -149,6 +159,11 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
             <h4 className="text-lg font-semibold text-[var(--theme-accent)] mb-3 flex items-center gap-2">
               <span className="material-icons">description</span>
               完整會議記錄
+              <HelpHint
+                title="住戶端完整記錄"
+                description="若有附檔，可下載完整會議記錄 PDF 供留存。"
+                align="center"
+              />
             </h4>
             <button
               onClick={handleDownloadPDF}
@@ -165,6 +180,11 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
           <h4 className="text-lg font-semibold text-[var(--theme-accent)] mb-3 flex items-center gap-2">
             <span className="material-icons">save_as</span>
             匯出為 PDF
+            <HelpHint
+              title="住戶端匯出 PDF"
+              description="提供快速導出與服務器導出兩種方式，方便保存或分享會議資料。"
+              align="center"
+            />
           </h4>
           <div className="flex gap-2 flex-wrap">
             <button

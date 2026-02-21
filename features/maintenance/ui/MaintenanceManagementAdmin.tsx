@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { getSupabaseClient } from "@/lib/supabase"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface MaintenanceRow {
   id: string | null
@@ -34,8 +35,12 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
       <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
-          <h3 className="text-lg font-bold text-[var(--theme-accent)]">
+          <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">
             {isEditing ? "編輯維修紀錄" : "新增維修紀錄"}
+            <HelpHint
+              title="管理端維修編輯"
+              description="可建立或更新維修案件，建議同步維護狀態、處理人與費用，方便後續追蹤。"
+            />
           </h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors">
             <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
@@ -45,7 +50,10 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
         {/* Form Content */}
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">設備</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">設備</label>
+              <HelpHint title="管理端設備" description="填寫故障設備主體，例如電梯、照明、門禁。" align="center" />
+            </div>
             <input
               type="text"
               value={formData.equipment || ""}
@@ -55,7 +63,10 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">項目</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">項目</label>
+              <HelpHint title="管理端項目" description="填寫設備下的細項（如馬達、面板），方便工單分類。" align="center" />
+            </div>
             <input
               type="text"
               value={formData.item || ""}
@@ -65,7 +76,10 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">詳細說明</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">詳細說明</label>
+              <HelpHint title="管理端詳細說明" description="記錄故障狀況與現場觀察，協助判斷處理優先順序。" align="center" />
+            </div>
             <textarea
               value={formData.description || ""}
               onChange={(e) => onChange("description", e.target.value)}
@@ -75,7 +89,10 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">報修人</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">報修人</label>
+              <HelpHint title="管理端報修人" description="填報修來源，可用於後續回報進度與責任追蹤。" align="center" />
+            </div>
             <input
               type="text"
               value={formData.reported_by_name || ""}
@@ -85,7 +102,10 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">處理狀態</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">處理狀態</label>
+              <HelpHint title="管理端處理狀態" description="待處理、處理中、已完成，請依實際進度更新。" align="center" />
+            </div>
             <select
               value={formData.status || "open"}
               onChange={(e) => onChange("status", e.target.value)}
@@ -97,7 +117,10 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
             </select>
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">處理人</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">處理人</label>
+              <HelpHint title="管理端處理人" description="填寫或更新實際負責人員，便於調度與追蹤。" align="center" />
+            </div>
             <input
               type="text"
               value={formData.handler || ""}
@@ -107,7 +130,10 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">費用</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">費用</label>
+              <HelpHint title="管理端費用" description="填入維修成本，可作為管理費支出與稽核依據。" align="center" />
+            </div>
             <input
               type="number"
               value={formData.cost || 0}
@@ -117,7 +143,10 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">備註</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">備註</label>
+              <HelpHint title="管理端備註" description="補充處理結果、特殊狀況或後續追蹤事項。" align="center" />
+            </div>
             <textarea
               value={formData.note || ""}
               onChange={(e) => onChange("note", e.target.value)}
@@ -372,6 +401,10 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
           <span className="material-icons">build</span>
           設備/維護管理
+          <HelpHint
+            title="管理端維護管理"
+            description="管理端可統一檢視與維護全社區維修案件，執行新增、編輯、刪除與進度管理。"
+          />
         </h2>
         <button
           onClick={handleAdd}
@@ -383,6 +416,13 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
       </div>
 
       <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+          <HelpHint
+            title="管理端維修搜尋"
+            description="可依設備、項目、描述、報修人或處理人快速找到目標案件。"
+          />
+        </div>
         <input
           type="text"
           placeholder="搜尋設備、項目、描述、報修人或處理人..."
@@ -393,18 +433,18 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
+        <table className="w-full min-w-[1280px] border-collapse">
           <thead>
             <tr className="bg-[var(--theme-accent-light)]">
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">設備</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">項目</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">描述</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">報修人</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">處理人</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">費用</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">備註</th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>設備</span><HelpHint title="設備欄" description="顯示故障設備類別。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>項目</span><HelpHint title="項目欄" description="顯示設備細項。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>描述</span><HelpHint title="描述欄" description="顯示故障描述摘要。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>報修人</span><HelpHint title="報修人欄" description="顯示案件提出者。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>狀態</span><HelpHint title="狀態欄" description="顯示案件進度狀態。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>處理人</span><HelpHint title="處理人欄" description="顯示負責人員。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>費用</span><HelpHint title="費用欄" description="顯示維修成本。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>備註</span><HelpHint title="備註欄" description="顯示補充資訊。" /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>操作</span><HelpHint title="操作欄" description="可編輯或刪除維修紀錄。" /></div></th>
             </tr>
           </thead>
           <tbody>

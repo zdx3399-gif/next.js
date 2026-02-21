@@ -7,6 +7,7 @@ import { CommunityPostCard } from "./CommunityPostCard"
 import { useCommunityPosts, useInteractions } from "../hooks/useCommunity"
 import type { User } from "@/features/profile/api/profile"
 import { Search, Plus } from "lucide-react"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface CommunityPostListProps {
   currentUser: User | null
@@ -77,6 +78,10 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
       {/* Improved search bar with better styling */}
       <div className="flex gap-3">
         <div className="relative flex-1">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">搜尋社區貼文</span>
+            <HelpHint title="住戶端貼文搜尋" description="可用標題或內容關鍵字快速找到相關討論。" align="center" />
+          </div>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={searchQuery}
@@ -94,6 +99,10 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
       </div>
 
       <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex items-center gap-2 shrink-0 pr-2">
+          <span className="text-xs text-muted-foreground">分類</span>
+          <HelpHint title="住戶端貼文分類" description="可用案例、教學、意見、警示篩選討論主題。" align="center" />
+        </div>
         {categories.map((cat) => (
           <button
             key={cat.value || "all"}
@@ -110,6 +119,10 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
       </div>
 
       {/* Using new CommunityPostCard component */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">貼文列表</span>
+        <HelpHint title="住戶端貼文列表" description="點選卡片可進入詳情、留言與檢舉。" align="center" />
+      </div>
       <div className="space-y-3">
         {filteredPosts.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">

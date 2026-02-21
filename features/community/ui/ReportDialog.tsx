@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface ReportDialogProps {
   open: boolean
@@ -56,12 +57,13 @@ export function ReportDialog({ open, onClose, onSubmit, targetType, targetId, re
           <DialogTitle className="flex gap-2 items-center">
             <span className="material-icons">flag</span>
             檢舉內容
+            <HelpHint title="住戶端檢舉" description="請選擇最符合的原因並補充事實，協助管理端判斷。" />
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div>
-            <Label>檢舉原因</Label>
+            <Label className="flex items-center gap-2">檢舉原因<HelpHint title="住戶端檢舉原因" description="選擇對應違規類型可提升審核效率。" align="center" /></Label>
             <Select value={reason} onValueChange={setReason}>
               <SelectTrigger>
                 <SelectValue />
@@ -79,7 +81,7 @@ export function ReportDialog({ open, onClose, onSubmit, targetType, targetId, re
           </div>
 
           <div>
-            <Label>詳細說明（選填）</Label>
+            <Label className="flex items-center gap-2">詳細說明（選填）<HelpHint title="住戶端補充說明" description="可補充時間、情境與影響，避免僅主觀描述。" align="center" /></Label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -89,7 +91,7 @@ export function ReportDialog({ open, onClose, onSubmit, targetType, targetId, re
           </div>
 
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-            <p className="text-xs text-yellow-600">檢舉將由管理方審核。濫用檢舉功能可能影響您的信用分。</p>
+            <p className="text-xs text-yellow-600 flex items-center gap-2">檢舉將由管理方審核。濫用檢舉功能可能影響您的信用分。<HelpHint title="住戶端檢舉提醒" description="請基於事實提交檢舉，避免惡意或重複檢舉。" align="center" /></p>
           </div>
         </div>
 

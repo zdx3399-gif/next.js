@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useDecryptionRequests } from "../hooks/useDecryption"
 import { Shield, Clock, CheckCircle, XCircle } from "lucide-react"
+import { HelpHint } from "@/components/ui/help-hint"
 
 export function DecryptionRequestList() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -46,6 +47,7 @@ export function DecryptionRequestList() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-4">
+        <HelpHint title="住戶端解密申請" description="可查看你提出的解密申請進度與審核結果。" align="center" />
         <Button
           variant={statusFilter === "all" ? "default" : "outline"}
           size="sm"
@@ -87,6 +89,7 @@ export function DecryptionRequestList() {
                     <span className="font-medium text-sm">
                       {request.target_type === "post" ? "貼文" : "留言"} 解密申請
                     </span>
+                    <HelpHint title="住戶端申請項目" description="顯示你申請解密的目標類型與目前狀態。" align="center" />
                     {getStatusBadge(request.status)}
                   </div>
                   <p className="text-sm text-muted-foreground mb-2">申請原因: {request.reason}</p>

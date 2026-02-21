@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { ProfileForm } from "./ProfileForm"
 import type { User } from "../api/profile"
+import { HelpHint } from "@/components/ui/help-hint"
 
 export type { User }
 export type ProfileUser = User
@@ -113,8 +114,9 @@ export function ProfileDropdown({ currentUser, onUpdate, getRoleLabel }: Profile
           {currentUser?.name?.charAt(0).toUpperCase() || "U"}
         </div>
         <div className="text-left flex-1 min-w-0">
-          <div className="text-[var(--theme-text-primary)] font-medium text-sm truncate">
+          <div className="text-[var(--theme-text-primary)] font-medium text-sm truncate flex items-center gap-2">
             {currentUser?.name || "載入中..."}
+            <HelpHint title="個人資料入口" description="點擊可展開個人資料表單，更新聯絡資訊與密碼。" align="center" />
           </div>
           <div className="text-[var(--theme-text-secondary)] text-xs">{roleLabel}</div>
         </div>

@@ -9,6 +9,32 @@ import {
   deleteAnnouncement,
   uploadAnnouncementImage,
 } from "../api/announcements"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+
+interface HelpHintProps {
+  title: string
+  description: string
+}
+
+function HelpHint({ title, description }: HelpHintProps) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-accent-light)] text-[var(--theme-accent)] text-xs font-semibold leading-none hover:border-[var(--theme-border-accent)] hover:opacity-90 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-border-accent)]"
+          aria-label={`${title}說明`}
+        >
+          ?
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="z-[220] w-80 text-sm">
+        <div className="font-semibold mb-1">{title}</div>
+        <div className="text-[var(--theme-text-secondary)] leading-relaxed">{description}</div>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 interface AnnouncementFormModalProps {
   isOpen: boolean
@@ -47,7 +73,10 @@ function AnnouncementFormModal({
         </div>
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">標題</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="text-[var(--theme-text-primary)] font-medium">標題</label>
+              <HelpHint title="標題" description="公告的主題名稱，會出現在公告列表與首頁輪播。建議在 20 字內說清楚『事件 + 重點』，例如：2/28 停水通知。" />
+            </div>
             <input
               type="text"
               value={formData.title || ""}
@@ -57,7 +86,10 @@ function AnnouncementFormModal({
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">內容</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="text-[var(--theme-text-primary)] font-medium">內容</label>
+              <HelpHint title="內容" description="公告完整內容區，建議包含：發生時間、地點/棟別、影響範圍、住戶需配合事項、聯絡窗口。這欄位會直接顯示給住戶閱讀。" />
+            </div>
             <textarea
               value={formData.content || ""}
               onChange={(e) => onChange("content", e.target.value)}
@@ -67,7 +99,10 @@ function AnnouncementFormModal({
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">圖片</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="text-[var(--theme-text-primary)] font-medium">圖片</label>
+              <HelpHint title="圖片" description="可上傳公告配圖（例如施工區域示意、活動海報）。有圖片時住戶更容易理解重點；未上傳也可以正常儲存與發布。" />
+            </div>
             <input
               type="file"
               accept="image/*"
@@ -82,7 +117,10 @@ function AnnouncementFormModal({
             )}
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">作者</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="text-[var(--theme-text-primary)] font-medium">作者</label>
+              <HelpHint title="作者" description="顯示公告發布者名稱，用於住戶辨識資訊來源。此欄位目前為系統帶入（唯讀），避免手動修改造成來源混淆。" />
+            </div>
             <input
               type="text"
               value={formData.author_name || "管理員"}
@@ -91,7 +129,10 @@ function AnnouncementFormModal({
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">狀態</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="text-[var(--theme-text-primary)] font-medium">狀態</label>
+              <HelpHint title="狀態" description="草稿：僅管理端可見，適合先編輯與校稿。已發布：住戶端可見，會進入公告列表與相關展示區。發布前請再確認內容正確。" />
+            </div>
             <select
               value={formData.status || "draft"}
               onChange={(e) => onChange("status", e.target.value)}
@@ -240,6 +281,10 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
         <h2 className="flex items-center gap-2 text-[var(--theme-accent)] text-xl">
           <span className="material-icons">campaign</span>
           公告管理
+          <HelpHint
+            title="公告管理"
+            description="這裡是公告後台：可新增、編輯、刪除公告，並切換草稿/已發布。建議流程為『先草稿校對 → 確認內容無誤 → 改為已發布』，可降低誤發風險。"
+          />
         </h2>
         <button
           onClick={handleAdd}
@@ -251,6 +296,10 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
       </div>
 
       <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <label className="text-[var(--theme-text-primary)] font-medium">搜尋</label>
+          <HelpHint title="搜尋" description="可用關鍵字搜尋標題、內容、作者。適合快速找到舊公告，例如輸入『停水』『電梯』『活動』等字詞。" />
+        </div>
         <input
           type="text"
           placeholder="搜尋標題、內容或作者..."
@@ -264,17 +313,45 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
         <div className="text-center text-[var(--theme-text-secondary)] py-12">載入中...</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[700px]">
+          <table className="w-full min-w-[1280px] border-collapse">
             <thead>
               <tr className="bg-[var(--theme-accent-light)]">
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">標題</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">內容</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">作者</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  建立日期
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span>標題</span>
+                    <HelpHint title="標題欄" description="顯示公告主題，用來快速辨識每筆公告。標題清楚時，管理者在大量資料中也能快速定位目標。" />
+                  </div>
                 </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span>內容</span>
+                    <HelpHint title="內容欄" description="顯示公告內容摘要（列表會截斷）。若要檢視或調整完整內容，請使用右側編輯按鈕進入表單。" />
+                  </div>
+                </th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span>作者</span>
+                    <HelpHint title="作者欄" description="顯示發布者名稱，方便追蹤公告來源與責任歸屬。住戶若有疑問，也可依此辨識聯繫對象。" />
+                  </div>
+                </th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span>狀態</span>
+                    <HelpHint title="狀態欄" description="顯示公告目前狀態：草稿（僅管理端可見）或已發布（住戶可見）。可用來快速檢查哪些公告尚未對外發布。" />
+                  </div>
+                </th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span>建立日期</span>
+                    <HelpHint title="建立日期欄" description="顯示公告建立日期，協助判斷資訊新舊與發布時序，避免誤用過期公告內容。" />
+                  </div>
+                </th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span>操作</span>
+                    <HelpHint title="操作欄" description="可對單筆公告執行編輯或刪除。建議刪除前先確認該公告是否仍需留存作為歷史紀錄。" />
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>

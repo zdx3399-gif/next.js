@@ -27,6 +27,7 @@ import { useKnowledgeCards } from "../hooks/useKMS"
 import { getPendingKMSPosts, importPostToKMS, rejectKMSSuggestion } from "../api/kms"
 import type { User } from "@/features/profile/api/profile"
 import type { CommunityPost } from "@/features/community/api/community"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface KnowledgeBaseAdminProps {
   currentUser: User | null
@@ -330,13 +331,14 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
             <Badge variant="destructive" className="ml-1">{pendingPosts.length}</Badge>
           )}
         </Button>
+        <HelpHint title="管理端知識庫分頁" description="知識卡管理：維護正式內容；待入庫審核：處理 AI 建議貼文。" align="center" />
       </div>
 
       {activeTab === "pending" ? (
         /* 待入庫審核分頁 */
         <div className="space-y-4">
           <div className="bg-card border rounded-lg p-4">
-            <h3 className="font-semibold mb-2">AI 建議入庫的貼文</h3>
+            <h3 className="font-semibold mb-2 flex items-center gap-2">AI 建議入庫的貼文<HelpHint title="管理端待入庫" description="先確認內容正確與可重用性，再決定入庫或拒絕。" align="center" /></h3>
             <p className="text-sm text-muted-foreground">
               以下貼文經 AI 評估後建議納入知識庫，請審核後決定是否入庫。
             </p>
@@ -423,6 +425,10 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
           {/* Header with actions */}
           <div className="flex flex-col sm:flex-row gap-3 justify-between">
             <div className="relative flex-1 max-w-md">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">搜尋知識卡</span>
+                <HelpHint title="管理端搜尋" description="可依標題或內容關鍵字查找既有知識卡。" align="center" />
+              </div>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="搜尋知識卡..."
@@ -438,6 +444,10 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
           </div>
 
           {/* Filters */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">分類篩選</span>
+            <HelpHint title="管理端分類篩選" description="用分類快速盤點特定主題知識卡。" align="center" />
+          </div>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((cat) => (
               <Button
@@ -455,6 +465,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
           {/* Status filter */}
           <div className="flex gap-2 items-center">
             <span className="text-sm text-muted-foreground">狀態：</span>
+            <HelpHint title="管理端狀態篩選" description="可檢視已發布、待驗證、已封存內容，安排維護優先序。" align="center" />
             {STATUS_OPTIONS.map((status) => (
               <Button
                 key={status.value}
@@ -582,7 +593,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>新增知識卡</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">新增知識卡<HelpHint title="管理端新增知識卡" description="建立可供住戶查閱的標準內容。" align="center" /></DialogTitle>
                 <DialogDescription>建立新的知識卡供社區成員參考</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -652,7 +663,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
           <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>編輯知識卡</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">編輯知識卡<HelpHint title="管理端編輯知識卡" description="更新內容後可透過版本歷史追蹤調整。" align="center" /></DialogTitle>
                 <DialogDescription>修改知識卡內容</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -742,7 +753,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>入庫知識卡</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">入庫知識卡<HelpHint title="管理端入庫" description="將審核通過的貼文轉為知識卡，供住戶搜尋使用。" align="center" /></DialogTitle>
             <DialogDescription>將選定的貼文納入知識庫</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -812,7 +823,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>拒絕入庫建議</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">拒絕入庫建議<HelpHint title="管理端拒絕原因" description="請填具體原因，便於後續模型與流程優化。" align="center" /></DialogTitle>
             <DialogDescription>請輸入拒絕的原因</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

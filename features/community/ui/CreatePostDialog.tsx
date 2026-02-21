@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { User } from "@/features/profile/api/profile"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface CreatePostDialogProps {
   open: boolean
@@ -62,12 +63,13 @@ export function CreatePostDialog({ open, onClose, onSubmit, currentUser }: Creat
           <DialogTitle className="flex gap-2 items-center">
             <span className="material-icons">edit_note</span>
             發表新貼文
+            <HelpHint title="住戶端發文" description="請先選擇分類與顯示方式，再輸入標題與內容。" />
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div>
-            <Label>分類</Label>
+            <Label className="flex items-center gap-2">分類<HelpHint title="住戶端分類" description="分類會影響其他住戶瀏覽與搜尋。" align="center" /></Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger>
                 <SelectValue />
@@ -82,7 +84,7 @@ export function CreatePostDialog({ open, onClose, onSubmit, currentUser }: Creat
           </div>
 
           <div>
-            <Label>顯示方式</Label>
+            <Label className="flex items-center gap-2">顯示方式<HelpHint title="住戶端顯示方式" description="可選半匿名、完全匿名或實名；系統皆可追溯身份。" align="center" /></Label>
             <Select value={displayMode} onValueChange={setDisplayMode}>
               <SelectTrigger>
                 <SelectValue />
@@ -97,7 +99,7 @@ export function CreatePostDialog({ open, onClose, onSubmit, currentUser }: Creat
           </div>
 
           <div>
-            <Label>標題</Label>
+            <Label className="flex items-center gap-2">標題<HelpHint title="住戶端標題" description="建議用一句話清楚描述主題。" align="center" /></Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -107,7 +109,7 @@ export function CreatePostDialog({ open, onClose, onSubmit, currentUser }: Creat
           </div>
 
           <div>
-            <Label>內容</Label>
+            <Label className="flex items-center gap-2">內容<HelpHint title="住戶端內容" description="請避免個資與人身攻擊，必要時先做資訊遮蔽。" align="center" /></Label>
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useMaintenance } from "../hooks/useMaintenance"
 import { MaintenanceForm } from "./MaintenanceForm"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface MaintenanceListProps {
   userId?: string
@@ -44,9 +45,20 @@ export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
           <span className="material-icons">list</span>
           我的維修申請
+          <HelpHint
+            title="住戶端維修紀錄"
+            description="這裡顯示你提交過的維修申請與處理狀態，可用於追蹤進度。"
+          />
         </h2>
 
         <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+            <HelpHint
+              title="住戶端維修搜尋"
+              description="可用設備、項目、描述或申請人關鍵字快速查找申請單。"
+            />
+          </div>
           <input
             type="text"
             placeholder="搜尋設備、項目、描述或報修人..."
@@ -82,6 +94,14 @@ export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
                   >
                     {item.status === "open" ? "待處理" : item.status === "progress" ? "處理中" : "已完成"}
                   </div>
+                </div>
+                <div className="mb-2 inline-flex items-center gap-2">
+                  <span className="text-xs text-[var(--theme-text-muted)]">狀態說明</span>
+                  <HelpHint
+                    title="住戶端維修狀態"
+                    description="待處理：已送出待分派。處理中：已開始修繕。已完成：案件已結案。"
+                    align="center"
+                  />
                 </div>
                 {item.description && <div className="text-[var(--theme-text-primary)] mb-2">{item.description}</div>}
                 {item.image_url && (

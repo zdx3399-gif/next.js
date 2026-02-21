@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import type { User } from "@/features/profile/api/profile"
 import { getSupabaseClient } from "@/lib/supabase"
+import { HelpHint } from "@/components/ui/help-hint"
 
 // ==================================================================================
 // 🔧 CONFIG: Your Static Default Links
@@ -148,6 +149,14 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
           紀錄與結果
         </button>
       </div>
+      <div className="flex items-center justify-center gap-2 -mt-4 mb-2">
+        <span className="text-sm text-[var(--theme-text-secondary)]">管理端投票功能說明</span>
+        <HelpHint
+          title="管理端投票功能"
+          description="管理端可建立投票/問卷通知、切換發布模式、查看歷史紀錄與結果入口。建議先在發布中心建立內容，再到紀錄頁追蹤執行情況。"
+          align="center"
+        />
+      </div>
 
       {/* ==================================================================================
           SLIDE 1: CREATE (Broadcasting)
@@ -158,6 +167,10 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
             <h2 className="flex gap-2 items-center text-[var(--theme-text-primary)] font-bold text-lg">
               <span className="material-icons text-[var(--theme-accent)]">add_circle</span>
               發起新投票 / 問卷
+              <HelpHint
+                title="管理端發布中心"
+                description="在此建立新投票通知。填寫標題、截止時間與內容後可直接推播，住戶端會看到對應入口。"
+              />
             </h2>
             <div className="flex bg-[var(--theme-bg-primary)] p-1 rounded-lg border border-[var(--theme-border)]">
               <button
@@ -175,11 +188,25 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
             </div>
           </div>
 
+          <div className="px-6 pt-4 flex items-center gap-2">
+            <span className="text-sm text-[var(--theme-text-secondary)]">模式切換</span>
+            <HelpHint
+              title="管理端模式切換"
+              description="連結模式：外部 Google Form 填答。投票模式：系統內文案投票流程。請依活動需求選擇。"
+            />
+          </div>
+
           <div className="p-6">
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-bold mb-1 text-[var(--theme-text-primary)]">標題</label>
+                  <div className="flex items-center gap-2 mb-1">
+                    <label className="block text-sm font-bold text-[var(--theme-text-primary)]">標題</label>
+                    <HelpHint
+                      title="管理端投票標題"
+                      description="住戶最先看到的文字。建議包含主題與目的，例如：『停車規則修訂投票』。"
+                    />
+                  </div>
                   <input
                     type="text"
                     className="w-full p-3 rounded-lg theme-input border border-[var(--theme-border)]"
@@ -189,7 +216,13 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold mb-1 text-[var(--theme-text-primary)]">截止時間</label>
+                  <div className="flex items-center gap-2 mb-1">
+                    <label className="block text-sm font-bold text-[var(--theme-text-primary)]">截止時間</label>
+                    <HelpHint
+                      title="管理端截止時間"
+                      description="投票有效期限。到期後住戶通常無法再參與，設定前請先確認公告時程。"
+                    />
+                  </div>
                   <input
                     type="datetime-local"
                     className="w-full p-3 rounded-lg theme-input border border-[var(--theme-border)]"
@@ -202,9 +235,15 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
               {activeTab === "link" ? (
                 <div className="space-y-3 bg-blue-50/50 dark:bg-blue-900/10 p-5 rounded-xl border border-blue-100 dark:border-blue-800">
                   <div>
-                    <label className="block text-blue-700 dark:text-blue-400 font-bold text-sm mb-1 flex items-center gap-1">
-                      <span className="material-icons text-sm">link</span> Google Form 網址 (給住戶填寫)
-                    </label>
+                    <div className="flex items-center gap-2 mb-1">
+                      <label className="block text-blue-700 dark:text-blue-400 font-bold text-sm flex items-center gap-1">
+                        <span className="material-icons text-sm">link</span> Google Form 網址 (給住戶填寫)
+                      </label>
+                      <HelpHint
+                        title="管理端 Google Form 連結"
+                        description="貼入住戶要填寫的公開表單網址。送出後住戶端會導向這個連結。"
+                      />
+                    </div>
                     <input
                       type="url"
                       className="w-full p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-black/20"
@@ -228,7 +267,13 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
                 </div>
               ) : (
                 <div className="bg-[var(--theme-accent)]/5 p-5 rounded-xl border border-[var(--theme-accent)]/20">
-                  <label className="block text-[var(--theme-accent)] font-bold text-sm mb-1">投票說明</label>
+                  <div className="flex items-center gap-2 mb-1">
+                    <label className="block text-[var(--theme-accent)] font-bold text-sm">投票說明</label>
+                    <HelpHint
+                      title="管理端投票說明"
+                      description="填寫投票背景、選項解釋與決策依據，幫助住戶理解後再投票。"
+                    />
+                  </div>
                   <textarea
                     className="w-full p-3 rounded-lg border border-[var(--theme-accent)]/20 min-h-[80px] bg-white dark:bg-black/20"
                     placeholder="請輸入說明..."
@@ -267,6 +312,10 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
             <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl font-bold mb-4">
               <span className="material-icons">bookmark</span>
               快速捷徑 (Shortcuts)
+              <HelpHint
+                title="管理端快速捷徑"
+                description="提供常用外部操作：編輯既有表單與建立新表單。可縮短建立投票內容的時間。"
+              />
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Button 1: Edit EXISTING (Keep this one) */}
@@ -304,9 +353,20 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
             <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl font-bold mb-4">
               <span className="material-icons">history</span>
               歷史紀錄 / 結果庫
+              <HelpHint
+                title="管理端歷史紀錄"
+                description="可查詢過去投票/問卷，並透過連結回到表單或結果頁做後續分析與追蹤。"
+              />
             </h2>
 
             <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm text-[var(--theme-text-primary)]">搜尋紀錄</span>
+                <HelpHint
+                  title="管理端搜尋紀錄"
+                  description="輸入標題、說明或發布者可快速定位指定投票紀錄。"
+                />
+              </div>
               <input
                 type="text"
                 placeholder="搜尋標題、說明或發布者..."
@@ -317,14 +377,14 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
+              <table className="w-full min-w-[980px] border-collapse text-sm text-left">
                 <thead className="text-[var(--theme-text-secondary)] uppercase bg-[var(--theme-bg-secondary)]">
                   <tr>
-                    <th className="px-4 py-3 rounded-l-lg">日期</th>
-                    <th className="px-4 py-3">標題</th>
-                    <th className="px-4 py-3">類型</th>
-                    <th className="px-4 py-3">發布者</th>
-                    <th className="px-4 py-3 rounded-r-lg text-right">連結與結果</th>
+                    <th className="px-4 py-3 rounded-l-lg whitespace-nowrap">日期</th>
+                    <th className="px-4 py-3 whitespace-nowrap">標題</th>
+                    <th className="px-4 py-3 whitespace-nowrap">類型</th>
+                    <th className="px-4 py-3 whitespace-nowrap">發布者</th>
+                    <th className="px-4 py-3 rounded-r-lg text-right whitespace-nowrap">連結與結果</th>
                   </tr>
                 </thead>
                 <tbody>

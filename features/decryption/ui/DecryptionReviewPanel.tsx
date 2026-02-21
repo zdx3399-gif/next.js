@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface DecryptionReviewPanelProps {
   reviewerId: string
@@ -107,6 +108,11 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
         <h3 className="font-semibold mb-2 flex items-center gap-2">
           <Shield className="w-5 h-5 text-primary" />
           {reviewerRole === "committee" ? "管委會初審（第一層）" : "系統管理員覆核（第二層）"}
+          <HelpHint
+            title={reviewerRole === "committee" ? "管委會初審" : "管理員覆核"}
+            description={reviewerRole === "committee" ? "先判斷是否符合解密條件，通過後送管理員。" : "進行最終核准，通過後才能查看作者資訊。"}
+            align="center"
+          />
         </h3>
         <p className="text-sm text-muted-foreground">
           {reviewerRole === "committee" 
@@ -139,6 +145,7 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
                         <Badge variant="outline">
                           {request.target_type === "post" ? "貼文" : "留言"}
                         </Badge>
+                        <HelpHint title="審核目標" description="顯示申請對應的內容類型與流程節點。" align="center" />
                         {request.trigger_condition && (
                           <Badge variant="secondary">
                             {TRIGGER_MAP[request.trigger_condition] || request.trigger_condition}
@@ -185,6 +192,10 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
                         onChange={(e) => setReviewNote(e.target.value)}
                         className="min-h-20"
                       />
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>審核備註</span>
+                        <HelpHint title="審核備註" description="建議填寫核准/拒絕依據，方便後續稽核與追溯。" align="center" />
+                      </div>
                       <div className="flex gap-2">
                         <Button
                           size="sm"
@@ -222,6 +233,7 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
                       <Button size="sm" onClick={() => setSelectedRequest(request.id)}>
                         開始審核
                       </Button>
+                      <HelpHint title="開始審核" description="進入審核模式後可填寫備註並做通過或拒絕。" align="center" />
                       {request.status === "fully_approved" && (
                         <Button 
                           size="sm" 
@@ -249,6 +261,7 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-yellow-500" />
               解密後作者資訊
+              <HelpHint title="解密資料保護" description="僅可用於處理違規案件，請遵守個資保護規範。" align="center" />
             </DialogTitle>
             <DialogDescription>
               此資訊僅供處理違規事項使用，請勿外洩。

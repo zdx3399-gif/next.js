@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { usePackages } from "../hooks/usePackages"
 import type { Package } from "../api/packages"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface PackageListProps {
   userRoom?: string | null
@@ -33,6 +34,13 @@ export function PackageList({ userRoom, currentUser }: PackageListProps) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <span className="text-[var(--theme-text-primary)] text-sm font-medium">包裹查詢</span>
+        <HelpHint
+          title="住戶端包裹查詢"
+          description="可用快遞商、收件人或追蹤號搜尋自己的包裹。若近期剛到貨，建議稍後重新整理再查詢。"
+        />
+      </div>
       <input
         type="text"
         placeholder="搜尋快遞商、收件人或追蹤號碼..."
@@ -49,6 +57,10 @@ export function PackageList({ userRoom, currentUser }: PackageListProps) {
             <h3 className="flex gap-2 items-center text-yellow-500 font-bold text-lg mb-4">
               <span className="material-icons">schedule</span>
               待領取 ({filteredPending.length})
+              <HelpHint
+                title="住戶端待領取"
+                description="這裡顯示尚未領取的包裹。請依到達時間與追蹤號確認後，前往警衛室或管理室領取。"
+              />
             </h3>
             <div className="space-y-3">
               {filteredPending.length > 0 ? (
@@ -68,6 +80,13 @@ export function PackageList({ userRoom, currentUser }: PackageListProps) {
                             <code className="bg-[var(--theme-bg-primary)] px-2 py-1 rounded">
                               {pkg.tracking_number}
                             </code>
+                            <span className="inline-flex ml-2 align-middle">
+                              <HelpHint
+                                title="住戶端追蹤號"
+                                description="可用於與物流客服確認配送狀態或查詢包裹異常。"
+                                align="center"
+                              />
+                            </span>
                           </div>
                         )}
                       </div>
@@ -81,6 +100,13 @@ export function PackageList({ userRoom, currentUser }: PackageListProps) {
                     <div className="mt-3 text-[var(--theme-accent)] text-sm">
                       <span className="material-icons text-sm align-middle mr-1">info</span>
                       請至警衛室領取包裹
+                      <span className="inline-flex ml-2 align-middle">
+                        <HelpHint
+                          title="住戶端領取提醒"
+                          description="領取時建議攜帶可識別身份的資訊，避免代領錯誤。若需代領，請先與管理端確認流程。"
+                          align="center"
+                        />
+                      </span>
                     </div>
                   </div>
                 ))
@@ -96,6 +122,10 @@ export function PackageList({ userRoom, currentUser }: PackageListProps) {
             <h3 className="flex gap-2 items-center text-green-500 font-bold text-lg mb-4">
               <span className="material-icons">check_circle</span>
               已領取 ({filteredPickedUp.length})
+              <HelpHint
+                title="住戶端已領取"
+                description="這裡保留已完成領取紀錄，方便回查何時領取與由誰領取。"
+              />
             </h3>
             <div className="space-y-3">
               {filteredPickedUp.length > 0 ? (

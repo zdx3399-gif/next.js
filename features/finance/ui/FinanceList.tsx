@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useFinance } from "../hooks/useFinance"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface ExpenseRecord {
   id: string
@@ -84,6 +85,10 @@ export function FinanceList({ userRoom }: FinanceListProps) {
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl font-bold">
           <span className="material-icons">account_balance</span>
           管理費/收支
+          <HelpHint
+            title="住戶端財務功能"
+            description="可查看個人繳費狀態、社區支出與財務報表。若有未繳款項，請依期限完成繳費。"
+          />
         </h2>
 
         <div className="flex bg-[var(--theme-bg-secondary)] p-1 rounded-lg border border-[var(--theme-border)]">
@@ -131,6 +136,13 @@ export function FinanceList({ userRoom }: FinanceListProps) {
       {/* Income Tab (My Payments) */}
       {activeTab === "income" && (
         <div className="space-y-4 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <span className="text-[var(--theme-text-primary)] text-sm">我的繳費說明</span>
+            <HelpHint
+              title="住戶端我的繳費"
+              description="此區顯示你的管理費繳費紀錄與期限。未繳項目可透過『前往繳費』查看匯款資訊。"
+            />
+          </div>
           
           {/* ⚠️ Warning Banner for Unpaid Bills */}
           {hasUnpaid && (
@@ -141,25 +153,27 @@ export function FinanceList({ userRoom }: FinanceListProps) {
                 <p className="text-red-600/80 dark:text-red-400/80 text-xs mt-1">
                   請盡快完成繳費，以免影響您的權益。點擊下方「前往繳費」查看匯款資訊。
                 </p>
+                <div className="mt-2 inline-flex items-center gap-2">
+                  <span className="text-xs text-red-500">未繳提醒</span>
+                  <HelpHint
+                    title="住戶端未繳提醒"
+                    description="紅色提醒代表仍有待繳款項。建議優先處理最接近到期日的費用。"
+                    align="center"
+                  />
+                </div>
               </div>
             </div>
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
+            <table className="w-full min-w-[980px] border-collapse">
               <thead>
                 <tr className="bg-[var(--theme-accent-light)]">
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tl-lg">
-                    房號
-                  </th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">金額</th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                    期限
-                  </th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">發票</th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tr-lg">
-                    狀態 / 操作
-                  </th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tl-lg whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>房號</span><HelpHint title="住戶房號欄" description="顯示對應繳費房號。" /></div></th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>金額</span><HelpHint title="住戶金額欄" description="顯示本期應繳金額。" /></div></th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>期限</span><HelpHint title="住戶期限欄" description="顯示繳費截止日期。" /></div></th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>發票</span><HelpHint title="住戶發票欄" description="顯示收據或發票資訊。" /></div></th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tr-lg whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>狀態 / 操作</span><HelpHint title="住戶狀態操作欄" description="可查看已繳/未繳狀態，未繳可進入繳費資訊。" /></div></th>
                 </tr>
               </thead>
               <tbody>
@@ -200,6 +214,13 @@ export function FinanceList({ userRoom }: FinanceListProps) {
                             前往繳費
                           </button>
                         )}
+                        {!row.paid && (
+                          <HelpHint
+                            title="住戶端前往繳費"
+                            description="點擊後會顯示目前設定的匯款資訊（示範資料），請依管理室公告為準。"
+                            align="center"
+                          />
+                        )}
                       </td>
                     </tr>
                   ))
@@ -219,14 +240,21 @@ export function FinanceList({ userRoom }: FinanceListProps) {
       {/* Expense Tab - Read Only */}
       {activeTab === "expense" && (
         <div className="overflow-x-auto animate-fade-in">
-          <table className="w-full border-collapse">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[var(--theme-text-primary)] text-sm">社區支出說明</span>
+            <HelpHint
+              title="住戶端社區支出"
+              description="此頁提供社區支出透明資訊，住戶可查閱主要支出項目與金額。"
+            />
+          </div>
+          <table className="w-full min-w-[980px] border-collapse">
             <thead>
               <tr className="bg-red-500/10">
-                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] rounded-tl-lg">日期</th>
-                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">項目</th>
-                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">類別</th>
-                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)]">廠商</th>
-                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] rounded-tr-lg">金額</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] rounded-tl-lg whitespace-nowrap">日期</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] whitespace-nowrap">項目</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] whitespace-nowrap">類別</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] whitespace-nowrap">廠商</th>
+                <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] rounded-tr-lg whitespace-nowrap">金額</th>
               </tr>
             </thead>
             <tbody>
@@ -260,6 +288,13 @@ export function FinanceList({ userRoom }: FinanceListProps) {
       {/* Report Tab */}
       {activeTab === "report" && (
         <div className="animate-fade-in space-y-6">
+          <div className="flex items-center gap-2">
+            <span className="text-[var(--theme-text-primary)] text-sm">報表說明</span>
+            <HelpHint
+              title="住戶端財務報表"
+              description="提供收入、支出與本期損益概況，協助了解社區財務整體狀態。"
+            />
+          </div>
           {/* Top Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Income */}

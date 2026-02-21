@@ -34,6 +34,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface PostCardProps {
   post: {
@@ -308,6 +309,7 @@ export function CommunityPostCard({
 
           <div className="flex items-center justify-between pt-3 border-t border-border/40">
             <div className="flex items-center gap-1">
+              <HelpHint title="住戶端互動操作" description="可按讚、留言、收藏，互動數據會影響貼文排序。" align="center" />
               <Button
                 variant="ghost"
                 size="sm"
@@ -355,7 +357,7 @@ export function CommunityPostCard({
       <Dialog open={showDecryptionDialog} onOpenChange={setShowDecryptionDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>申請解密</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">申請解密<HelpHint title="管理端解密申請" description="需填寫觸發條件與理由，送交雙重授權審核。" align="center" /></DialogTitle>
             <DialogDescription>
               申請查看此貼文作者的真實身份。此操作需要經過雙重授權（管理員 + 委員會）才能完成。
             </DialogDescription>

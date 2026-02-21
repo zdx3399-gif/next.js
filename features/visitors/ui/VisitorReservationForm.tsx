@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import type { VisitorReservation } from "../api/visitors"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface VisitorReservationFormProps {
   onSubmit: (reservation: VisitorReservation) => Promise<boolean>
@@ -32,10 +33,21 @@ export function VisitorReservationForm({ onSubmit, onCancel }: VisitorReservatio
       <h3 className="flex gap-2 items-center text-[var(--theme-accent)] font-bold text-lg mb-4">
         <span className="material-icons">person_add</span>
         預約訪客
+        <HelpHint
+          title="住戶端預約表單"
+          description="填寫訪客基本資料與來訪時間，提交後管理端可提前掌握訪客資訊。"
+        />
       </h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">訪客姓名</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">訪客姓名</label>
+            <HelpHint
+              title="住戶端訪客姓名"
+              description="請填寫實際來訪者姓名，避免警衛現場核對困難。"
+              align="center"
+            />
+          </div>
           <input
             type="text"
             value={form.name}
@@ -45,7 +57,14 @@ export function VisitorReservationForm({ onSubmit, onCancel }: VisitorReservatio
           />
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">訪客電話</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">訪客電話</label>
+            <HelpHint
+              title="住戶端訪客電話"
+              description="建議填寫可聯絡電話，若現場有狀況可快速通知。"
+              align="center"
+            />
+          </div>
           <input
             type="tel"
             value={form.phone}
@@ -54,7 +73,14 @@ export function VisitorReservationForm({ onSubmit, onCancel }: VisitorReservatio
           />
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">來訪目的</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">來訪目的</label>
+            <HelpHint
+              title="住戶端來訪目的"
+              description="簡述拜訪原因（如親友、維修、送件），有助於管理端快速判斷。"
+              align="center"
+            />
+          </div>
           <input
             type="text"
             value={form.purpose}
@@ -64,7 +90,14 @@ export function VisitorReservationForm({ onSubmit, onCancel }: VisitorReservatio
           />
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">預約時間</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">預約時間</label>
+            <HelpHint
+              title="住戶端預約時間"
+              description="請填預計到訪時間，系統限制為當前時間之後，避免填入過期資料。"
+              align="center"
+            />
+          </div>
           <input
             type="datetime-local"
             value={form.reservation_time}

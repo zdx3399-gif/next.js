@@ -63,13 +63,13 @@ export function CreatePostDialog({ open, onClose, onSubmit, currentUser }: Creat
           <DialogTitle className="flex gap-2 items-center">
             <span className="material-icons">edit_note</span>
             發表新貼文
-            <HelpHint title="住戶端發文" description="請先選擇分類與顯示方式，再輸入標題與內容。" />
+            <HelpHint title="住戶端發文" description="請先選擇分類與顯示方式，再輸入標題與內容。" workflow={["先選分類與顯示方式。","再填標題與內容後送出。"]} logic={["完整欄位可提高審核效率與可讀性。"]} />
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div>
-            <Label className="flex items-center gap-2">分類<HelpHint title="住戶端分類" description="分類會影響其他住戶瀏覽與搜尋。" align="center" /></Label>
+            <Label className="flex items-center gap-2">分類<HelpHint title="住戶端分類" description="分類會影響其他住戶瀏覽與搜尋。" workflow={["依內容主題選擇分類。"]} logic={["案例：分享事件經過與解法。","教學：提供可重複的操作步驟。","意見：提出看法與討論建議。","警示：提醒風險與重要異常。"]} align="center" /></Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger>
                 <SelectValue />
@@ -84,7 +84,7 @@ export function CreatePostDialog({ open, onClose, onSubmit, currentUser }: Creat
           </div>
 
           <div>
-            <Label className="flex items-center gap-2">顯示方式<HelpHint title="住戶端顯示方式" description="可選半匿名、完全匿名或實名；系統皆可追溯身份。" align="center" /></Label>
+            <Label className="flex items-center gap-2">顯示方式<HelpHint title="住戶端顯示方式" description="可選半匿名、完全匿名或實名；系統皆可追溯身份。" workflow={["選擇實名或匿名顯示模式。","確認可見身份再發文。"]} logic={["半匿名：顯示住戶#編號，兼顧辨識與隱私。","完全匿名：前台不顯示身份資訊。","實名：顯示名稱，利於公開討論。","三種模式都可由後台依規範追溯。"]} align="center" /></Label>
             <Select value={displayMode} onValueChange={setDisplayMode}>
               <SelectTrigger>
                 <SelectValue />
@@ -99,7 +99,7 @@ export function CreatePostDialog({ open, onClose, onSubmit, currentUser }: Creat
           </div>
 
           <div>
-            <Label className="flex items-center gap-2">標題<HelpHint title="住戶端標題" description="建議用一句話清楚描述主題。" align="center" /></Label>
+            <Label className="flex items-center gap-2">標題<HelpHint title="住戶端標題" description="建議用一句話清楚描述主題。" workflow={["用一句話描述核心重點。"]} logic={["清晰標題有助其他住戶快速判讀。"]} align="center" /></Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -109,7 +109,7 @@ export function CreatePostDialog({ open, onClose, onSubmit, currentUser }: Creat
           </div>
 
           <div>
-            <Label className="flex items-center gap-2">內容<HelpHint title="住戶端內容" description="請避免個資與人身攻擊，必要時先做資訊遮蔽。" align="center" /></Label>
+            <Label className="flex items-center gap-2">內容<HelpHint title="住戶端內容" description="請避免個資與人身攻擊，必要時先做資訊遮蔽。" workflow={["先完成內容描述。","送出前檢查是否包含敏感資訊。"]} logic={["內容合規可降低被檢舉與下架風險。"]} align="center" /></Label>
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}

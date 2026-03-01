@@ -9,32 +9,10 @@ import {
   deleteAnnouncement,
   uploadAnnouncementImage,
 } from "../api/announcements"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-
-interface HelpHintProps {
-  title: string
-  description: string
-}
-
-function HelpHint({ title, description }: HelpHintProps) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-accent-light)] text-[var(--theme-accent)] text-xs font-semibold leading-none hover:border-[var(--theme-border-accent)] hover:opacity-90 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-border-accent)]"
-          aria-label={`${title}說明`}
-        >
-          ?
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="z-[220] w-80 text-sm">
-        <div className="font-semibold mb-1">{title}</div>
-        <div className="text-[var(--theme-text-secondary)] leading-relaxed">{description}</div>
-      </PopoverContent>
-    </Popover>
-  )
-}
+import { HelpHint } from "@/components/ui/help-hint"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { RefreshCw, Plus, Search } from "lucide-react"
 
 interface AnnouncementFormModalProps {
   isOpen: boolean
@@ -75,7 +53,19 @@ function AnnouncementFormModal({
           <div>
             <div className="flex items-center gap-2 mb-2">
               <label className="text-[var(--theme-text-primary)] font-medium">標題</label>
-              <HelpHint title="標題" description="公告的主題名稱，會出現在公告列表與首頁輪播。建議在 20 字內說清楚『事件 + 重點』，例如：2/28 停水通知。" />
+              <HelpHint
+                title="標題"
+                description="公告的主題名稱，會出現在公告列表與首頁輪播。建議在 20 字內說清楚『事件 + 重點』，例如：2/28 停水通知。"
+                workflow={[
+                  "先輸入事件主題與時間重點（例如停水、施工、活動）。",
+                  "確認標題可單獨被理解，再進行內容撰寫。",
+                  "送出前檢查是否與既有公告重複。",
+                ]}
+                logic={[
+                  "標題會直接影響住戶端列表辨識與點擊率。",
+                  "標題過長或不明確會增加住戶誤解風險。",
+                ]}
+              />
             </div>
             <input
               type="text"
@@ -88,7 +78,19 @@ function AnnouncementFormModal({
           <div>
             <div className="flex items-center gap-2 mb-2">
               <label className="text-[var(--theme-text-primary)] font-medium">內容</label>
-              <HelpHint title="內容" description="公告完整內容區，建議包含：發生時間、地點/棟別、影響範圍、住戶需配合事項、聯絡窗口。這欄位會直接顯示給住戶閱讀。" />
+              <HelpHint
+                title="內容"
+                description="公告完整內容區，建議包含：發生時間、地點/棟別、影響範圍、住戶需配合事項、聯絡窗口。這欄位會直接顯示給住戶閱讀。"
+                workflow={[
+                  "依序填寫時間、地點、影響範圍與住戶需配合事項。",
+                  "補上聯絡窗口與處理時段，避免住戶無法追問。",
+                  "發布前再校對一次內容是否可直接執行。",
+                ]}
+                logic={[
+                  "內容為住戶主要依據，資訊不完整會造成後續詢問量上升。",
+                  "清楚條列可降低現場執行誤差。",
+                ]}
+              />
             </div>
             <textarea
               value={formData.content || ""}
@@ -101,7 +103,19 @@ function AnnouncementFormModal({
           <div>
             <div className="flex items-center gap-2 mb-2">
               <label className="text-[var(--theme-text-primary)] font-medium">圖片</label>
-              <HelpHint title="圖片" description="可上傳公告配圖（例如施工區域示意、活動海報）。有圖片時住戶更容易理解重點；未上傳也可以正常儲存與發布。" />
+              <HelpHint
+                title="圖片"
+                description="可上傳公告配圖（例如施工區域示意、活動海報）。有圖片時住戶更容易理解重點；未上傳也可以正常儲存與發布。"
+                workflow={[
+                  "點選檔案上傳圖片，確認檔名已顯示。",
+                  "若要沿用既有圖片可不重新上傳。",
+                  "儲存時系統會先處理圖片再寫入公告資料。",
+                ]}
+                logic={[
+                  "圖片上傳失敗時不會進入儲存流程，避免公告資料不完整。",
+                  "圖片屬輔助資訊，無圖片也可發布公告。",
+                ]}
+              />
             </div>
             <input
               type="file"
@@ -119,7 +133,19 @@ function AnnouncementFormModal({
           <div>
             <div className="flex items-center gap-2 mb-2">
               <label className="text-[var(--theme-text-primary)] font-medium">作者</label>
-              <HelpHint title="作者" description="顯示公告發布者名稱，用於住戶辨識資訊來源。此欄位目前為系統帶入（唯讀），避免手動修改造成來源混淆。" />
+              <HelpHint
+                title="作者"
+                description="顯示公告發布者名稱，用於住戶辨識資訊來源。此欄位目前為系統帶入（唯讀），避免手動修改造成來源混淆。"
+                workflow={[
+                  "建立公告時先確認作者欄位是否正確顯示。",
+                  "作者欄位為唯讀，不需手動修改。",
+                  "若來源錯誤，請改由帳號權限或登入者設定修正。",
+                ]}
+                logic={[
+                  "作者資訊用於責任追溯與住戶信任建立。",
+                  "禁止手動改作者可避免冒名或來源混淆。",
+                ]}
+              />
             </div>
             <input
               type="text"
@@ -131,7 +157,19 @@ function AnnouncementFormModal({
           <div>
             <div className="flex items-center gap-2 mb-2">
               <label className="text-[var(--theme-text-primary)] font-medium">狀態</label>
-              <HelpHint title="狀態" description="草稿：僅管理端可見，適合先編輯與校稿。已發布：住戶端可見，會進入公告列表與相關展示區。發布前請再確認內容正確。" />
+              <HelpHint
+                title="狀態"
+                description="草稿：僅管理端可見，適合先編輯與校稿。已發布：住戶端可見，會進入公告列表與相關展示區。發布前請再確認內容正確。"
+                workflow={[
+                  "初次建立建議先選草稿，完成校稿後再改為已發布。",
+                  "確認內容與圖片無誤後切換為已發布。",
+                  "發布後若需修正，可編輯後再次儲存。",
+                ]}
+                logic={[
+                  "狀態會決定住戶端是否可見。",
+                  "草稿可降低誤發風險，適合多人協作審閱。",
+                ]}
+              />
             </div>
             <select
               value={formData.status || "draft"}
@@ -284,72 +322,174 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
           <HelpHint
             title="公告管理"
             description="這裡是公告後台：可新增、編輯、刪除公告，並切換草稿/已發布。建議流程為『先草稿校對 → 確認內容無誤 → 改為已發布』，可降低誤發風險。"
+            workflow={[
+              "點「新增一筆」建立公告並先存成草稿。",
+              "完成標題、內容、圖片與狀態設定後儲存。",
+              "確認公告可對外後改為已發布；後續可再編輯或刪除。",
+            ]}
+            logic={[
+              "管理端是公告生命週期中心：建立、修訂、發布、下線。",
+              "發布狀態會直接影響住戶端可見內容。",
+            ]}
           />
         </h2>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 border border-[var(--theme-btn-add-border)] text-[var(--theme-btn-add-text)] rounded-lg hover:bg-[var(--theme-btn-add-border)]/15 transition-all text-sm font-semibold"
-        >
-          <span className="material-icons text-xl">add</span>
-          新增一筆
-        </button>
       </div>
 
-      <div className="mb-4">
-        <div className="flex items-center gap-2 mb-2">
-          <label className="text-[var(--theme-text-primary)] font-medium">搜尋</label>
-          <HelpHint title="搜尋" description="可用關鍵字搜尋標題、內容、作者。適合快速找到舊公告，例如輸入『停水』『電梯』『活動』等字詞。" />
+      <div className="flex flex-col sm:flex-row gap-3 justify-between mb-4">
+        <div className="flex-1 max-w-md">
+          <div className="flex items-center gap-2 mb-2">
+            <label className="text-[var(--theme-text-primary)] font-medium">搜尋</label>
+            <HelpHint
+              title="搜尋"
+              description="可用關鍵字搜尋標題、內容、作者。適合快速找到舊公告，例如輸入『停水』『電梯』『活動』等字詞。"
+              workflow={[
+                "輸入關鍵字篩選公告資料。",
+                "從結果中點選欲編輯或檢查的公告。",
+                "查無結果時清空關鍵字回到完整清單。",
+              ]}
+              logic={[
+                "搜尋僅影響列表顯示，不會修改公告資料。",
+                "適合大量公告下快速定位目標。",
+              ]}
+            />
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-text-secondary)]" />
+            <Input
+              type="text"
+              placeholder="搜尋標題、內容或作者..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </div>
-        <input
-          type="text"
-          placeholder="搜尋標題、內容或作者..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full p-3 rounded-xl theme-input outline-none"
-        />
+
+        <div className="flex items-end gap-2">
+          <Button variant="outline" onClick={loadAnnouncements} disabled={loading || isPreviewMode}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            重新整理
+          </Button>
+          <Button onClick={handleAdd}>
+            <Plus className="w-4 h-4 mr-2" />
+            新增一筆
+          </Button>
+        </div>
       </div>
 
       {loading ? (
         <div className="text-center text-[var(--theme-text-secondary)] py-12">載入中...</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1280px] border-collapse">
+          <table className="w-full min-w-[1100px] table-fixed border-collapse">
             <thead>
               <tr className="bg-[var(--theme-accent-light)]">
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                <th className="w-[30%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
                   <div className="inline-flex items-center gap-2 whitespace-nowrap">
                     <span>標題</span>
-                    <HelpHint title="標題欄" description="顯示公告主題，用來快速辨識每筆公告。標題清楚時，管理者在大量資料中也能快速定位目標。" />
+                    <HelpHint
+                      title="標題欄"
+                      description="顯示公告主題，用來快速辨識每筆公告。標題清楚時，管理者在大量資料中也能快速定位目標。"
+                      workflow={[
+                        "先看標題辨識公告主題。",
+                        "搭配搜尋結果快速確認目標公告。",
+                        "若標題不清楚，建議進入編輯補強。",
+                      ]}
+                      logic={[
+                        "標題欄是列表的第一層辨識資訊。",
+                        "良好命名可降低誤編輯機率。",
+                      ]}
+                    />
                   </div>
                 </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                <th className="w-[25%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
                   <div className="inline-flex items-center gap-2 whitespace-nowrap">
                     <span>內容</span>
-                    <HelpHint title="內容欄" description="顯示公告內容摘要（列表會截斷）。若要檢視或調整完整內容，請使用右側編輯按鈕進入表單。" />
+                    <HelpHint
+                      title="內容欄"
+                      description="顯示公告內容摘要（列表會截斷）。若要檢視或調整完整內容，請使用右側編輯按鈕進入表單。"
+                      workflow={[
+                        "在列表先看摘要確認主題是否正確。",
+                        "需要完整檢查時點編輯進入表單。",
+                        "調整後儲存並回列表複核摘要。",
+                      ]}
+                      logic={[
+                        "摘要為截斷顯示，不等同完整內容。",
+                        "完整內容校正需透過編輯流程進行。",
+                      ]}
+                    />
                   </div>
                 </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                <th className="w-[10%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
                   <div className="inline-flex items-center gap-2 whitespace-nowrap">
                     <span>作者</span>
-                    <HelpHint title="作者欄" description="顯示發布者名稱，方便追蹤公告來源與責任歸屬。住戶若有疑問，也可依此辨識聯繫對象。" />
+                    <HelpHint
+                      title="作者欄"
+                      description="顯示發布者名稱，方便追蹤公告來源與責任歸屬。住戶若有疑問，也可依此辨識聯繫對象。"
+                      workflow={[
+                        "檢查作者欄確認公告來源。",
+                        "若來源異常，回到編輯或帳號設定檢查。",
+                        "對外溝通時可依作者判斷窗口。",
+                      ]}
+                      logic={[
+                        "作者欄是稽核與責任歸屬關鍵資料。",
+                        "來源一致性有助於住戶建立信任。",
+                      ]}
+                    />
                   </div>
                 </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                <th className="w-[10%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
                   <div className="inline-flex items-center gap-2 whitespace-nowrap">
                     <span>狀態</span>
-                    <HelpHint title="狀態欄" description="顯示公告目前狀態：草稿（僅管理端可見）或已發布（住戶可見）。可用來快速檢查哪些公告尚未對外發布。" />
+                    <HelpHint
+                      title="狀態欄"
+                      description="顯示公告目前狀態：草稿（僅管理端可見）或已發布（住戶可見）。可用來快速檢查哪些公告尚未對外發布。"
+                      workflow={[
+                        "先看狀態確認公告是否對住戶可見。",
+                        "草稿需編輯完成後再改為已發布。",
+                        "若需撤回公開內容，可改回草稿後儲存。",
+                      ]}
+                      logic={[
+                        "狀態決定住戶端展示範圍。",
+                        "列表檢查狀態可快速掌握發布進度。",
+                      ]}
+                    />
                   </div>
                 </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                <th className="w-[12%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
                   <div className="inline-flex items-center gap-2 whitespace-nowrap">
                     <span>建立日期</span>
-                    <HelpHint title="建立日期欄" description="顯示公告建立日期，協助判斷資訊新舊與發布時序，避免誤用過期公告內容。" />
+                    <HelpHint
+                      title="建立日期欄"
+                      description="顯示公告建立日期，協助判斷資訊新舊與發布時序，避免誤用過期公告內容。"
+                      workflow={[
+                        "查看日期判斷公告新舊與時效性。",
+                        "處理舊公告前先確認是否仍適用。",
+                        "必要時更新內容或調整狀態。",
+                      ]}
+                      logic={[
+                        "日期是判斷公告時效的重要依據。",
+                        "可避免舊資訊持續誤導住戶。",
+                      ]}
+                    />
                   </div>
                 </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                <th className="w-[13%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
                   <div className="inline-flex items-center gap-2 whitespace-nowrap">
                     <span>操作</span>
-                    <HelpHint title="操作欄" description="可對單筆公告執行編輯或刪除。建議刪除前先確認該公告是否仍需留存作為歷史紀錄。" />
+                    <HelpHint
+                      title="操作欄"
+                      description="可對單筆公告執行編輯或刪除。建議刪除前先確認該公告是否仍需留存作為歷史紀錄。"
+                      workflow={[
+                        "點鉛筆按鈕進入編輯，修正後儲存。",
+                        "點垃圾桶前先確認公告是否可刪除。",
+                        "刪除後回列表確認資料已移除。",
+                      ]}
+                      logic={[
+                        "編輯適合內容更新；刪除適合誤建或確定不保留資料。",
+                        "刪除是高風險操作，建議保留必要歷史紀錄。",
+                      ]}
+                    />
                   </div>
                 </th>
               </tr>
@@ -359,13 +499,13 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
                 filteredAnnouncements.map((announcement) => (
                   <tr key={announcement.id} className="hover:bg-[var(--theme-accent-light)] transition-colors">
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {announcement.title}
+                      <div className="truncate" title={announcement.title}>{announcement.title}</div>
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] max-w-[200px]">
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       <div className="line-clamp-2">{announcement.content}</div>
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      {announcement.author_name || "管理員"}
+                      <div className="truncate" title={announcement.author_name || "管理員"}>{announcement.author_name || "管理員"}</div>
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)]">
                       <span
@@ -378,10 +518,10 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
                         {announcement.status === "published" ? "已發布" : "草稿"}
                       </span>
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] whitespace-nowrap">
                       {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)]">
+                    <td className="p-3 border-b border-[var(--theme-border)] whitespace-nowrap">
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleEdit(announcement)}

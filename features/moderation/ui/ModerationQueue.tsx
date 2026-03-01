@@ -76,6 +76,15 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
         <HelpHint
           title="管理端佇列篩選"
           description="佇列狀態邏輯：\n• 待處理（pending）：新進案件，尚未開始審核。\n• 審核中（in_review）：已進入人工處理流程。\n• 已處理（resolved）：已完成處置並結案。\n\n優先級邏輯：urgent > high > medium > low，建議先處理緊急與高風險案件。"
+          workflow={[
+            "先用狀態按鈕切換待處理、審核中或已處理。",
+            "再用優先級按鈕縮小案件範圍（如緊急、高）。",
+            "從清單點選案件進入詳情處理。",
+          ]}
+          logic={[
+            "狀態篩選控制流程階段，優先級篩選控制處理順序。",
+            "建議先處理 urgent/high，可降低高風險延誤。",
+          ]}
           align="center"
         />
         <div className="flex gap-2">
@@ -153,6 +162,14 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
                       <HelpHint
                         title="管理端案件標籤"
                         description="案件標籤說明：\n• 優先級：決定處理先後。\n• 內容類型：貼文 / 留言 / 檢舉。\n• 已指派：已有審核人員接手。\n• 逾期：已超過 due_at 或系統標記 overdue。"
+                        workflow={[
+                          "先看優先級與內容類型判斷案件性質。",
+                          "再看是否已指派與是否逾期，決定是否要優先接手。",
+                        ]}
+                        logic={[
+                          "標籤組合提供快速風險判斷，減少逐筆展開成本。",
+                          "逾期或高優先級案件通常應排在前面處理。",
+                        ]}
                         align="center"
                       />
                       {item.assigned_to && (
@@ -196,7 +213,18 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
                       <Button size="sm" onClick={(e) => handleAssignToMe(item.id, e)} className="shrink-0">
                         指派給我
                       </Button>
-                      <HelpHint title="管理端指派" description="先指派再處理可避免多人重複作業。" align="center" />
+                      <HelpHint
+                        title="管理端指派"
+                        description="先指派再處理可避免多人重複作業。"
+                        workflow={[
+                          "確認案件尚未指派後點「指派給我」。",
+                          "指派成功後再進入詳情頁執行審核。",
+                        ]}
+                        logic={[
+                          "先指派可建立責任歸屬，避免多位管理員重複處理。",
+                        ]}
+                        align="center"
+                      />
                     </div>
                   )}
                 </div>

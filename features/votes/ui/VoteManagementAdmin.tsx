@@ -6,6 +6,9 @@ import { useState, useEffect } from "react"
 import type { User } from "@/features/profile/api/profile"
 import { getSupabaseClient } from "@/lib/supabase"
 import { HelpHint } from "@/components/ui/help-hint"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { RefreshCw, Search } from "lucide-react"
 
 // ==================================================================================
 // 🔧 CONFIG: Your Static Default Links
@@ -154,6 +157,15 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
         <HelpHint
           title="管理端投票功能"
           description="管理端可建立投票/問卷通知、切換發布模式、查看歷史紀錄與結果入口。建議先在發布中心建立內容，再到紀錄頁追蹤執行情況。"
+          workflow={[
+            "先在發布中心建立本次投票或問卷內容。",
+            "確認模式、截止時間與連結後送出通知。",
+            "到紀錄與結果頁追蹤執行狀態與回收情況。",
+          ]}
+          logic={[
+            "本模組分為建立與追蹤兩階段，避免流程混亂。",
+            "模式與截止時間會直接影響住戶端填答體驗。",
+          ]}
           align="center"
         />
       </div>
@@ -170,6 +182,14 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
               <HelpHint
                 title="管理端發布中心"
                 description="在此建立新投票通知。填寫標題、截止時間與內容後可直接推播，住戶端會看到對應入口。"
+                workflow={[
+                  "先填標題與截止時間。",
+                  "依需求選擇連結模式或投票模式並填內容。",
+                  "送出後到紀錄頁確認是否成功建立。",
+                ]}
+                logic={[
+                  "發布中心是新投票唯一入口，欄位完整性會影響住戶端顯示。",
+                ]}
               />
             </h2>
             <div className="flex bg-[var(--theme-bg-primary)] p-1 rounded-lg border border-[var(--theme-border)]">
@@ -193,6 +213,15 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
             <HelpHint
               title="管理端模式切換"
               description="連結模式：外部 Google Form 填答。投票模式：系統內文案投票流程。請依活動需求選擇。"
+              workflow={[
+                "先確認本次活動要走外部表單或內建投票。",
+                "切換模式後填對應欄位內容。",
+                "送出前再次確認模式是否正確。",
+              ]}
+              logic={[
+                "不同模式會改變住戶端跳轉與填答方式。",
+                "模式選錯會導致連結或內容不一致。",
+              ]}
             />
           </div>
 
@@ -205,6 +234,14 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
                     <HelpHint
                       title="管理端投票標題"
                       description="住戶最先看到的文字。建議包含主題與目的，例如：『停車規則修訂投票』。"
+                      workflow={[
+                        "輸入主題與投票目的。",
+                        "用住戶能快速理解的句型命名。",
+                        "送出前確認與截止時間一致。",
+                      ]}
+                      logic={[
+                        "標題會直接影響住戶是否點開與參與。",
+                      ]}
                     />
                   </div>
                   <input
@@ -221,6 +258,14 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
                     <HelpHint
                       title="管理端截止時間"
                       description="投票有效期限。到期後住戶通常無法再參與，設定前請先確認公告時程。"
+                      workflow={[
+                        "先確認公告期間與投票結束時點。",
+                        "設定截止時間後檢查時區與日期是否正確。",
+                        "發布後若需延長，請重新公告說明。",
+                      ]}
+                      logic={[
+                        "截止時間會控制可否填答，屬高影響欄位。",
+                      ]}
                     />
                   </div>
                   <input
@@ -242,6 +287,15 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
                       <HelpHint
                         title="管理端 Google Form 連結"
                         description="貼入住戶要填寫的公開表單網址。送出後住戶端會導向這個連結。"
+                        workflow={[
+                          "貼上可公開存取的 Google Form 連結。",
+                          "發布前先自行開啟測試連結可用性。",
+                          "送出後於住戶端驗證跳轉是否正確。",
+                        ]}
+                        logic={[
+                          "連結錯誤會造成住戶無法投票。",
+                          "建議使用最終公開版連結，避免中途改版失效。",
+                        ]}
                       />
                     </div>
                     <input
@@ -272,6 +326,14 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
                     <HelpHint
                       title="管理端投票說明"
                       description="填寫投票背景、選項解釋與決策依據，幫助住戶理解後再投票。"
+                      workflow={[
+                        "先交代背景與決策目的。",
+                        "再補充選項差異與注意事項。",
+                        "發布前確認說明內容與題目一致。",
+                      ]}
+                      logic={[
+                        "說明越清楚，越能降低無效或誤解填答。",
+                      ]}
                     />
                   </div>
                   <textarea
@@ -315,6 +377,14 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
               <HelpHint
                 title="管理端快速捷徑"
                 description="提供常用外部操作：編輯既有表單與建立新表單。可縮短建立投票內容的時間。"
+                workflow={[
+                  "先判斷要編輯既有表單或建立新表單。",
+                  "開啟對應捷徑後完成 Google 表單設定。",
+                  "回到發布中心貼上最終連結。",
+                ]}
+                logic={[
+                  "捷徑只負責開啟外部工具，發布仍需在本系統完成。",
+                ]}
               />
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -356,24 +426,48 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
               <HelpHint
                 title="管理端歷史紀錄"
                 description="可查詢過去投票/問卷，並透過連結回到表單或結果頁做後續分析與追蹤。"
+                workflow={[
+                  "先用搜尋定位目標投票紀錄。",
+                  "查看日期、類型與發布者確認正確性。",
+                  "必要時點連結回到表單或結果頁分析。",
+                ]}
+                logic={[
+                  "歷史紀錄是追蹤活動成效與稽核依據。",
+                ]}
               />
             </h2>
 
             <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm text-[var(--theme-text-primary)]">搜尋紀錄</span>
-                <HelpHint
-                  title="管理端搜尋紀錄"
-                  description="輸入標題、說明或發布者可快速定位指定投票紀錄。"
+              <div className="flex flex-col sm:flex-row gap-3 justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-[var(--theme-text-primary)]">搜尋紀錄</span>
+                  <HelpHint
+                    title="管理端搜尋紀錄"
+                    description="輸入標題、說明或發布者可快速定位指定投票紀錄。"
+                    workflow={[
+                      "輸入標題、說明或發布者關鍵字。",
+                      "從結果中選擇要檢查的紀錄。",
+                      "查無結果時調整字詞再搜尋。",
+                    ]}
+                    logic={[
+                      "搜尋僅過濾目前列表，不會變更歷史資料。",
+                    ]}
+                  />
+                </div>
+                <Button variant="outline" onClick={fetchHistory} disabled={loading || isPreviewMode}>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  重新整理
+                </Button>
+              </div>
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-text-secondary)]" />
+                <Input
+                  placeholder="搜尋標題、說明或發布者..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
                 />
               </div>
-              <input
-                type="text"
-                placeholder="搜尋標題、說明或發布者..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full p-3 rounded-xl theme-input outline-none"
-              />
             </div>
 
             <div className="overflow-x-auto">

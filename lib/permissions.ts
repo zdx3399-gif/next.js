@@ -16,6 +16,7 @@ export type Section =
   | "facilities"
   | "community"
   | "knowledge-base"
+  | "handover-knowledge"
   | "moderation"
   | "audit-logs"
   | "decryption"
@@ -56,6 +57,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "facilities",
     "community",
     "knowledge-base",
+    "handover-knowledge",
     "moderation",
     "audit-logs",
     "decryption",
@@ -80,6 +82,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "facilities",
     "community",      // 可看但作者資訊遮蔽
     "knowledge-base",
+    "handover-knowledge",
     "moderation",     // 可看但用戶資料遮蔽
     "decryption",     // 解密申請覆核（第二層）
     "audit-logs",
@@ -103,6 +106,7 @@ export const ADMIN_PREVIEW_ONLY_SECTIONS: Section[] = [
   "emergencies",
   "facilities",
   "knowledge-base",
+  "handover-knowledge",
 ]
 
 // Admin 可以正常操作的區塊（解密覆核、稽核紀錄）
@@ -192,6 +196,7 @@ const COMMITTEE_RESIDENT_PERMISSIONS: Section[] = [
   "facilities",
   "community",
   "knowledge-base",
+  "handover-knowledge",
 ]
 
 export function canAccessSection(role: UserRole, section: Section, isResidentMode = false): boolean {

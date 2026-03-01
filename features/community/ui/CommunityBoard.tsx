@@ -49,6 +49,14 @@ export function CommunityBoard({ currentUser }: CommunityBoardProps) {
         <HelpHint
           title="住戶端社區討論"
           description="可瀏覽貼文、查看詳情、發文與檢舉。發文前請遵守社區規範與禮貌原則。"
+          workflow={[
+            "先在列表搜尋或篩選想看的主題。",
+            "點進詳情閱讀內容並互動留言。",
+            "需要時可發文或檢舉不當內容。",
+          ]}
+          logic={[
+            "社區討論流程結合內容互動與治理機制，兼顧交流與秩序。",
+          ]}
         />
       </div>
       {view === "list" ? (

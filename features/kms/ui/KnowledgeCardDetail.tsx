@@ -66,7 +66,7 @@ export function KnowledgeCardDetail({ cardId, currentUser, onBack, onEdit }: Kno
           <span className="material-icons">arrow_back</span>
           返回列表
         </Button>
-        <HelpHint title="住戶端知識詳情" description="此頁面提供完整流程、注意事項與聯絡資訊，建議依序閱讀。" align="center" />
+        <HelpHint title="住戶端知識詳情" description="此頁面提供完整流程、注意事項與聯絡資訊，建議依序閱讀。" workflow={["先看摘要確認是否符合當前情境。","依序閱讀操作步驟與注意事項。","需要時參考聯絡資訊取得協助。"]} logic={["詳情頁提供完整上下文，避免只看片段造成誤解。"]} align="center" />
         {canEdit && onEdit && (
           <Button onClick={() => onEdit(card.id)} className="flex gap-2 items-center ml-auto">
             <span className="material-icons">edit</span>
@@ -102,7 +102,7 @@ export function KnowledgeCardDetail({ cardId, currentUser, onBack, onEdit }: Kno
             <h2 className="font-bold text-lg mb-3 flex gap-2 items-center text-[var(--theme-text-primary)]">
               <span className="material-icons">list</span>
               操作步驟
-              <HelpHint title="住戶端操作步驟" description="依步驟順序操作可降低錯誤，若情況不同可詢問管理室。" align="center" />
+              <HelpHint title="住戶端操作步驟" description="依步驟順序操作可降低錯誤，若情況不同可詢問管理室。" workflow={["從第 1 步開始依序執行。","遇到條件不符時停止並改看注意事項。","仍有例外情況可聯絡管理端。"]} logic={["步驟設計有前後依賴，跳步可能導致失敗。"]} align="center" />
             </h2>
             <ol className="list-decimal list-inside space-y-2">
               {card.steps.map((step: string, index: number) => (
@@ -148,7 +148,7 @@ export function KnowledgeCardDetail({ cardId, currentUser, onBack, onEdit }: Kno
 
         {/* Vote */}
         <div className="border-t pt-4">
-          <p className="text-sm text-[var(--theme-text-secondary)] mb-3 flex items-center gap-2">這個知識卡對您有幫助嗎？<HelpHint title="住戶端回饋" description="你的回饋會幫助系統調整內容品質與排序。" align="center" /></p>
+          <p className="text-sm text-[var(--theme-text-secondary)] mb-3 flex items-center gap-2">這個知識卡對您有幫助嗎？<HelpHint title="住戶端回饋" description="你的回饋會幫助系統調整內容品質與排序。" workflow={["閱讀內容後再投票。","依實際幫助程度選有幫助或沒幫助。"]} logic={["回饋資料會影響排序與內容維護優先序。"]} align="center" /></p>
           <div className="flex gap-2">
             <Button onClick={() => handleVote("helpful")} variant="outline" className="flex gap-2 items-center">
               <span className="material-icons text-green-600">thumb_up</span>
@@ -167,7 +167,7 @@ export function KnowledgeCardDetail({ cardId, currentUser, onBack, onEdit }: Kno
             <h2 className="font-bold text-lg mb-3 flex gap-2 items-center text-[var(--theme-text-primary)]">
               <span className="material-icons">history</span>
               版本歷史 ({versions.length})
-              <HelpHint title="住戶端版本歷史" description="可查看內容更新紀錄，確保使用最新規則。" align="center" />
+              <HelpHint title="住戶端版本歷史" description="可查看內容更新紀錄，確保使用最新規則。" workflow={["先看目前版本，再比對歷史異動。","有爭議時可用版本日期追溯規則變更。"]} logic={["版本歷史可提高規範透明度與追溯性。"]} align="center" />
             </h2>
             <div className="space-y-2">
               {versions.map((v, index) => (

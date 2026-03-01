@@ -62,7 +62,7 @@ export function KnowledgeCardList({ currentUser, onSelectCard, onCreateCard }: K
         <div className="relative flex-1">
           <div className="mb-2 flex items-center gap-2">
             <span className="text-sm text-muted-foreground">搜尋知識卡</span>
-            <HelpHint title="住戶端知識庫搜尋" description="可輸入關鍵字快速找到流程、規章與常見問題。" align="center" />
+            <HelpHint title="住戶端知識庫搜尋" description="可輸入關鍵字快速找到流程、規章與常見問題。" workflow={["輸入流程關鍵字（如包裹、訪客）。","即時查看結果並點選目標知識卡。"]} logic={["搜尋會比對標題與內容摘要，加速定位。"]} align="center" />
           </div>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -84,7 +84,7 @@ export function KnowledgeCardList({ currentUser, onSelectCard, onCreateCard }: K
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         <div className="flex items-center gap-2 shrink-0 pr-2">
           <span className="text-xs text-muted-foreground">分類</span>
-          <HelpHint title="住戶端分類篩選" description="可依包裹、訪客、報修等分類縮小查詢範圍。" align="center" />
+          <HelpHint title="住戶端分類篩選" description="可依包裹、訪客、報修等分類縮小查詢範圍。" workflow={["先選分類縮小範圍。","再配合搜尋欄快速找到內容。"]} logic={["分類篩選可降低噪音結果，提高查找效率。"]} align="center" />
         </div>
         {categories.map((cat) => (
           <Button
@@ -106,7 +106,7 @@ export function KnowledgeCardList({ currentUser, onSelectCard, onCreateCard }: K
       {/* Using new KnowledgeCardItem component in grid layout */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">知識卡列表</span>
-        <HelpHint title="住戶端知識卡" description="點選「查看詳情」可閱讀完整步驟，並可回饋是否有幫助。" align="center" />
+        <HelpHint title="住戶端知識卡" description="點選「查看詳情」可閱讀完整步驟，並可回饋是否有幫助。" workflow={["先看卡片標題與摘要判斷是否相關。","點查看詳情閱讀完整內容。","閱讀後可回饋有幫助/沒幫助。"]} logic={["回饋資料會用於排序優化與內容修訂優先級。"]} align="center" />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {cards.length === 0 ? (

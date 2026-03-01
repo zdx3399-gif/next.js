@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Search, Plus, Edit, Trash2, CheckCircle, XCircle, Shield, Users, Building, MoreVertical, Inbox, FileText, ArrowRight } from "lucide-react"
+import { Search, Plus, Edit, Trash2, CheckCircle, XCircle, Shield, Users, Building, MoreVertical, Inbox, FileText, ArrowRight, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -60,6 +60,7 @@ const CREDIBILITY_OPTIONS = [
   { value: "verified", label: "已驗證", icon: CheckCircle, color: "text-green-500" },
   { value: "community", label: "社區", icon: Users, color: "text-gray-500" },
 ]
+
 
 // 預覽模式的模擬資料
 const PREVIEW_CARDS = [
@@ -258,6 +259,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
     }
   }
 
+
   const resetForm = () => {
     setFormData({
       title: "",
@@ -331,14 +333,14 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
             <Badge variant="destructive" className="ml-1">{pendingPosts.length}</Badge>
           )}
         </Button>
-        <HelpHint title="管理端知識庫分頁" description="知識卡管理：維護正式內容；待入庫審核：處理 AI 建議貼文。" align="center" />
+        <HelpHint title="管理端知識庫分頁" description="知識卡管理：維護正式內容；待入庫審核：處理 AI 建議貼文。" workflow={["平時在知識卡管理維護正式內容。","有新建議時切到待入庫審核做入庫或拒絕。"]} logic={["分頁分工可區分既有內容維護與新內容審核流程。"]} align="center" />
       </div>
 
       {activeTab === "pending" ? (
         /* 待入庫審核分頁 */
         <div className="space-y-4">
           <div className="bg-card border rounded-lg p-4">
-            <h3 className="font-semibold mb-2 flex items-center gap-2">AI 建議入庫的貼文<HelpHint title="管理端待入庫" description="先確認內容正確與可重用性，再決定入庫或拒絕。" align="center" /></h3>
+            <h3 className="font-semibold mb-2 flex items-center gap-2">AI 建議入庫的貼文<HelpHint title="管理端待入庫" description="先確認內容正確與可重用性，再決定入庫或拒絕。" workflow={["先看貼文內容與 AI 建議摘要。","判斷是否可轉成可重用標準流程。","選擇入庫或拒絕並留下理由。"]} logic={["待入庫審核是內容品質閘門，避免低品質資訊進知識庫。"]} align="center" /></h3>
             <p className="text-sm text-muted-foreground">
               以下貼文經 AI 評估後建議納入知識庫，請審核後決定是否入庫。
             </p>
@@ -427,7 +429,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
             <div className="relative flex-1 max-w-md">
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">搜尋知識卡</span>
-                <HelpHint title="管理端搜尋" description="可依標題或內容關鍵字查找既有知識卡。" align="center" />
+                <HelpHint title="管理端搜尋" description="可依標題或內容關鍵字查找既有知識卡。" workflow={["輸入標題或摘要關鍵字。","從結果中快速進入編輯或狀態調整。"]} logic={["搜尋能縮短維護定位時間，特別適合大量知識卡。"]} align="center" />
               </div>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -437,16 +439,22 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
                 className="pl-9"
               />
             </div>
-            <Button onClick={() => setShowCreateDialog(true)} className="bg-primary text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              新增知識卡
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={refresh} disabled={loading}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                重新整理
+              </Button>
+              <Button onClick={() => setShowCreateDialog(true)} className="bg-primary text-primary-foreground">
+                <Plus className="w-4 h-4 mr-2" />
+                新增知識卡
+              </Button>
+            </div>
           </div>
 
           {/* Filters */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">分類篩選</span>
-            <HelpHint title="管理端分類篩選" description="用分類快速盤點特定主題知識卡。" align="center" />
+            <HelpHint title="管理端分類篩選" description="用分類快速盤點特定主題知識卡。" workflow={["先選擇主題分類。","再搭配搜尋縮小到目標內容。"]} logic={["全部：顯示所有主題知識卡。","包裹/訪客/報修/設施/管理費：對應各業務流程主題。","緊急：高優先通報與應變流程。","規章：制度與社區規範。","其他：尚未歸入既有主題。"]} align="center" />
           </div>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((cat) => (
@@ -465,7 +473,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
           {/* Status filter */}
           <div className="flex gap-2 items-center">
             <span className="text-sm text-muted-foreground">狀態：</span>
-            <HelpHint title="管理端狀態篩選" description="可檢視已發布、待驗證、已封存內容，安排維護優先序。" align="center" />
+            <HelpHint title="管理端狀態篩選" description="可檢視已發布、待驗證、已封存內容，安排維護優先序。" workflow={["切換狀態快速檢視不同生命週期內容。","優先處理待驗證與需封存項目。"]} logic={["全部狀態：顯示全部生命週期內容。","已發布（active）：可供住戶查閱。","待驗證（unverified）：內容待確認，需優先檢核。","已封存（archived）：保留歷史，不做主推。"]} align="center" />
             {STATUS_OPTIONS.map((status) => (
               <Button
                 key={status.value}
@@ -593,7 +601,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">新增知識卡<HelpHint title="管理端新增知識卡" description="建立可供住戶查閱的標準內容。" align="center" /></DialogTitle>
+                <DialogTitle className="flex items-center gap-2">新增知識卡<HelpHint title="管理端新增知識卡" description="建立可供住戶查閱的標準內容。" workflow={["填寫標題、摘要、分類與可信度。","確認內容可重用後建立發布。"]} logic={["新增內容應以標準流程為主，避免一次性公告式文字。"]} align="center" /></DialogTitle>
                 <DialogDescription>建立新的知識卡供社區成員參考</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -663,7 +671,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
           <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">編輯知識卡<HelpHint title="管理端編輯知識卡" description="更新內容後可透過版本歷史追蹤調整。" align="center" /></DialogTitle>
+                <DialogTitle className="flex items-center gap-2">編輯知識卡<HelpHint title="管理端編輯知識卡" description="更新內容後可透過版本歷史追蹤調整。" workflow={["修改標題、摘要或分類內容。","儲存後確認列表與版本紀錄更新。"]} logic={["持續編修可讓知識卡維持最新與一致。"]} align="center" /></DialogTitle>
                 <DialogDescription>修改知識卡內容</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -753,7 +761,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">入庫知識卡<HelpHint title="管理端入庫" description="將審核通過的貼文轉為知識卡，供住戶搜尋使用。" align="center" /></DialogTitle>
+            <DialogTitle className="flex items-center gap-2">入庫知識卡<HelpHint title="管理端入庫" description="將審核通過的貼文轉為知識卡，供住戶搜尋使用。" workflow={["檢查 AI 建議欄位並人工修正標題摘要。","確認分類與可信度後執行入庫。"]} logic={["入庫會把貼文轉為可維護知識資產，後續可版本化管理。"]} align="center" /></DialogTitle>
             <DialogDescription>將選定的貼文納入知識庫</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -823,7 +831,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">拒絕入庫建議<HelpHint title="管理端拒絕原因" description="請填具體原因，便於後續模型與流程優化。" align="center" /></DialogTitle>
+            <DialogTitle className="flex items-center gap-2">拒絕入庫建議<HelpHint title="管理端拒絕原因" description="請填具體原因，便於後續模型與流程優化。" workflow={["輸入具體且可執行的拒絕原因。","送出後返回待審列表確認案件已移除。"]} logic={["拒絕原因可回饋內容治理與 AI 建議品質改進。"]} align="center" /></DialogTitle>
             <DialogDescription>請輸入拒絕的原因</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

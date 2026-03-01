@@ -47,7 +47,20 @@ export function DecryptionRequestList() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-4">
-        <HelpHint title="住戶端解密申請" description="可查看你提出的解密申請進度與審核結果。" align="center" />
+        <HelpHint
+          title="住戶端解密申請"
+          description="可查看你提出的解密申請進度與審核結果。"
+          workflow={[
+            "先用上方狀態按鈕切換要看的申請範圍（全部/待審核/已核准/已拒絕）。",
+            "在清單逐筆查看申請原因、建立時間與審核時間。",
+            "若已完成審核，可對照審核備註確認結果。",
+          ]}
+          logic={[
+            "此頁是住戶端查詢用途，不提供審核操作。",
+            "狀態由審核流程更新，住戶端即時反映最終結果。",
+          ]}
+          align="center"
+        />
         <Button
           variant={statusFilter === "all" ? "default" : "outline"}
           size="sm"
@@ -89,7 +102,18 @@ export function DecryptionRequestList() {
                     <span className="font-medium text-sm">
                       {request.target_type === "post" ? "貼文" : "留言"} 解密申請
                     </span>
-                    <HelpHint title="住戶端申請項目" description="顯示你申請解密的目標類型與目前狀態。" align="center" />
+                    <HelpHint
+                      title="住戶端申請項目"
+                      description="顯示你申請解密的目標類型與目前狀態。"
+                      workflow={[
+                        "先確認申請目標是貼文或留言。",
+                        "再看右側狀態標籤判斷目前審核進度。",
+                      ]}
+                      logic={[
+                        "目標類型與狀態一起看，能快速判斷案件在哪個流程節點。",
+                      ]}
+                      align="center"
+                    />
                     {getStatusBadge(request.status)}
                   </div>
                   <p className="text-sm text-muted-foreground mb-2">申請原因: {request.reason}</p>

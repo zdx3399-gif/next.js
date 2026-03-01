@@ -80,7 +80,7 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
         <div className="relative flex-1">
           <div className="mb-2 flex items-center gap-2">
             <span className="text-xs text-muted-foreground">搜尋社區貼文</span>
-            <HelpHint title="住戶端貼文搜尋" description="可用標題或內容關鍵字快速找到相關討論。" align="center" />
+            <HelpHint title="住戶端貼文搜尋" description="可用標題或內容關鍵字快速找到相關討論。" workflow={["輸入主題關鍵字。","從結果中選擇要閱讀的貼文。"]} logic={["搜尋同時比對標題與內容，提高命中率。"]} align="center" />
           </div>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -101,7 +101,7 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
       <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
         <div className="flex items-center gap-2 shrink-0 pr-2">
           <span className="text-xs text-muted-foreground">分類</span>
-          <HelpHint title="住戶端貼文分類" description="可用案例、教學、意見、警示篩選討論主題。" align="center" />
+          <HelpHint title="住戶端貼文分類" description="可用案例、教學、意見、警示篩選討論主題。" workflow={["先選分類縮小列表。","再搭配搜尋快速定位。"]} logic={["全部：顯示所有討論。","案例：實際事件與處理經驗。","教學：步驟教學與操作指南。","意見：討論想法與建議。","警示：風險提醒與重要通報。"]} align="center" />
         </div>
         {categories.map((cat) => (
           <button
@@ -121,7 +121,7 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
       {/* Using new CommunityPostCard component */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground">貼文列表</span>
-        <HelpHint title="住戶端貼文列表" description="點選卡片可進入詳情、留言與檢舉。" align="center" />
+        <HelpHint title="住戶端貼文列表" description="點選卡片可進入詳情、留言與檢舉。" workflow={["先看卡片摘要判斷是否相關。","點卡片進入詳情頁執行互動。"]} logic={["列表是討論入口，詳情頁是互動主場景。"]} align="center" />
       </div>
       <div className="space-y-3">
         {filteredPosts.length === 0 ? (

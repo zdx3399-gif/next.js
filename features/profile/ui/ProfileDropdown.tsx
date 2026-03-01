@@ -79,7 +79,7 @@ export function ProfileDropdown({ currentUser, onUpdate, getRoleLabel }: Profile
               position: "fixed",
               top: dropdownPosition.top,
               left: dropdownPosition.left,
-              zIndex: 99999,
+              zIndex: 1200,
             }}
           >
             <ProfileForm
@@ -116,7 +116,7 @@ export function ProfileDropdown({ currentUser, onUpdate, getRoleLabel }: Profile
         <div className="text-left flex-1 min-w-0">
           <div className="text-[var(--theme-text-primary)] font-medium text-sm truncate flex items-center gap-2">
             {currentUser?.name || "載入中..."}
-            <HelpHint title="個人資料入口" description="點擊可展開個人資料表單，更新聯絡資訊與密碼。" align="center" />
+            <HelpHint title="個人資料入口" description="點擊可展開個人資料表單，更新聯絡資訊與密碼。" workflow={["點使用者名稱區塊展開個人資料視窗。","在表單更新聯絡資料或密碼後送出。","完成後視窗會關閉並回到側欄。"]} logic={["入口整合在帳號區塊，方便住戶快速維護基本資料。","更新成功會同步目前登入資訊顯示。"]} align="center" />
           </div>
           <div className="text-[var(--theme-text-secondary)] text-xs">{roleLabel}</div>
         </div>

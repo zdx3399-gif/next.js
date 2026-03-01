@@ -90,7 +90,7 @@ export function KnowledgeCardItem({ card, onVote, onView }: KnowledgeCardItemPro
         {/* Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-border/40">
           <div className="flex items-center gap-1">
-            <HelpHint title="住戶端知識互動" description="可對內容回饋有幫助/沒幫助，幫助系統優化排序。" align="center" />
+            <HelpHint title="住戶端知識互動" description="可對內容回饋有幫助/沒幫助，幫助系統優化排序。" workflow={["閱讀摘要後可先按查看詳情。","閱讀完成再按有幫助或沒幫助。"]} logic={["互動票數會影響內容排序與後續優化方向。"]} align="center" />
             <Button
               variant="ghost"
               size="sm"

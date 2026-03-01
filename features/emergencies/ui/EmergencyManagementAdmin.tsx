@@ -3,6 +3,9 @@
 import { useEmergencies } from "../hooks/useEmergencies"
 import { useState } from "react"
 import { HelpHint } from "@/components/ui/help-hint"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { RefreshCw, Search } from "lucide-react"
 
 interface EmergencyManagementAdminProps {
   currentUserName?: string
@@ -23,7 +26,7 @@ const PREVIEW_EMERGENCIES = [
 ]
 
 export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = false }: EmergencyManagementAdminProps) {
-  const { emergencies: realEmergencies, loading, confirmAndTrigger, deleteEmergency } = useEmergencies(true)
+  const { emergencies: realEmergencies, loading, confirmAndTrigger, deleteEmergency, reload } = useEmergencies(true)
 
   // 預覽模式使用模擬資料
   const emergencies = isPreviewMode ? PREVIEW_EMERGENCIES : realEmergencies
@@ -57,7 +60,7 @@ export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = fals
           <h2 className="flex gap-2 items-center text-[var(--theme-danger)] text-xl">
             <span className="material-icons">emergency</span>
             緊急事件
-            <HelpHint title="管理端緊急通報" description="可由管理端主動發起通報，並同步通知相關人員。" />
+            <HelpHint title="管理端緊急通報" description="可由管理端主動發起通報，並同步通知相關人員。" workflow={["依事件類型點選對應緊急按鈕。","同步通知相關單位並啟動應變流程。"]} logic={["管理端主動通報可在住戶未回報時快速啟動處置。"]} />
           </h2>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -80,38 +83,44 @@ export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = fals
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
             <span className="material-icons">history</span>
             緊急事件紀錄
-            <HelpHint title="管理端紀錄" description="查看通報歷史、發起人與備註，供事後追蹤與稽核。" />
+            <HelpHint title="管理端紀錄" description="查看通報歷史、發起人與備註，供事後追蹤與稽核。" workflow={["先用搜尋定位事件。","查看時間、發起人與備註完成追蹤。"]} logic={["事件紀錄是檢討與稽核基礎資料。"]} />
           </h2>
+          <Button variant="outline" onClick={reload} disabled={loading || isPreviewMode}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            重新整理
+          </Button>
         </div>
 
-        <div className="mb-4">
+        <div className="mb-4 max-w-md">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[var(--theme-text-primary)] text-sm">搜尋紀錄</span>
-            <HelpHint title="管理端搜尋" description="可依類別、發起人或備註快速查詢事件。" align="center" />
+            <HelpHint title="管理端搜尋" description="可依類別、發起人或備註快速查詢事件。" workflow={["輸入類別、人名或關鍵字。","依結果展開目標事件。"]} logic={["搜尋不改資料，只加速事件定位。"]} align="center" />
           </div>
-          <input
-            type="text"
-            placeholder="搜尋類別、發起人或備註..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-3 rounded-xl theme-input outline-none"
-          />
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-text-secondary)]" />
+            <Input
+              placeholder="搜尋類別、發起人或備註..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse">
+          <table className="w-full min-w-[1100px] table-fixed border-collapse">
             <thead>
               <tr className="bg-[var(--theme-accent-light)]">
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">類別</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap">時間<HelpHint title="管理端時間欄" description="顯示事件建立時間，建議搭配監視器時間軸比對。" align="center" /></span>
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap">時間<HelpHint title="管理端時間欄" description="顯示事件建立時間，建議搭配監視器時間軸比對。" workflow={["先確認通報時間。","必要時與監視器時間交叉比對。"]} logic={["時間欄是事件還原與調查關鍵。"]} align="center" /></span>
                 </th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap">發起人<HelpHint title="管理端發起人欄" description="顯示住戶姓名或管理端帳號，便於回訪確認。" align="center" /></span>
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap">發起人<HelpHint title="管理端發起人欄" description="顯示住戶姓名或管理端帳號，便於回訪確認。" workflow={["查看是住戶還是管理端發起。","需要時回訪確認現場細節。"]} logic={["發起人欄可對應責任與後續聯繫窗口。"]} align="center" /></span>
                 </th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">備註</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap">操作<HelpHint title="管理端操作欄" description="僅在確認已結案或誤報時再刪除，避免影響追溯。" align="center" /></span>
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap">操作<HelpHint title="管理端操作欄" description="僅在確認已結案或誤報時再刪除，避免影響追溯。" workflow={["先確認事件已結案或判定誤報。","再執行刪除避免保留錯誤資料。"]} logic={["刪除會減少可追溯資訊，應審慎操作。"]} align="center" /></span>
                 </th>
               </tr>
             </thead>

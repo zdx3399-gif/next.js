@@ -91,6 +91,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   alert: "警示",
 }
 
+const POST_CATEGORY_HELP =
+  "貼文分類說明：\n• 全部（all）：不限制分類，顯示所有貼文。\n• 案例（case）：分享實際事件與處理結果。\n• 教學（howto）：提供可重複操作的步驟指引。\n• 意見（opinion）：提出看法、討論與建議。\n• 警示（alert）：風險提醒與需即時注意的資訊。\n• 分類主要用於瀏覽分流，不會改變貼文內容。"
+
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
   urgent: { label: "緊急", color: "bg-red-600" },
   high: { label: "高", color: "bg-red-500" },
@@ -99,7 +102,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
 }
 
 const POST_STATUS_HELP =
-  "貼文狀態說明：\n• 已發布（published）：community_posts.status=published，前台正常可見。\n• 待審核（pending）：community_posts.status=pending，等待人工決策。\n• 影子封禁（shadow）：community_posts.status=shadow，僅作者可見。\n• 已遮蔽（redacted）：community_posts.status=redacted，貼文保留但敏感內容需遮蔽。\n• 已下架（removed）：community_posts.status=removed，前台不再展示。\n• 已刪除（deleted）：community_posts.status=deleted，視為刪除狀態。\n• 狀態切換時系統會同步寫入 moderated_at、moderated_by、moderation_reason 供稽核追蹤。"
+  "貼文狀態說明：\n• 全部狀態（all）：不限制狀態，顯示全部貼文。\n• 已發布（published）：community_posts.status=published，前台正常可見。\n• 待審核（pending）：community_posts.status=pending，等待人工決策。\n• 影子封禁（shadow）：community_posts.status=shadow，僅作者可見。\n• 已遮蔽（redacted）：community_posts.status=redacted，貼文保留但敏感內容需遮蔽。\n• 已下架（removed）：community_posts.status=removed，前台不再展示。\n• 已刪除（deleted）：community_posts.status=deleted，視為刪除狀態。\n• 狀態切換時系統會同步寫入 moderated_at、moderated_by、moderation_reason 供稽核追蹤。"
 
 const QUEUE_STATUS_HELP =
   "審核隊列狀態說明：\n• 審核待處理 = moderation_queue.status 為 pending 或 in_review。\n• 審核已完成 = moderation_queue.status 為 resolved。\n• 隊列依 priority 及建立時間排序，優先處理 urgent/high。\n• 處理完成後會更新案件狀態並可在已完成頁籤追蹤處置結果。"
@@ -405,6 +408,13 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
         <HelpHint
           title="管理端社區討論"
           description={`此頁分為「貼文管理」與「審核隊列」兩條流程。\n\n${POST_STATUS_HELP}\n\n${QUEUE_STATUS_HELP}`}
+          workflow={[
+            "先在貼文管理檢視內容狀態與風險。",
+            "再到審核隊列處理待辦案件並完成處置。",
+          ]}
+          logic={[
+            "貼文管理負責內容狀態維護；審核隊列負責案件流程閉環。",
+          ]}
         />
       </div>
       {/* 統計面板 */}
@@ -467,31 +477,54 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
           <HelpHint
             title="管理端分頁"
             description="貼文管理：直接調整 community_posts 的狀態（發布、待審、影子封禁、遮蔽、下架、刪除）。\n審核隊列：處理 moderation_queue 待辦，完成後會把案件標記為 resolved。"
+            workflow={[
+              "日常維運先看貼文管理。",
+              "有待辦時切到審核隊列執行處理。",
+            ]}
+            logic={[
+              "分頁分工可避免把內容維護與案件審核混在同一流程。",
+            ]}
             align="center"
           />
         </div>
 
         {/* 貼文管理 */}
         <TabsContent value="posts" className="space-y-4">
-          {/* 搜尋和篩選 */}
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <div className="mb-2 flex items-center gap-2">
-                <span className="text-xs text-[var(--theme-text-secondary)]">搜尋貼文</span>
-                <HelpHint title="管理端貼文搜尋" description="可依標題或內容快速定位要審核的貼文。" align="center" />
-              </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-text-secondary)]" />
-                <Input
-                  placeholder="搜尋貼文標題或內容..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-[var(--theme-bg-primary)] border-[var(--theme-border)]"
-                />
-              </div>
+          {/* 搜尋 */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--theme-text-secondary)]">搜尋貼文</span>
+              <HelpHint title="管理端貼文搜尋" description="可依標題或內容快速定位要審核的貼文。" workflow={["輸入標題或內容關鍵字。","從結果挑選目標貼文處理。"]} logic={["搜尋加速案件定位，不改變資料內容。"]} align="center" />
             </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-text-secondary)]" />
+              <Input
+                placeholder="搜尋貼文標題或內容..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-[var(--theme-bg-primary)] border-[var(--theme-border)]"
+              />
+            </div>
+          </div>
 
-            {/* 分類篩選 */}
+          {/* 分類篩選 */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--theme-text-secondary)]">分類篩選</span>
+              <HelpHint
+                title="管理端分類篩選"
+                description={POST_CATEGORY_HELP}
+                workflow={["先選分類縮小範圍。", "再搭配搜尋定位目標貼文。"]}
+                logic={[
+                  "全部：顯示所有分類貼文。",
+                  "案例：看實際事件與處理經驗。",
+                  "教學：看可操作步驟與流程指引。",
+                  "意見：看討論與建議型內容。",
+                  "警示：看風險提醒與緊急資訊。",
+                ]}
+                align="center"
+              />
+            </div>
             <div className="flex gap-2 flex-wrap">
               {CATEGORIES.map((cat) => (
                 <Button
@@ -508,9 +541,13 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
           </div>
 
           {/* 狀態篩選 */}
-          <div className="flex gap-2 flex-wrap">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--theme-text-secondary)]">狀態篩選</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
             <Filter className="w-4 h-4 text-[var(--theme-text-secondary)] self-center" />
-            <HelpHint title="管理端狀態篩選" description={POST_STATUS_HELP} align="center" />
+            <HelpHint title="管理端狀態篩選" description={POST_STATUS_HELP} workflow={["先選貼文狀態篩出目標集合。","再進行批次巡檢或個別處置。"]} logic={["全部狀態：顯示所有治理階段。","已發布：前台可見、正常流通。","待審核：等待人工判斷。","影子封禁：僅作者可見。","已遮蔽：保留貼文但遮敏感內容。","已下架/已刪除：前台不可見。"]} align="center" />
             {STATUSES.map((status) => (
               <Button
                 key={status.value}
@@ -522,6 +559,7 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
                 {status.label}
               </Button>
             ))}
+            </div>
           </div>
 
           {/* 貼文列表 */}
@@ -646,7 +684,7 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
         <TabsContent value="moderation" className="space-y-4">
           {/* 審核狀態篩選 */}
           <div className="flex gap-2">
-            <HelpHint title="管理端審核隊列" description={QUEUE_STATUS_HELP} align="center" />
+            <HelpHint title="管理端審核隊列" description={QUEUE_STATUS_HELP} workflow={["先處理 pending/in_review 案件。","完成後在已完成頁籤追蹤結果。"]} logic={["隊列排序按優先級與時間，確保高風險先處理。"]} align="center" />
             <Button
               variant={queueFilter === "pending" ? "default" : "outline"}
               onClick={() => setQueueFilter("pending")}

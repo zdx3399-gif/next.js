@@ -128,7 +128,7 @@ export function AiChatWindow({
         top: position.y,
         maxHeight: "calc(100vh - 40px)",
       }}
-      className="w-96 bg-[var(--theme-bg-card)] border-2 border-[var(--theme-border-accent)] rounded-xl shadow-2xl flex flex-col z-[999] transition-shadow"
+      className="w-96 bg-[var(--theme-bg-card)] border-2 border-[var(--theme-border-accent)] rounded-xl shadow-2xl flex flex-col z-[1200] transition-shadow"
     >
       {/* 可拖曳的標題列 */}
       <div
@@ -140,7 +140,7 @@ export function AiChatWindow({
         <div className="flex gap-2 items-center text-[var(--theme-accent)] font-bold pointer-events-none">
           <span className="material-icons">smart_toy</span>
           AI 助理
-          <HelpHint title="住戶端 AI 助理" description="可詢問常見流程、快速帶入常用問題，協助你找到功能入口。" align="center" />
+          <HelpHint title="住戶端 AI 助理" description="可詢問常見流程、快速帶入常用問題，協助你找到功能入口。" workflow={["開啟視窗後先輸入問題或點快捷提問。","查看回覆內容並依指引前往對應功能。","若需更多細節可接續追問同一主題。"]} logic={["AI 助理用於導覽與流程協助，不直接修改住戶資料。","對話內容依目前上下文回覆，連續提問可提高精準度。"]} align="center" />
           <span className="text-xs text-[var(--theme-text-muted)] font-normal ml-2">(可拖曳移動)</span>
         </div>
         <button
@@ -182,7 +182,8 @@ export function AiChatWindow({
             placeholder="輸入訊息..."
             className="theme-input flex-1 p-2 rounded-lg"
           />
-          <HelpHint title="住戶端訊息輸入" description="輸入問題後送出；也可點下方快捷按鈕自動帶入文字。" align="center" />
+          <HelpHint title="住戶端訊息輸入" description="輸入問題後送出；也可點下方快捷按鈕自動帶入文字。" workflow={["在輸入框輸入問題後按 Enter 或送出按鈕。","若不確定問法，可先用快捷提問帶入文字。","回覆不夠完整時可接續補充問題。"]} logic={["送出才會發問；輸入文字本身不會觸發請求。","同一對話串可保留上下文，提升回答連貫性。"]} align="center" />
+          
           <button
             onClick={sendMessage}
             className="p-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg font-bold hover:opacity-90 transition-all disabled:opacity-500 disabled:cursor-not-allowed"
@@ -191,7 +192,7 @@ export function AiChatWindow({
           </button>
         </div>
         <div className="flex justify-center gap-4 mt-3">
-          <HelpHint title="住戶端分頁" description="常用功能：快捷提問；住戶資訊：查看目前帳號資料。" align="center" />
+          <HelpHint title="住戶端分頁" description="常用功能：快捷提問；住戶資訊：查看目前帳號資料。" workflow={["點「常用功能」使用快捷提問按鈕。","點「住戶資訊」查看目前登入帳號的基本資料。","依需求切換分頁再繼續提問。"]} logic={["分頁是資訊分流介面，不會重置已存在的對話訊息。"]} align="center" />
           <button
             onClick={() => setActiveTab("functions")}
             className={`text-sm font-medium transition-colors ${
@@ -226,7 +227,7 @@ export function AiChatWindow({
         {activeTab === "functions" && (
           <div className="flex items-center gap-2 mt-3 text-xs text-[var(--theme-text-muted)]">
             <span>常用問題快捷鍵</span>
-            <HelpHint title="住戶端快捷提問" description="點擊按鈕會把問題填入輸入框，可再送出。" align="center" />
+            <HelpHint title="住戶端快捷提問" description="點擊按鈕會把問題填入輸入框，可再送出。" workflow={["先點任一快捷按鈕自動帶入問題。","可先修改文字，再按送出取得回覆。","常見流程可重複使用快捷鍵提升速度。"]} logic={["快捷鍵只會填入輸入框，不會自動送出，避免誤發問。"]} align="center" />
           </div>
         )}
         {activeTab === "functions" && (

@@ -170,7 +170,7 @@ export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
       <div className="flex flex-wrap gap-2">
         <div className="flex items-center gap-2 mr-2">
           <span className="text-xs text-[var(--theme-text-secondary)]">稽核查詢</span>
-          <HelpHint title="管理端稽核查詢" description="可依關鍵字、動作類型與目標類型快速定位紀錄。" align="center" />
+          <HelpHint title="管理端稽核查詢" description="可依關鍵字、動作類型與目標類型快速定位紀錄。" workflow={["先輸入關鍵字或選擇篩選條件。","按搜尋更新結果列表。","點查看詳情深入檢視單筆紀錄。"]} logic={["多維篩選可快速鎖定異常操作。","查詢僅影響檢視結果，不變更稽核資料。"]} align="center" />
         </div>
         <Input
           value={searchQuery}
@@ -217,7 +217,7 @@ export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
       {/* Stats */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-[var(--theme-text-secondary)]">統計摘要</span>
-        <HelpHint title="管理端統計摘要" description="顯示近期稽核數量與重點操作分布，便於快速監控。" align="center" />
+        <HelpHint title="管理端統計摘要" description="顯示近期稽核數量與重點操作分布，便於快速監控。" workflow={["先看總量與高風險操作數。","異常波動時再下鑽到明細。"]} logic={["摘要卡片提供快速監控視角，利於早期發現問題。"]} align="center" />
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="p-3 text-center">
@@ -275,7 +275,7 @@ export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
                     </Badge>
                     <Badge variant="outline">{targetTypeLabels[log.target_type] || log.target_type}</Badge>
                     <Badge variant="secondary">{log.operator_role}</Badge>
-                    <HelpHint title="管理端稽核欄位" description="可快速辨識操作動作、目標類型與執行角色。" align="center" />
+                    <HelpHint title="管理端稽核欄位" description="可快速辨識操作動作、目標類型與執行角色。" workflow={["先看動作標籤判斷風險。","再看目標類型與角色確認責任範圍。"]} logic={["欄位組合可在不展開詳情前完成初步判斷。"]} align="center" />
                   </div>
 
                   <p className="text-[var(--theme-text-primary)] font-medium mb-2">{log.reason || "(未填寫原因)"}</p>
@@ -307,7 +307,7 @@ export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
                       <div className="mt-2 space-y-2">
                         <div className="flex items-center gap-2 text-xs text-[var(--theme-text-secondary)]">
                           <span>詳細資料</span>
-                          <HelpHint title="管理端詳細資料" description="展開可查看前後狀態差異與附加資料，供稽核追溯。" align="center" />
+                          <HelpHint title="管理端詳細資料" description="展開可查看前後狀態差異與附加資料，供稽核追溯。" workflow={["展開後先看前後狀態差異。","再檢視附加資料確認上下文。"]} logic={["明細是還原操作原因與影響範圍的核心證據。"]} align="center" />
                         </div>
                         {renderStateDiff(log.before_state, log.after_state)}
 

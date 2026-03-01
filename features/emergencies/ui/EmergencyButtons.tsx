@@ -71,6 +71,15 @@ export function EmergencyButtons({ userName, onTrigger, variant = "full" }: Emer
         <HelpHint
           title="住戶端緊急事件"
           description="遇到緊急狀況可立即通報管理端。請依實際情境點選最接近的類別，避免誤報。"
+          workflow={[
+            "先判斷現場狀況並點選最接近的通報類別。",
+            "確認送出後立即同步進行現場處置或聯繫 110/119。",
+            "事後可向管理端補充細節以利追蹤。",
+          ]}
+          logic={[
+            "通報會留下事件時間與發起人，作為後續追溯依據。",
+            "正確分類有助管理端快速派遣對應支援。",
+          ]}
         />
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
@@ -86,7 +95,7 @@ export function EmergencyButtons({ userName, onTrigger, variant = "full" }: Emer
       </div>
       <div className="text-[var(--theme-text-muted)] text-sm text-center flex items-center justify-center gap-2">
         點擊上方按鈕可立即通知管理員和相關單位
-        <HelpHint title="住戶端通報提醒" description="系統會保留通報時間與發起人。若為誤觸，請盡快聯繫管理室說明。" align="center" />
+        <HelpHint title="住戶端通報提醒" description="系統會保留通報時間與發起人。若為誤觸，請盡快聯繫管理室說明。" workflow={["送出後先確認是否為正確通報。","若誤觸請立即聯繫管理室更正。"]} logic={["通報紀錄屬安全事件資料，需保留可追溯性。"]} align="center" />
       </div>
     </div>
   )

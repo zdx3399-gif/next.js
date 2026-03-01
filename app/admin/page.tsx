@@ -15,6 +15,7 @@ import { AnnouncementDetailsAdmin } from "@/features/announcements/ui/Announceme
 import { AnnouncementManagementAdmin } from "@/features/announcements/ui/AnnouncementManagementAdmin"
 import { CommunityBoardAdmin } from "@/features/community/ui/CommunityBoardAdmin"
 import { KnowledgeBaseAdmin } from "@/features/kms/ui/KnowledgeBaseAdmin"
+import { HandoverKnowledgeAdmin } from "@/features/handover/ui/HandoverKnowledgeAdmin"
 import { AuditLogViewer } from "@/features/audit/ui/AuditLogViewer"
 import { DecryptionReviewPanel } from "@/features/decryption/ui/DecryptionReviewPanel"
 import { DecryptionRequestList } from "@/features/decryption/ui/DecryptionRequestList"
@@ -42,6 +43,7 @@ type Section =
   | "facilities"
   | "community"
   | "knowledge-base"
+  | "handover-knowledge"
   | "audit-logs"
   | "decryption"
 
@@ -157,6 +159,7 @@ export default function AdminPage() {
     { id: "facilities", icon: "meeting_room", label: "設施管理" },
     { id: "community", icon: "forum", label: "社區討論管理" },
     { id: "knowledge-base", icon: "school", label: "知識庫管理" },
+    { id: "handover-knowledge", icon: "folder_shared", label: "交接知識庫" },
     { id: "decryption", icon: "lock_open", label: "解密申請" },
     { id: "audit-logs", icon: "history", label: "稽核紀錄" },
   ]
@@ -356,6 +359,15 @@ export default function AdminPage() {
                 知識庫管理
               </h2>
               <KnowledgeBaseAdmin currentUser={currentUser} isPreviewMode={isPreviewMode} />
+            </div>
+          ) : currentSection === "handover-knowledge" ? (
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <AdminPreviewBanner show={isPreviewMode} />
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
+                <span className="material-icons">folder_shared</span>
+                交接知識庫
+              </h2>
+              <HandoverKnowledgeAdmin currentUser={currentUser} isPreviewMode={isPreviewMode} />
             </div>
           ) : currentSection === "audit-logs" ? (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">

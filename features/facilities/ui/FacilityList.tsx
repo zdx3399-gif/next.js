@@ -160,7 +160,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
               <div>
                 <div className="text-[var(--theme-text-muted)] text-sm">點數餘額</div>
                 <div className="text-2xl font-bold text-[var(--theme-accent)] flex items-center gap-2">{userPoints.points_balance} 點
-                  <HelpHint title="住戶端點數餘額" description="預約設施會扣點，取消或退款會回補。請留意餘額是否足夠。" align="center" />
+                  <HelpHint title="住戶端點數餘額" description="預約設施會扣點，取消或退款會回補。請留意餘額是否足夠。" workflow={["先查看目前可用點數。","選時段前先確認點數是否足夠。","點數不足時先補點或改選較低點數時段。"]} logic={["點數不足時無法完成預約。","退款與扣款會反映在點數餘額與交易紀錄。"]} align="center" />
                 </div>
               </div>
               <div className="h-10 w-px bg-[var(--theme-border)]" />
@@ -228,6 +228,15 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
             <HelpHint
               title="住戶端設施預約"
               description="依序選擇設施、日期與時段後確認預約。熱門時段可能需抽籤。"
+              workflow={[
+                "先選設施與日期，再挑選可用時段。",
+                "確認點數與規則後送出預約或抽籤登記。",
+                "到「我的預約」追蹤結果與後續操作。",
+              ]}
+              logic={[
+                "一般時段可直接預約；抽籤時段需走登記流程。",
+                "最終結果受點數、規則與時段供需影響。",
+              ]}
             />
           </h2>
 
@@ -236,7 +245,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <label className="block text-[var(--theme-text-primary)] font-medium">選擇設施</label>
-                <HelpHint title="住戶端選擇設施" description="先選擇要使用的設施，系統會載入該設施可預約時段。" align="center" />
+                <HelpHint title="住戶端選擇設施" description="先選擇要使用的設施，系統會載入該設施可預約時段。" workflow={["從清單選擇要預約的設施。","更換設施後需重新選擇時段。"]} logic={["設施會決定時段供應、價格與抽籤規則。"]} align="center" />
               </div>
               <select
                 value={selectedFacility}
@@ -260,7 +269,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <label className="block text-[var(--theme-text-primary)] font-medium">選擇日期</label>
-                <HelpHint title="住戶端選擇日期" description="目前可預約未來 14 天時段，超出範圍無法選取。" align="center" />
+                <HelpHint title="住戶端選擇日期" description="目前可預約未來 14 天時段，超出範圍無法選取。" workflow={["挑選目標使用日期。","日期變更後系統會重新載入時段。"]} logic={["日期範圍限制可控制可預約視窗並降低衝突。"]} align="center" />
               </div>
               <input
                 type="date"
@@ -281,7 +290,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <label className="block text-[var(--theme-text-primary)] font-medium">選擇時段</label>
-                  <HelpHint title="住戶端時段" description="顯示可預約時段與所需點數，尖峰時段點數會較高。" align="center" />
+                  <HelpHint title="住戶端時段" description="顯示可預約時段與所需點數，尖峰時段點數會較高。" workflow={["點選狀態為可用的時段。","比較不同時段點數後再確認。","選取後會展開預約確認區。"]} logic={["時段狀態、點數與抽籤標記共同決定預約方式。"]} align="center" />
                 </div>
                 {loadingSlots ? (
                   <div className="text-center py-4 text-[var(--theme-text-muted)]">載入時段中...</div>
@@ -353,7 +362,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
                 </h3>
                 <div className="mb-2 inline-flex items-center gap-2">
                   <span className="text-xs text-[var(--theme-text-muted)]">預約規則</span>
-                  <HelpHint title="住戶端預約規則" description="請留意取消、簽到與未到場規則，違規可能影響帳號狀態。" align="center" />
+                  <HelpHint title="住戶端預約規則" description="請留意取消、簽到與未到場規則，違規可能影響帳號狀態。" workflow={["送出前先讀取消與簽到時限。","按規則完成簽到與取消操作。","避免未到場累積違規次數。"]} logic={["規則會影響退款比例、罰則與帳號可預約狀態。"]} align="center" />
                 </div>
 
                 <div className="space-y-3">
@@ -426,7 +435,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
             <span className="material-icons">list</span>
             我的預約記錄
-            <HelpHint title="住戶端我的預約" description="可查看歷史預約與目前狀態，符合條件時可簽到或取消。" />
+            <HelpHint title="住戶端我的預約" description="可查看歷史預約與目前狀態，符合條件時可簽到或取消。" workflow={["在清單查看每筆預約日期、時段與狀態。","符合時間條件時可執行簽到或取消。","完成操作後重新確認狀態是否更新。"]} logic={["簽到與取消按鈕僅在符合規則時顯示。","歷史記錄可用於爭議查核與使用追蹤。"]} />
           </h2>
 
           <div className="mb-4">
@@ -523,7 +532,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
             <span className="material-icons">meeting_room</span>
             可用設施
-            <HelpHint title="住戶端設施總覽" description="可查看設施說明、位置、容量、點數與是否支援抽籤。" />
+            <HelpHint title="住戶端設施總覽" description="可查看設施說明、位置、容量、點數與是否支援抽籤。" workflow={["先用搜尋縮小設施範圍。","查看設施條件後回預約分頁選時段。"]} logic={["總覽頁提供比較資訊，協助選擇適合設施。"]} />
           </h2>
 
           <div className="mb-4">
@@ -602,7 +611,7 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-hidden">
             <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
-              <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">點數交易紀錄<HelpHint title="住戶端點數紀錄" description="記錄點數加減來源，包含預約扣款、退款與管理員調整。" /></h3>
+              <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">點數交易紀錄<HelpHint title="住戶端點數紀錄" description="記錄點數加減來源，包含預約扣款、退款與管理員調整。" workflow={["開啟視窗查看每筆點數異動。","對照異動類型與時間確認來源。"]} logic={["交易紀錄是點數餘額的可追溯明細。"]} /></h3>
               <button
                 onClick={() => setShowPointsHistory(false)}
                 className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors"

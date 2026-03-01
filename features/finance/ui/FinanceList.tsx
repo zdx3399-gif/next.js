@@ -88,6 +88,14 @@ export function FinanceList({ userRoom }: FinanceListProps) {
           <HelpHint
             title="住戶端財務功能"
             description="可查看個人繳費狀態、社區支出與財務報表。若有未繳款項，請依期限完成繳費。"
+            workflow={[
+              "先在我的繳費確認是否有未繳項目。",
+              "再查看社區支出與報表掌握整體財務。",
+              "若有未繳款項，依提示完成繳費流程。",
+            ]}
+            logic={[
+              "三個分頁分別對應個人繳費、社區支出與整體報表。",
+            ]}
           />
         </h2>
 
@@ -141,6 +149,14 @@ export function FinanceList({ userRoom }: FinanceListProps) {
             <HelpHint
               title="住戶端我的繳費"
               description="此區顯示你的管理費繳費紀錄與期限。未繳項目可透過『前往繳費』查看匯款資訊。"
+              workflow={[
+                "先查看每筆費用狀態與到期日。",
+                "未繳項目點前往繳費查看付款資訊。",
+                "完成付款後再回來確認狀態更新。",
+              ]}
+              logic={[
+                "此分頁聚焦個人帳務，狀態欄會區分已繳與未繳。",
+              ]}
             />
           </div>
           
@@ -158,6 +174,14 @@ export function FinanceList({ userRoom }: FinanceListProps) {
                   <HelpHint
                     title="住戶端未繳提醒"
                     description="紅色提醒代表仍有待繳款項。建議優先處理最接近到期日的費用。"
+                    workflow={[
+                      "看到提醒後先查看未繳筆數。",
+                      "優先處理到期日最近的費用。",
+                      "繳費後回列表確認提醒是否消失。",
+                    ]}
+                    logic={[
+                      "紅色提醒僅在存在未繳記錄時顯示。",
+                    ]}
                     align="center"
                   />
                 </div>
@@ -166,14 +190,14 @@ export function FinanceList({ userRoom }: FinanceListProps) {
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] border-collapse">
+            <table className="w-full min-w-[1100px] table-fixed border-collapse">
               <thead>
                 <tr className="bg-[var(--theme-accent-light)]">
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tl-lg whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>房號</span><HelpHint title="住戶房號欄" description="顯示對應繳費房號。" /></div></th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>金額</span><HelpHint title="住戶金額欄" description="顯示本期應繳金額。" /></div></th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>期限</span><HelpHint title="住戶期限欄" description="顯示繳費截止日期。" /></div></th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>發票</span><HelpHint title="住戶發票欄" description="顯示收據或發票資訊。" /></div></th>
-                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tr-lg whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>狀態 / 操作</span><HelpHint title="住戶狀態操作欄" description="可查看已繳/未繳狀態，未繳可進入繳費資訊。" /></div></th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tl-lg whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>房號</span><HelpHint title="住戶房號欄" description="顯示對應繳費房號。" workflow={["先核對房號是否為本人住戶。","若有異常請聯繫管理端修正。"]} logic={["房號欄為帳單歸屬依據。"]} /></div></th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>金額</span><HelpHint title="住戶金額欄" description="顯示本期應繳金額。" workflow={["查看每筆應繳金額。","與管理公告或帳單通知交叉確認。"]} logic={["金額欄為實際繳費基準。"]} /></div></th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>期限</span><HelpHint title="住戶期限欄" description="顯示繳費截止日期。" workflow={["優先檢查近期到期費用。","逾期風險項目請先完成繳費。"]} logic={["期限欄決定催繳與提醒優先順序。"]} /></div></th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>發票</span><HelpHint title="住戶發票欄" description="顯示收據或發票資訊。" workflow={["繳費後確認發票/收據資訊是否存在。","需要報帳時可依此欄位查核。"]} logic={["發票欄用於對帳與憑證追溯。"]} /></div></th>
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] rounded-tr-lg whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>狀態 / 操作</span><HelpHint title="住戶狀態操作欄" description="可查看已繳/未繳狀態，未繳可進入繳費資訊。" workflow={["先看狀態判斷是否需要付款。","未繳時點前往繳費取得匯款資訊。","付款後回列表確認狀態更新。"]} logic={["狀態與操作欄是付款流程入口。"]} /></div></th>
                 </tr>
               </thead>
               <tbody>
@@ -218,6 +242,14 @@ export function FinanceList({ userRoom }: FinanceListProps) {
                           <HelpHint
                             title="住戶端前往繳費"
                             description="點擊後會顯示目前設定的匯款資訊（示範資料），請依管理室公告為準。"
+                            workflow={[
+                              "點按前往繳費開啟付款資訊。",
+                              "依匯款資訊完成付款流程。",
+                              "付款後保留憑證並通知管理室。",
+                            ]}
+                            logic={[
+                              "目前彈窗為示範資訊，正式帳務仍以管理室公告為準。",
+                            ]}
                             align="center"
                           />
                         )}
@@ -245,9 +277,17 @@ export function FinanceList({ userRoom }: FinanceListProps) {
             <HelpHint
               title="住戶端社區支出"
               description="此頁提供社區支出透明資訊，住戶可查閱主要支出項目與金額。"
+              workflow={[
+                "切換到社區支出分頁瀏覽明細。",
+                "按日期與類別查看主要費用流向。",
+                "若有疑義可向管理端提出查詢。",
+              ]}
+              logic={[
+                "此分頁以公開透明為目的，提供查閱不提供編輯。",
+              ]}
             />
           </div>
-          <table className="w-full min-w-[980px] border-collapse">
+          <table className="w-full min-w-[1100px] table-fixed border-collapse">
             <thead>
               <tr className="bg-red-500/10">
                 <th className="p-3 text-left text-red-500 border-b border-[var(--theme-border)] rounded-tl-lg whitespace-nowrap">日期</th>
@@ -293,6 +333,14 @@ export function FinanceList({ userRoom }: FinanceListProps) {
             <HelpHint
               title="住戶端財務報表"
               description="提供收入、支出與本期損益概況，協助了解社區財務整體狀態。"
+              workflow={[
+                "先看總收入、總支出與本期損益。",
+                "再閱讀支出類別分析掌握費用結構。",
+                "最後查看資產概況了解整體財務體質。",
+              ]}
+              logic={[
+                "報表提供趨勢視角，詳細帳目仍以明細資料為準。",
+              ]}
             />
           </div>
           {/* Top Cards */}

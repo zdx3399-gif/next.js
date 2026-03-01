@@ -26,11 +26,11 @@ export function FacilityBookingForm({ facilities, bookingForm, setBookingForm, o
       <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
         <span className="material-icons">meeting_room</span>
         預約設施
-        <HelpHint title="住戶端預約表單" description="填寫設施、日期與時段後送出，系統會建立預約申請。" />
+        <HelpHint title="住戶端預約表單" description="填寫設施、日期與時段後送出，系統會建立預約申請。" workflow={["先選擇設施與日期，再填開始/結束時間。","確認時段與備註後按提交預約。","送出後到我的預約查看狀態。"]} logic={["表單欄位會共同組成預約請求，缺一不可。","時間與設施條件不符時，後端會拒絕建立預約。"]} />
       </h2>
       <form onSubmit={onSubmit} className="space-y-4 max-w-2xl">
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">選擇設施<HelpHint title="住戶端選擇設施" description="先選設施再安排可用時段。" align="center" /></label>
+          <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">選擇設施<HelpHint title="住戶端選擇設施" description="先選設施再安排可用時段。" workflow={["從下拉清單選擇目標設施。","確認名稱與位置是否符合需求。"]} logic={["設施決定可用時段與點數規則。"]} align="center" /></label>
           <select
             value={bookingForm.facilityId}
             onChange={(e) => setBookingForm({ ...bookingForm, facilityId: e.target.value })}
@@ -46,7 +46,7 @@ export function FacilityBookingForm({ facilities, bookingForm, setBookingForm, o
           </select>
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">預約日期<HelpHint title="住戶端預約日期" description="僅能選擇今天之後可開放預約的日期。" align="center" /></label>
+          <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">預約日期<HelpHint title="住戶端預約日期" description="僅能選擇今天之後可開放預約的日期。" workflow={["選擇想使用設施的日期。","若無法選取，代表不在可預約範圍。"]} logic={["日期限制可避免建立過去時段或未開放時段預約。"]} align="center" /></label>
           <input
             type="date"
             value={bookingForm.bookingDate}
@@ -58,7 +58,7 @@ export function FacilityBookingForm({ facilities, bookingForm, setBookingForm, o
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">開始時間<HelpHint title="住戶端開始時間" description="請確認與結束時間順序正確。" align="center" /></label>
+            <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">開始時間<HelpHint title="住戶端開始時間" description="請確認與結束時間順序正確。" workflow={["先選預計開始使用的時間。","再搭配結束時間確認時長。"]} logic={["開始時間是時段計費與衝突檢查起點。"]} align="center" /></label>
             <input
               type="time"
               value={bookingForm.startTime}
@@ -68,7 +68,7 @@ export function FacilityBookingForm({ facilities, bookingForm, setBookingForm, o
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">結束時間<HelpHint title="住戶端結束時間" description="請留意不可早於開始時間。" align="center" /></label>
+            <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">結束時間<HelpHint title="住戶端結束時間" description="請留意不可早於開始時間。" workflow={["選擇預計結束時間。","確認結束時間晚於開始時間。"]} logic={["結束時間若早於開始時間會造成無效時段。"]} align="center" /></label>
             <input
               type="time"
               value={bookingForm.endTime}
@@ -79,7 +79,7 @@ export function FacilityBookingForm({ facilities, bookingForm, setBookingForm, o
           </div>
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">備註（選填）<HelpHint title="住戶端備註" description="可填寫用途或特殊需求，供管理端參考。" align="center" /></label>
+          <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">備註（選填）<HelpHint title="住戶端備註" description="可填寫用途或特殊需求，供管理端參考。" workflow={["有特殊需求時填寫用途或補充說明。","無需求可留空直接提交。"]} logic={["備註提供客服判斷背景，但不影響核心預約資格。"]} align="center" /></label>
           <textarea
             value={bookingForm.notes}
             onChange={(e) => setBookingForm({ ...bookingForm, notes: e.target.value })}

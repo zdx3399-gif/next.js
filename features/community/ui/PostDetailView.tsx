@@ -124,7 +124,7 @@ export function PostDetailView({ postId, currentUser, onBack, onReport }: PostDe
       </Button>
       <div className="flex items-center gap-2 text-xs text-[var(--theme-text-secondary)]">
         <span>貼文詳情</span>
-        <HelpHint title="住戶端貼文詳情" description="可閱讀全文、互動與留言，必要時可提出檢舉。" align="center" />
+        <HelpHint title="住戶端貼文詳情" description="可閱讀全文、互動與留言，必要時可提出檢舉。" workflow={["先讀完整內容與時間資訊。","再進行互動、留言或檢舉。"]} logic={["詳情頁整合內容與互動，降低誤判風險。"]} align="center" />
       </div>
 
       {/* Post Content */}
@@ -160,7 +160,7 @@ export function PostDetailView({ postId, currentUser, onBack, onReport }: PostDe
 
         {/* Actions */}
         <div className="flex gap-2 items-center border-t pt-4">
-          <HelpHint title="住戶端互動區" description="按讚、收藏與有幫助可反映內容品質。" align="center" />
+          <HelpHint title="住戶端互動區" description="按讚、收藏與有幫助可反映內容品質。" workflow={["閱讀後依感受按讚或收藏。","遇違規內容可改走檢舉。"]} logic={["互動資料會影響內容排序與可見性。"]} align="center" />
           <Button
             variant={isLiked ? "default" : "outline"}
             size="sm"
@@ -208,7 +208,7 @@ export function PostDetailView({ postId, currentUser, onBack, onReport }: PostDe
         <h2 className="text-xl font-bold mb-4 flex gap-2 items-center text-[var(--theme-text-primary)]">
           <span className="material-icons">comment</span>
           留言 ({comments.length})
-          <HelpHint title="住戶端留言區" description="可參與討論，留言時請遵守社區規範。" align="center" />
+          <HelpHint title="住戶端留言區" description="可參與討論，留言時請遵守社區規範。" workflow={["輸入留言內容後送出。","保持理性與事實描述。"]} logic={["留言屬公共內容，需符合社區規範與審核政策。"]} align="center" />
         </h2>
 
         {/* Add Comment */}

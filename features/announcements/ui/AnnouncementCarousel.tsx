@@ -48,7 +48,20 @@ export function AnnouncementCarousel({
     <section className="mb-6 sm:mb-8">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-xs text-[var(--theme-text-secondary)]">公告輪播</span>
-        <HelpHint title="住戶端公告輪播" description="可點標題查看完整公告，輪播會自動切換最新重點。" align="center" />
+        <HelpHint
+          title="住戶端公告輪播"
+          description="可點標題查看完整公告，輪播會自動切換最新重點。"
+          workflow={[
+            "先瀏覽輪播中的重點公告卡片。",
+            "點擊標題可進入該公告完整內容。",
+            "也可點下方圓點快速切換到指定公告。",
+          ]}
+          logic={[
+            "輪播會定時自動切換，確保近期公告有曝光。",
+            "按讚按鈕會顯示當前公告互動數並可切換個人按讚狀態。",
+          ]}
+          align="center"
+        />
       </div>
       <div className="relative w-full h-[350px] sm:h-[600px] overflow-hidden rounded-2xl shadow-2xl group">
         {announcements.map((announcement, idx) => {

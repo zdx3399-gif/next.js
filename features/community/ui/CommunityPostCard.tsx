@@ -309,7 +309,7 @@ export function CommunityPostCard({
 
           <div className="flex items-center justify-between pt-3 border-t border-border/40">
             <div className="flex items-center gap-1">
-              <HelpHint title="住戶端互動操作" description="可按讚、留言、收藏，互動數據會影響貼文排序。" align="center" />
+              <HelpHint title="住戶端互動操作" description="可按讚、留言、收藏，互動數據會影響貼文排序。" workflow={["閱讀後可按讚、留言或收藏。","需要時可展開更多選單進行檢舉。"]} logic={["互動行為會影響社區內容排序與推薦。"]} align="center" />
               <Button
                 variant="ghost"
                 size="sm"
@@ -357,7 +357,7 @@ export function CommunityPostCard({
       <Dialog open={showDecryptionDialog} onOpenChange={setShowDecryptionDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">申請解密<HelpHint title="管理端解密申請" description="需填寫觸發條件與理由，送交雙重授權審核。" align="center" /></DialogTitle>
+            <DialogTitle className="flex items-center gap-2">申請解密<HelpHint title="管理端解密申請" description="需填寫觸發條件與理由，送交雙重授權審核。" workflow={["選擇觸發條件並填寫申請理由。","送出後等待委員會與管理員雙重審核。"]} logic={["解密屬高敏感操作，需雙重授權降低濫用風險。"]} align="center" /></DialogTitle>
             <DialogDescription>
               申請查看此貼文作者的真實身份。此操作需要經過雙重授權（管理員 + 委員會）才能完成。
             </DialogDescription>

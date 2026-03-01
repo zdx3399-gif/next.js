@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect } from "react"
 import { useAiChat } from "../hooks/useAiChat"
 import { AiChatButton } from "./AiChatButton"
 import { AiChatWindow } from "./AiChatWindow"
-import { HelpHint } from "@/components/ui/help-hint"
 
 interface User {
   id?: string
@@ -59,10 +58,6 @@ export function AiChat({ currentUser }: AiChatProps) {
 
   return (
     <>
-      <div className="fixed bottom-3 right-3 z-[998] hidden sm:flex items-center gap-2 pointer-events-none">
-        <span className="text-[10px] text-[var(--theme-text-secondary)] bg-[var(--theme-bg-card)]/80 px-2 py-1 rounded">AI 助理入口</span>
-        <div className="pointer-events-auto"><HelpHint title="住戶端 AI 助理入口" description="點右下角按鈕可開啟 AI 助理，並可拖曳調整位置。" align="center" /></div>
-      </div>
       <AiChatButton onClick={open} isOpen={isOpen} position={buttonPosition} onDrag={handleButtonDrag} />
       <AiChatWindow
         isOpen={isOpen}

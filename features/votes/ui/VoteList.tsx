@@ -28,6 +28,15 @@ export function VoteList({ userId, userName }: VoteListProps) {
           <HelpHint
             title="住戶端投票功能"
             description="這裡提供住戶參與社區投票或問卷。點『前往投票』會開啟外部表單，請在截止前完成填寫，逾時可能無法送出。"
+            workflow={[
+              "先閱讀投票活動說明與注意事項。",
+              "點「前往投票」開啟外部表單填答。",
+              "送出後返回本頁確認是否還有其他活動。",
+            ]}
+            logic={[
+              "本頁主要作為入口，實際填答在外部表單完成。",
+              "是否可重複填答由該表單設定決定。",
+            ]}
             align="center"
           />
         </div>
@@ -41,6 +50,14 @@ export function VoteList({ userId, userName }: VoteListProps) {
         <HelpHint
           title="住戶端投票入口"
           description="點此按鈕會另開新視窗進入投票表單。若無法開啟，請確認瀏覽器是否阻擋彈出視窗。"
+          workflow={[
+            "點擊按鈕後在新分頁開啟表單。",
+            "若未開啟，檢查瀏覽器彈出視窗限制。",
+            "確認連結正確後再開始填答。",
+          ]}
+          logic={[
+            "入口連結為固定外部網址，需保持最新有效。",
+          ]}
           align="center"
         />
       </div>
@@ -63,6 +80,14 @@ export function VoteList({ userId, userName }: VoteListProps) {
         <HelpHint
           title="住戶端投票提醒"
           description="投票前建議先完整閱讀題目說明。每位住戶是否可重複填答，依該次表單設定為準。"
+          workflow={[
+            "進入表單前先確認投票主題與截止時間。",
+            "填答時依題目說明逐項完成。",
+            "送出前再次檢查選項是否正確。",
+          ]}
+          logic={[
+            "重複填答限制與身分驗證規則由外部表單控制。",
+          ]}
           align="center"
         />
       </div>

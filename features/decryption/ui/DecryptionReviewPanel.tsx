@@ -111,6 +111,30 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
           <HelpHint
             title={reviewerRole === "committee" ? "管委會初審" : "管理員覆核"}
             description={reviewerRole === "committee" ? "先判斷是否符合解密條件，通過後送管理員。" : "進行最終核准，通過後才能查看作者資訊。"}
+            workflow={
+              reviewerRole === "committee"
+                ? [
+                    "先閱讀申請原因與觸發條件，確認是否符合初審標準。",
+                    "點開始審核，填寫備註後選擇通過或拒絕。",
+                    "初審通過的案件會送交管理員進行第二層覆核。",
+                  ]
+                : [
+                    "先查看管委會初審意見與案件內容。",
+                    "點開始審核後填寫覆核備註並做最終核准或拒絕。",
+                    "最終核准後，才可依權限查看作者解密資訊。",
+                  ]
+            }
+            logic={
+              reviewerRole === "committee"
+                ? [
+                    "管委會屬第一層把關，避免不必要的個資揭露。",
+                    "僅初審通過案件會進入管理員覆核流程。",
+                  ]
+                : [
+                    "管理員是最終決策層，決定是否開啟作者資訊存取。",
+                    "雙層審核可降低誤判與濫用解密權限風險。",
+                  ]
+            }
             align="center"
           />
         </h3>
@@ -145,7 +169,18 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
                         <Badge variant="outline">
                           {request.target_type === "post" ? "貼文" : "留言"}
                         </Badge>
-                        <HelpHint title="審核目標" description="顯示申請對應的內容類型與流程節點。" align="center" />
+                        <HelpHint
+                          title="審核目標"
+                          description="顯示申請對應的內容類型與流程節點。"
+                          workflow={[
+                            "先確認目標是貼文或留言。",
+                            "再看狀態與觸發條件（如多人檢舉、嚴重違規）。",
+                          ]}
+                          logic={[
+                            "目標類型與觸發條件共同構成審核判斷依據。",
+                          ]}
+                          align="center"
+                        />
                         {request.trigger_condition && (
                           <Badge variant="secondary">
                             {TRIGGER_MAP[request.trigger_condition] || request.trigger_condition}
@@ -194,7 +229,18 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
                       />
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <span>審核備註</span>
-                        <HelpHint title="審核備註" description="建議填寫核准/拒絕依據，方便後續稽核與追溯。" align="center" />
+                        <HelpHint
+                          title="審核備註"
+                          description="建議填寫核准/拒絕依據，方便後續稽核與追溯。"
+                          workflow={[
+                            "在備註欄填入判斷重點與決策理由。",
+                            "若拒絕，請明確說明不符合條件的原因。",
+                          ]}
+                          logic={[
+                            "備註會保留在審核紀錄中，供後續稽核與申訴查核。",
+                          ]}
+                          align="center"
+                        />
                       </div>
                       <div className="flex gap-2">
                         <Button
@@ -233,7 +279,18 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
                       <Button size="sm" onClick={() => setSelectedRequest(request.id)}>
                         開始審核
                       </Button>
-                      <HelpHint title="開始審核" description="進入審核模式後可填寫備註並做通過或拒絕。" align="center" />
+                      <HelpHint
+                        title="開始審核"
+                        description="進入審核模式後可填寫備註並做通過或拒絕。"
+                        workflow={[
+                          "點開始審核進入該筆案件的操作狀態。",
+                          "填寫備註後選擇通過或拒絕，或按取消退出。",
+                        ]}
+                        logic={[
+                          "一次只會開啟一筆案件的審核操作，避免誤送出。",
+                        ]}
+                        align="center"
+                      />
                       {request.status === "fully_approved" && (
                         <Button 
                           size="sm" 
@@ -261,7 +318,19 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-yellow-500" />
               解密後作者資訊
-              <HelpHint title="解密資料保護" description="僅可用於處理違規案件，請遵守個資保護規範。" align="center" />
+              <HelpHint
+                title="解密資料保護"
+                description="僅可用於處理違規案件，請遵守個資保護規範。"
+                workflow={[
+                  "僅在案件處理需要時查看作者資訊。",
+                  "處理完成後避免擴散或另作他用。",
+                ]}
+                logic={[
+                  "解密資料屬高敏感資訊，應依最小必要原則存取。",
+                  "系統保留存取與審核紀錄，便於後續追蹤責任。",
+                ]}
+                align="center"
+              />
             </DialogTitle>
             <DialogDescription>
               此資訊僅供處理違規事項使用，請勿外洩。

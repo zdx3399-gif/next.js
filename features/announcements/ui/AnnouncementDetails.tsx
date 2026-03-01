@@ -2,32 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { getSupabaseClient } from "@/lib/supabase"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-
-interface HelpHintProps {
-  title: string
-  description: string
-}
-
-function HelpHint({ title, description }: HelpHintProps) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-accent-light)] text-[var(--theme-accent)] text-xs font-semibold leading-none hover:border-[var(--theme-accent)] hover:opacity-90 transition-all"
-          aria-label={`${title}說明`}
-        >
-          ?
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="z-[220] w-80 text-sm">
-        <div className="font-semibold mb-1">{title}</div>
-        <div className="text-[var(--theme-text-muted)] leading-relaxed">{description}</div>
-      </PopoverContent>
-    </Popover>
-  )
-}
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface Comment {
   id: string
@@ -213,6 +188,15 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
           <HelpHint
             title="住戶公告列表"
             description="這裡會顯示已發布公告。點選任一公告可在右側看完整內容；可先用下方搜尋快速找到你關心的主題。"
+            workflow={[
+              "先在左側清單選擇一則公告，右側會同步顯示完整內容。",
+              "公告很多時先用搜尋縮小範圍，再點選目標公告。",
+              "切換公告後，檢查發布日期與發布者再決定是否採取行動。",
+            ]}
+            logic={[
+              "清單只顯示已發布公告（published），未發布內容不會出現在住戶端。",
+              "目前選取公告會高亮，避免在多則公告間誤讀內容。",
+            ]}
           />
         </div>
         <div className="flex items-center gap-2">
@@ -220,6 +204,15 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
           <HelpHint
             title="住戶搜尋"
             description="輸入關鍵字可篩選公告標題與內容，例如『停水』『電梯』『活動』。找不到時可清空關鍵字查看全部。"
+            workflow={[
+              "在搜尋框輸入關鍵字（可用設備、活動、日期等詞）。",
+              "確認左側列表即時縮小後，再點選目標公告查看內容。",
+              "若沒有結果，清空關鍵字回到完整列表。",
+            ]}
+            logic={[
+              "搜尋同時比對標題與內文，不會改動任何公告資料。",
+              "搜尋是前端篩選行為，只影響目前畫面顯示。",
+            ]}
           />
         </div>
         <input
@@ -277,6 +270,15 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
                   <HelpHint
                     title="公告詳情"
                     description="此區顯示完整公告內容與圖片。建議先確認日期與內容是否仍適用，再依公告指示進行後續動作。"
+                    workflow={[
+                      "先看標題、發布者與日期確認公告時效。",
+                      "再閱讀圖片與完整內文，依公告指示執行後續操作。",
+                      "若有疑問可在下方留言區提問。",
+                    ]}
+                    logic={[
+                      "詳情區內容會隨左側選取公告即時切換。",
+                      "公告內容以發布資料為準，住戶端僅可閱讀與互動（按讚/留言）。",
+                    ]}
                   />
                 </div>
                 <div className="flex gap-4 text-[var(--theme-text-muted)] text-sm mb-4">
@@ -303,6 +305,15 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
                   <HelpHint
                     title="住戶按讚"
                     description="按讚可表達你對公告的認同或回饋，數字會顯示社區關注度。再次點擊可取消按讚。"
+                    workflow={[
+                      "閱讀公告後點擊按讚按鈕表達認同。",
+                      "若要收回反應，再次點擊同一按鈕即可取消。",
+                      "觀察按讚數字變化，了解社區對公告的關注程度。",
+                    ]}
+                    logic={[
+                      "按讚為切換行為：同一使用者可在已讚/未讚間切換。",
+                      "未登入或無使用者資料時按鈕會停用。",
+                    ]}
                   />
                 </div>
                 <button
@@ -325,6 +336,15 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
                   <HelpHint
                     title="住戶留言"
                     description="可在此提問或回覆公告內容。留言請避免個資與不當文字；若違反規範，可能被管理員限制留言權限。"
+                    workflow={[
+                      "先閱讀既有留言，避免重複提問。",
+                      "在輸入框撰寫重點內容後送出留言。",
+                      "送出後確認留言是否出現在清單中。",
+                    ]}
+                    logic={[
+                      "留言會綁定目前選取的公告，不會跨公告共用。",
+                      "被禁言使用者不可送出留言，只能查看內容。",
+                    ]}
                   />
                 </div>
                 <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
@@ -365,6 +385,15 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
                       <HelpHint
                         title="住戶發送留言"
                         description="輸入內容後可按 Enter 或點『發送』。建議一句重點一行，方便管理員與其他住戶閱讀。"
+                        workflow={[
+                          "在輸入框填寫留言內容。",
+                          "按 Enter 或點「發送」送出。",
+                          "送出成功後輸入框會清空，可繼續補充留言。",
+                        ]}
+                        logic={[
+                          "空白內容不會送出，避免產生無效留言。",
+                          "留言作者名稱會使用目前登入者姓名；未提供時顯示匿名。",
+                        ]}
                       />
                     </div>
                     <input

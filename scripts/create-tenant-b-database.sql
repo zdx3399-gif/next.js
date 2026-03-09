@@ -7,12 +7,19 @@ CREATE TABLE IF NOT EXISTS profiles (
   email TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
   name TEXT,
-  role TEXT CHECK (role IN ('resident', 'committee', 'vendor')) DEFAULT 'resident',
+  role TEXT CHECK (role IN ('resident', 'committee', 'guard', 'admin')) DEFAULT 'resident',
   phone TEXT,
   room TEXT,
   unit TEXT,
   status TEXT DEFAULT 'active',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- System-wide settings table (used for role permission customization)
+CREATE TABLE IF NOT EXISTS system_settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -137,7 +144,7 @@ CREATE TABLE IF NOT EXISTS residents (
   room TEXT NOT NULL,
   phone TEXT DEFAULT '',
   email TEXT DEFAULT '',
-  role TEXT DEFAULT 'resident' CHECK (role IN ('resident', 'committee', 'vendor')),
+  role TEXT DEFAULT 'resident' CHECK (role IN ('resident', 'committee', 'guard', 'admin')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -197,7 +204,7 @@ VALUES
   ('resident1@tenant-b.com', 'password123', '周小姐', '0976543210', 'B-102', '1F', 'resident', 'active'),
   ('resident2@tenant-b.com', 'password123', '吳先生', '0965432109', 'B-201', '2F', 'resident', 'active'),
   ('resident3@tenant-b.com', 'password123', '鄭太太', '0954321098', 'B-202', '2F', 'resident', 'active'),
-  ('vendor@tenant-b.com', 'vendor123', '陳技師', '0943210987', '', '', 'vendor', 'active')
+  ('guard@tenant-b.com', 'guard123', '陳技師', '0943210987', '', '', 'guard', 'active')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO announcements (title, content, author, status, created_by, image_url)

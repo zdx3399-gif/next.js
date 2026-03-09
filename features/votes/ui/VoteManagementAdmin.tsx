@@ -25,8 +25,8 @@ interface VoteManagementAdminProps {
 
 // 預覽模式的模擬資料
 const PREVIEW_VOTES = [
-  { id: "preview-1", title: "社區公共設施更新提案", description: "關於更新健身房設備的投票", created_at: new Date().toISOString(), ends_at: new Date(Date.now() + 7 * 86400000).toISOString(), author: "管委會", vote_url: "" },
-  { id: "preview-2", title: "停車場管理規則修訂", description: "修訂停車位輪替制度", created_at: new Date(Date.now() - 7 * 86400000).toISOString(), ends_at: new Date(Date.now() - 1 * 86400000).toISOString(), author: "管委會", vote_url: "https://forms.google.com/..." },
+  { id: "preview-1", title: "測試資料", description: "測試資料", created_at: new Date().toISOString(), ends_at: new Date(Date.now() + 7 * 86400000).toISOString(), author: "測試資料", vote_url: "" },
+  { id: "preview-2", title: "測試資料", description: "測試資料", created_at: new Date(Date.now() - 7 * 86400000).toISOString(), ends_at: new Date(Date.now() - 1 * 86400000).toISOString(), author: "測試資料", vote_url: "測試資料" },
 ]
 
 export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: VoteManagementAdminProps) {

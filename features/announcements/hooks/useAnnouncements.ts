@@ -3,18 +3,24 @@
 import { useEffect, useState, useCallback } from "react"
 import { fetchAnnouncements, fetchAllAnnouncements, type Announcement } from "../api/announcements"
 
-export function useAnnouncements(publishedOnly = true, currentUserId: string | null = null) {
+export function useAnnouncements(publishedOnly = true, currentUserId: string | null = null, disabled = false) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [likes, setLikes] = useState<any[]>([])
 
   useEffect(() => {
+    if (disabled) {
+      setAnnouncements([])
+      setLoading(false)
+      return
+    }
+
     loadAnnouncements()
     if (currentUserId) {
       loadLikes()
     }
-  }, [publishedOnly, currentUserId])
+  }, [publishedOnly, currentUserId, disabled])
 
   async function loadAnnouncements() {
     try {

@@ -28,9 +28,41 @@ interface AuditLog {
 
 interface AuditLogViewerProps {
   currentUser?: User
+  isPreviewMode?: boolean
 }
 
-export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
+const PREVIEW_AUDIT_LOGS: AuditLog[] = [
+  {
+    id: "audit-p-1",
+    operator_id: "committee-001",
+    operator_role: "committee",
+    action_type: "approve",
+    target_type: "announcement",
+    target_id: "ann-102",
+    reason: "測試資料",
+    before_state: null,
+    after_state: { status: "測試資料" },
+    additional_data: { source: "preview" },
+    related_request_id: null,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "audit-p-2",
+    operator_id: "admin-001",
+    operator_role: "admin",
+    action_type: "decryption_committee_approved",
+    target_type: "decryption_request",
+    target_id: "dec-551",
+    reason: "測試資料",
+    before_state: { status: "測試資料" },
+    after_state: { status: "測試資料" },
+    additional_data: { source: "preview" },
+    related_request_id: "dec-551",
+    created_at: new Date(Date.now() - 1800000).toISOString(),
+  },
+]
+
+export function AuditLogViewer({ currentUser, isPreviewMode = false }: AuditLogViewerProps = {}) {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)
   const [actionFilter, setActionFilter] = useState<string>("all")
@@ -45,6 +77,26 @@ export function AuditLogViewer({ currentUser }: AuditLogViewerProps = {}) {
   const loadLogs = async () => {
     setLoading(true)
     try {
+      if (isPreviewMode) {
+        let filtered = [...PREVIEW_AUDIT_LOGS]
+        if (actionFilter && actionFilter !== "all") {
+          filtered = filtered.filter((log) =>
+            actionFilter.endsWith("_") ? log.action_type.startsWith(actionFilter) : log.action_type === actionFilter,
+          )
+        }
+        if (targetTypeFilter && targetTypeFilter !== "all") {
+          filtered = filtered.filter((log) => log.target_type === targetTypeFilter)
+        }
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase()
+          filtered = filtered.filter(
+            (log) => log.reason.toLowerCase().includes(q) || log.operator_id.toLowerCase().includes(q),
+          )
+        }
+        setLogs(filtered)
+        return
+      }
+
       const supabase = getSupabaseClient()
       if (!supabase) {
         console.log("[v0] Supabase client not available")

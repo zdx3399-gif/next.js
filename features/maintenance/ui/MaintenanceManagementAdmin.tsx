@@ -282,9 +282,9 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
 
 // 預覽模式的模擬資料
 const PREVIEW_MAINTENANCE = [
-  { id: "preview-1", equipment: "電梯", item: "馬達", description: "電梯運轉有異音", reported_by_name: "王**", reported_by_id: null, photo_url: null, status: "open", handler: "", cost: 0, note: "" },
-  { id: "preview-2", equipment: "空調", item: "冷氣主機", description: "冷氣不冷", reported_by_name: "李**", reported_by_id: null, photo_url: null, status: "progress", handler: "張師傅", cost: 2500, note: "已派人處理中" },
-  { id: "preview-3", equipment: "照明", item: "大廳燈泡", description: "大廳燈泡損壞", reported_by_name: "管理員", reported_by_id: null, photo_url: null, status: "done", handler: "電器行", cost: 800, note: "已更換完成" },
+  { id: "preview-1", equipment: "測試資料", item: "測試資料", description: "測試資料", reported_by_name: "測試資料", reported_by_id: null, photo_url: null, status: "open", handler: "", cost: 0, note: "測試資料" },
+  { id: "preview-2", equipment: "測試資料", item: "測試資料", description: "測試資料", reported_by_name: "測試資料", reported_by_id: null, photo_url: null, status: "progress", handler: "測試資料", cost: 2500, note: "測試資料" },
+  { id: "preview-3", equipment: "測試資料", item: "測試資料", description: "測試資料", reported_by_name: "測試資料", reported_by_id: null, photo_url: null, status: "done", handler: "測試資料", cost: 800, note: "測試資料" },
 ]
 
 interface MaintenanceManagementAdminProps {

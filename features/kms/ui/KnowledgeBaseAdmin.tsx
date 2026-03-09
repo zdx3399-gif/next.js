@@ -64,9 +64,27 @@ const CREDIBILITY_OPTIONS = [
 
 // 預覽模式的模擬資料
 const PREVIEW_CARDS = [
-  { id: "preview-1", title: "包裹領取流程", summary: "說明如何領取包裹的標準流程...", category: "package", credibility: "official", status: "active", helpful_count: 15, not_helpful_count: 2, view_count: 120, version: 1 },
-  { id: "preview-2", title: "訪客登記須知", summary: "訪客來訪前需要完成的登記步驟...", category: "visitor", credibility: "verified", status: "active", helpful_count: 8, not_helpful_count: 1, view_count: 85, version: 2 },
-  { id: "preview-3", title: "設施預約規則", summary: "公共設施預約的相關規定...", category: "facility", credibility: "community", status: "unverified", helpful_count: 3, not_helpful_count: 0, view_count: 42, version: 1 },
+  { id: "preview-1", title: "測試資料", summary: "測試資料", category: "package", credibility: "official", status: "active", helpful_count: 15, not_helpful_count: 2, view_count: 120, version: 1, created_at: new Date(Date.now() - 86400000).toISOString(), updated_at: new Date(Date.now() - 43200000).toISOString() },
+  { id: "preview-2", title: "測試資料", summary: "測試資料", category: "visitor", credibility: "verified", status: "active", helpful_count: 8, not_helpful_count: 1, view_count: 85, version: 2, created_at: new Date(Date.now() - 172800000).toISOString(), updated_at: new Date(Date.now() - 86400000).toISOString() },
+  { id: "preview-3", title: "測試資料", summary: "測試資料", category: "facility", credibility: "community", status: "unverified", helpful_count: 3, not_helpful_count: 0, view_count: 42, version: 1, created_at: new Date(Date.now() - 259200000).toISOString(), updated_at: new Date(Date.now() - 172800000).toISOString() },
+]
+
+const PREVIEW_PENDING_POSTS: CommunityPost[] = [
+  {
+    id: "preview-kms-pending-1",
+    title: "測試資料",
+    content: "測試資料",
+    category: "visitor",
+    display_name: "測試資料",
+    created_at: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
+    structured_data: {
+      kms_suggestion: {
+        suggested_title: "測試資料",
+        summary: "測試資料",
+        suggested_category: "visitor",
+      },
+    },
+  } as CommunityPost,
 ]
 
 export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: KnowledgeBaseAdminProps) {
@@ -95,6 +113,12 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
 
   // 載入待入庫貼文
   const loadPendingPosts = useCallback(async () => {
+    if (isPreviewMode) {
+      setPendingLoading(false)
+      setPendingPosts(PREVIEW_PENDING_POSTS)
+      return
+    }
+
     setPendingLoading(true)
     try {
       const posts = await getPendingKMSPosts()
@@ -104,7 +128,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
     } finally {
       setPendingLoading(false)
     }
-  }, [])
+  }, [isPreviewMode])
 
   useEffect(() => {
     if (activeTab === "pending") {
@@ -112,10 +136,15 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
     }
   }, [activeTab, loadPendingPosts])
 
-  const { cards, loading, error, refresh, createCard, updateCard, deleteCard } = useKnowledgeCards({
+  const { cards: realCards, loading: realLoading, error: realError, refresh: realRefresh, createCard, updateCard, deleteCard } = useKnowledgeCards({
     category: selectedCategory === "all" ? undefined : selectedCategory,
     search: searchQuery || undefined,
   })
+
+  const cards = isPreviewMode ? PREVIEW_CARDS : realCards
+  const loading = isPreviewMode ? false : realLoading
+  const error = isPreviewMode ? null : realError
+  const refresh = isPreviewMode ? () => {} : realRefresh
 
   // 處理入庫
   const handleImport = async () => {
@@ -172,6 +201,10 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
   })
 
   const handleCreate = async () => {
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
     if (!currentUser) {
       alert("請先登入")
       return
@@ -193,6 +226,10 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
   }
 
   const handleEdit = async () => {
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
     if (!selectedCard || !currentUser) return
     try {
       await updateCard(
@@ -214,6 +251,10 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
   }
 
   const handleDelete = async () => {
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
     if (!selectedCard) return
     try {
       await deleteCard(selectedCard.id)
@@ -226,6 +267,10 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
   }
 
   const handleStatusChange = async (cardId: string, newStatus: string) => {
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
     if (!currentUser) return
     try {
       await updateCard(
@@ -243,6 +288,10 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
   }
 
   const handleCredibilityChange = async (cardId: string, newCredibility: string) => {
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
     if (!currentUser) return
     try {
       await updateCard(

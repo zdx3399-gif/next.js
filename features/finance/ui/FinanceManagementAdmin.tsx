@@ -367,9 +367,9 @@ function ExpenseFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
 
 // 預覽模式的模擬資料
 const PREVIEW_RECORDS: FinanceRecord[] = [
-  { id: "preview-1", room: "A棟 5樓 501室", amount: 3500, due: new Date(Date.now() + 7 * 86400000).toISOString(), invoice: "INV-***-001", paid: false, unit_id: "preview-unit-1", monthly_fee: 3500 },
-  { id: "preview-2", room: "B棟 3樓 302室", amount: 4200, due: new Date(Date.now() - 3 * 86400000).toISOString(), invoice: "INV-***-002", paid: true, unit_id: "preview-unit-2", monthly_fee: 4200 },
-  { id: "preview-3", room: "A棟 8樓 801室", amount: 3800, due: new Date(Date.now() + 14 * 86400000).toISOString(), invoice: "INV-***-003", paid: false, unit_id: "preview-unit-3", monthly_fee: 3800 },
+  { id: "preview-1", room: "測試資料", amount: 3500, due: new Date(Date.now() + 7 * 86400000).toISOString(), invoice: "測試資料", paid: false, unit_id: "preview-unit-1", monthly_fee: 3500 },
+  { id: "preview-2", room: "測試資料", amount: 4200, due: new Date(Date.now() - 3 * 86400000).toISOString(), invoice: "測試資料", paid: true, unit_id: "preview-unit-2", monthly_fee: 4200 },
+  { id: "preview-3", room: "測試資料", amount: 3800, due: new Date(Date.now() + 14 * 86400000).toISOString(), invoice: "測試資料", paid: false, unit_id: "preview-unit-3", monthly_fee: 3800 },
 ]
 
 interface FinanceManagementAdminProps {

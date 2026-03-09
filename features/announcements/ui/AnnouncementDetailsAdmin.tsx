@@ -32,9 +32,50 @@ interface Announcement {
 interface AnnouncementDetailsAdminProps {
   onClose: () => void
   currentUser: any
+  isPreviewMode?: boolean
 }
 
-export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementDetailsAdminProps) {
+const PREVIEW_ANNOUNCEMENTS: Announcement[] = [
+  {
+    id: "preview-a1",
+    title: "測試資料",
+    content: "測試資料",
+    image_url: "",
+    author: "測試資料",
+    created_at: new Date().toISOString(),
+    status: "published",
+  },
+  {
+    id: "preview-a2",
+    title: "測試資料",
+    content: "測試資料",
+    image_url: "",
+    author: "測試資料",
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+    status: "published",
+  },
+]
+
+const PREVIEW_COMMENTS: Record<string, Comment[]> = {
+  "preview-a1": [
+    {
+      id: "pc-1",
+      announcement_id: "preview-a1",
+      user_name: "測試資料",
+      comment_text: "測試資料",
+      created_at: new Date(Date.now() - 3600000).toISOString(),
+    },
+    {
+      id: "pc-2",
+      announcement_id: "preview-a1",
+      user_name: "測試資料",
+      comment_text: "測試資料",
+      created_at: new Date(Date.now() - 1800000).toISOString(),
+    },
+  ],
+}
+
+export function AnnouncementDetailsAdmin({ onClose, currentUser, isPreviewMode = false }: AnnouncementDetailsAdminProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null)
   const [comments, setComments] = useState<Map<string, Comment[]>>(new Map())
@@ -46,6 +87,15 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (isPreviewMode) {
+      setAnnouncements(PREVIEW_ANNOUNCEMENTS)
+      setSelectedAnnouncement(PREVIEW_ANNOUNCEMENTS[0])
+      setComments(new Map(Object.entries(PREVIEW_COMMENTS)))
+      setLikes(new Map([["preview-a1", new Set(["preview-user-1", "preview-user-2"])]]))
+      setBannedUsers(new Set())
+      return
+    }
+
     const savedComments = localStorage.getItem("announcement_comments")
     const savedLikes = localStorage.getItem("announcement_likes")
     const savedBannedUsers = localStorage.getItem("announcement_banned_users")
@@ -66,7 +116,7 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
     }
 
     loadAnnouncements()
-  }, [])
+  }, [isPreviewMode])
 
   useEffect(() => {
     const selectedId = sessionStorage.getItem("selectedAnnouncementId")
@@ -82,6 +132,14 @@ export function AnnouncementDetailsAdmin({ onClose, currentUser }: AnnouncementD
   }, [announcements])
 
   const loadAnnouncements = async () => {
+    if (isPreviewMode) {
+      setAnnouncements(PREVIEW_ANNOUNCEMENTS)
+      if (!selectedAnnouncement) {
+        setSelectedAnnouncement(PREVIEW_ANNOUNCEMENTS[0])
+      }
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)

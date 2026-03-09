@@ -31,9 +31,43 @@ interface Announcement {
 interface AnnouncementDetailsProps {
   onClose: () => void
   currentUser: any
+  isPreviewMode?: boolean
 }
 
-export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetailsProps) {
+const PREVIEW_ANNOUNCEMENTS: Announcement[] = [
+  {
+    id: "resident-preview-1",
+    title: "測試資料",
+    content: "測試資料",
+    image_url: "",
+    author: "測試資料",
+    created_at: new Date().toISOString(),
+    status: "published",
+  },
+  {
+    id: "resident-preview-2",
+    title: "測試資料",
+    content: "測試資料",
+    image_url: "",
+    author: "測試資料",
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+    status: "published",
+  },
+]
+
+const PREVIEW_COMMENTS: Record<string, Comment[]> = {
+  "resident-preview-1": [
+    {
+      id: "resident-preview-c1",
+      announcement_id: "resident-preview-1",
+      user_name: "測試資料",
+      comment_text: "測試資料",
+      created_at: new Date(Date.now() - 3600000).toISOString(),
+    },
+  ],
+}
+
+export function AnnouncementDetails({ onClose, currentUser, isPreviewMode = false }: AnnouncementDetailsProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null)
   const [comments, setComments] = useState<Map<string, Comment[]>>(new Map())
@@ -45,6 +79,15 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (isPreviewMode) {
+      setAnnouncements(PREVIEW_ANNOUNCEMENTS)
+      setSelectedAnnouncement(PREVIEW_ANNOUNCEMENTS[0])
+      setComments(new Map(Object.entries(PREVIEW_COMMENTS)))
+      setLikes(new Map())
+      setBannedUsers(new Set())
+      return
+    }
+
     const savedComments = localStorage.getItem("announcement_comments")
     const savedLikes = localStorage.getItem("announcement_likes")
     const savedBannedUsers = localStorage.getItem("announcement_banned_users")
@@ -65,7 +108,7 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
     }
 
     loadAnnouncements()
-  }, [])
+  }, [isPreviewMode])
 
   useEffect(() => {
     const selectedId = sessionStorage.getItem("selectedAnnouncementId")
@@ -81,6 +124,12 @@ export function AnnouncementDetails({ onClose, currentUser }: AnnouncementDetail
   }, [announcements])
 
   const loadAnnouncements = async () => {
+    if (isPreviewMode) {
+      setAnnouncements(PREVIEW_ANNOUNCEMENTS)
+      setSelectedAnnouncement(PREVIEW_ANNOUNCEMENTS[0])
+      return
+    }
+
     setLoading(true)
     setError(null)
 

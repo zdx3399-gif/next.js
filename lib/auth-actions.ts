@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js"
 
 export type TenantId = "tenant_a" | "tenant_b"
 
-export type UserRole = "resident" | "guard" | "committee" | "vendor" | "admin"
+export type UserRole = "resident" | "guard" | "committee" | "admin"
 
 // Server-side tenant configuration (can access non-public env vars)
 const TENANT_CONFIG = {

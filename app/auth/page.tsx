@@ -28,6 +28,10 @@ export default function AuthPage() {
     const currentUser = localStorage.getItem("currentUser")
     if (currentUser) {
       const user = JSON.parse(currentUser)
+      if (user.role === "vendor") {
+        user.role = "guard"
+        localStorage.setItem("currentUser", JSON.stringify(user))
+      }
       const useBackend = shouldUseBackend(user.role)
       router.push(useBackend ? "/admin" : "/dashboard")
     }
@@ -70,7 +74,8 @@ export default function AuthPage() {
 
       setSuccessMessage("登入成功！正在跳轉...")
 
-      const useBackend = shouldUseBackend(result.user.role as UserRole)
+      const normalizedRole = result.user.role === "vendor" ? "guard" : result.user.role
+      const useBackend = shouldUseBackend(normalizedRole as UserRole)
       setTimeout(() => {
         router.push(useBackend ? "/admin" : "/dashboard")
       }, 1500)

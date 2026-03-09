@@ -15,12 +15,14 @@ import { VisitorList } from "@/features/visitors/ui/VisitorList"
 import { MaintenanceList } from "@/features/maintenance/ui/MaintenanceList"
 import { FinanceList } from "@/features/finance/ui/FinanceList"
 import { MeetingList } from "@/features/meetings/ui/MeetingList"
-import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
+// import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
 import { FacilityList } from "@/features/facilities/ui/FacilityList"
 import { AiChat } from "@/features/support/ui/AiChat"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CommunityBoard } from "@/features/community/ui/CommunityBoard"
 import { KnowledgeBase } from "@/features/kms/ui/KnowledgeBase"
+import { syncRolePermissionsFromSupabase } from "@/lib/role-permission-service"
+import { AdminPreviewBanner } from "@/components/AdminPreviewBanner"
 
 type Section =
   | "dashboard"
@@ -61,7 +63,29 @@ export default function DashboardPage() {
     loading: announcementsLoading,
     likes: announcementLikes,
     toggleLike: toggleAnnouncementLike,
-  } = useAnnouncements(true, currentUser?.id)
+  } = useAnnouncements(true, currentUser?.id, currentUser?.role === "admin")
+
+  const isAdminResidentPreview = currentUser?.role === "admin"
+  const previewAnnouncements = [
+    {
+      id: "resident-preview-1",
+      title: "測試資料",
+      content: "測試資料",
+      author_name: "測試資料",
+      status: "published",
+      created_at: new Date().toISOString(),
+      image_url: "",
+    },
+    {
+      id: "resident-preview-2",
+      title: "測試資料",
+      content: "測試資料",
+      author_name: "測試資料",
+      status: "published",
+      created_at: new Date(Date.now() - 86400000).toISOString(),
+      image_url: "",
+    },
+  ]
 
   useEffect(() => {
     initAuth()
@@ -81,15 +105,41 @@ export default function DashboardPage() {
     }
     try {
       const user = JSON.parse(storedUser)
+      if (user.role === "vendor") {
+        user.role = "guard"
+        localStorage.setItem("currentUser", JSON.stringify(user))
+      }
       console.log("[v0] User role:", user.role)
 
-      if (user.role !== "resident" && user.role !== "committee") {
+      if (user.role !== "resident" && user.role !== "committee" && user.role !== "admin") {
         console.log("[v0] Non-resident user detected, redirecting to admin")
         router.push("/admin")
         return
       }
 
+      await syncRolePermissionsFromSupabase()
+
+      if (user.role === "admin") {
+        const previewUser: User = {
+          id: user.id,
+          name: getNameString(user.name) || "測試資料",
+          email: user.email || "測試資料",
+          phone: user.phone || "測試資料",
+          role: "admin",
+          status: user.status || "active",
+          unit_id: user.unit_id || "",
+          room: user.room || "測試資料",
+        }
+        setCurrentUser(previewUser)
+        return
+      }
+
       const supabase = getSupabaseClient()
+      if (!supabase) {
+        setCurrentUser(user)
+        return
+      }
+
       const { data: userDataArray, error } = await supabase
         .from("profiles")
         .select(`
@@ -189,6 +239,13 @@ export default function DashboardPage() {
     }
   }
 
+  const switchToAdminPreview = () => {
+    if (currentUser?.role === "admin") {
+      localStorage.setItem("currentUser", JSON.stringify({ ...currentUser, role: "admin" }))
+      router.push("/admin")
+    }
+  }
+
   const sectionTitles: Record<Section, string> = {
     dashboard: "首頁",
     announcements: "公告",
@@ -213,7 +270,7 @@ export default function DashboardPage() {
     { id: "finance", icon: "account_balance", label: "管理費/收支" },
     { id: "visitors", icon: "how_to_reg", label: "訪客紀錄" },
     { id: "meetings", icon: "event", label: "會議記錄" },
-    { id: "emergencies", icon: "emergency", label: "緊急事件" },
+    // { id: "emergencies", icon: "emergency", label: "緊急事件" },
     { id: "facilities", icon: "meeting_room", label: "設施預約" },
     { id: "community", icon: "forum", label: "社區討論" },
     { id: "knowledge-base", icon: "school", label: "知識庫" },
@@ -276,7 +333,16 @@ export default function DashboardPage() {
                 className="flex gap-2 items-center border-2 border-[var(--theme-border-accent)] rounded-lg px-3 py-2 bg-transparent text-[var(--theme-accent)] cursor-pointer font-semibold hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all"
               >
                 <span className="material-icons text-lg">admin_panel_settings</span>
-                <span className="hidden sm:inline">管委會功能</span>
+                <span>切換管理員介面</span>
+              </button>
+            )}
+            {currentUser?.role === "admin" && (
+              <button
+                onClick={switchToAdminPreview}
+                className="flex gap-2 items-center border-2 border-[var(--theme-border-accent)] rounded-lg px-3 py-2 bg-transparent text-[var(--theme-accent)] cursor-pointer font-semibold hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all"
+              >
+                <span className="material-icons text-lg">admin_panel_settings</span>
+                <span>切換管理員介面</span>
               </button>
             )}
             <button
@@ -290,22 +356,24 @@ export default function DashboardPage() {
         </header>
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <AdminPreviewBanner show={isAdminResidentPreview} />
+
           {currentSection === "dashboard" && (
             <section>
-              {announcements.length > 0 && (
+              {(isAdminResidentPreview ? previewAnnouncements.length > 0 : announcements.length > 0) && (
                 <section className="mb-6 sm:mb-8">
                   <AnnouncementCarousel
-                    announcements={announcements}
-                    loading={announcementsLoading}
-                    onLike={toggleAnnouncementLike}
+                    announcements={isAdminResidentPreview ? (previewAnnouncements as any) : announcements}
+                    loading={isAdminResidentPreview ? false : announcementsLoading}
+                    onLike={isAdminResidentPreview ? undefined : toggleAnnouncementLike}
                     onSelect={() => setCurrentSection("announcements")}
-                    likes={announcementLikes}
-                    currentUserId={currentUser?.id}
+                    likes={isAdminResidentPreview ? [] : announcementLikes}
+                    currentUserId={isAdminResidentPreview ? undefined : currentUser?.id}
                   />
                 </section>
               )}
 
-              {/* Emergency Actions */}
+              {/* Emergency Actions (temporarily disabled)
               <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-xl p-3">
                 <h3 className="flex items-center gap-1 text-[var(--theme-text-primary)]/90 text-sm font-bold mb-2">
                   <span className="material-icons">emergency</span>
@@ -313,6 +381,7 @@ export default function DashboardPage() {
                 </h3>
                 <EmergencyButtons userName={currentUser?.name} onTrigger={() => {}} variant="sidebar" />
               </div>
+              */}
             </section>
           )}
           {currentSection === "packages" && (
@@ -333,15 +402,13 @@ export default function DashboardPage() {
               <VoteList userId={currentUser?.id} userName={getNameString(currentUser?.name)} />
             </div>
           )}
-          {currentSection === "maintenance" && (
-            <MaintenanceList userId={currentUser?.id} userName={getNameString(currentUser?.name)} />
-          )}
+          {currentSection === "maintenance" && <MaintenanceList userId={currentUser?.id} userName={getNameString(currentUser?.name)} />}
           {currentSection === "finance" && <FinanceList userRoom={currentUser?.room} />}
           {currentSection === "visitors" && <VisitorList userRoom={currentUser?.room} currentUser={currentUser} />}
           {currentSection === "meetings" && <MeetingList />}
-          {currentSection === "emergencies" && (
+          {/* {currentSection === "emergencies" && (
             <EmergencyButtons userName={getNameString(currentUser?.name)} variant="full" />
-          )}
+          )} */}
           {currentSection === "facilities" && (
             <FacilityList
               userId={currentUser?.id}
@@ -355,18 +422,14 @@ export default function DashboardPage() {
                 <span className="material-icons">campaign</span>
                 公告詳情
               </h2>
-              <AnnouncementDetails onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
+              <AnnouncementDetails
+                onClose={() => setCurrentSection("dashboard")}
+                currentUser={currentUser}
+                isPreviewMode={isAdminResidentPreview}
+              />
             </div>
           )}
-          {currentSection === "community" && (
-            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
-              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
-                <span className="material-icons">forum</span>
-                社區討論
-              </h2>
-              <CommunityBoard currentUser={currentUser} />
-            </div>
-          )}
+          {currentSection === "community" && <CommunityBoard currentUser={currentUser} />}
           {currentSection === "knowledge-base" && (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
               <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">

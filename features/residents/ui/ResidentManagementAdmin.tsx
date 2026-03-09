@@ -1,12 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useResidents } from "../hooks/useResidents"
 import type { Resident } from "../api/residents"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Plus, RefreshCw, Search } from "lucide-react"
+import {
+  CUSTOMIZABLE_SECTIONS,
+  USER_ROLES,
+  clearRolePermissionOverrides,
+  getAllowedSections,
+  getRoleLabel,
+  setRolePermissionOverrides,
+  type Section,
+  type UserRole,
+} from "@/lib/permissions"
+import {
+  applyRolePermissionOverridesToLocal,
+  loadRolePermissionsFromSupabase,
+  saveRolePermissionsToSupabase,
+} from "@/lib/role-permission-service"
 
 const getRelationshipLabel = (relationship?: string): string => {
   const labels: Record<string, string> = {
@@ -17,11 +32,10 @@ const getRelationshipLabel = (relationship?: string): string => {
   return labels[relationship || "household_member"] || "住戶成員"
 }
 
-const getRoleLabel = (role?: string): string => {
+const getResidentRoleLabel = (role?: string): string => {
   const labels: Record<string, string> = {
     resident: "住戶",
     committee: "管委會",
-    vendor: "警衛",
     guard: "警衛",
     admin: "管理員",
   }
@@ -116,7 +130,7 @@ function ResidentFormModal({
             >
               <option value="resident">住戶</option>
               <option value="committee">管委會</option>
-              <option value="vendor">警衛</option>
+              <option value="guard">警衛</option>
             </select>
           </div>
 
@@ -157,14 +171,92 @@ function ResidentFormModal({
 
 // 預覽模式的模擬資料
 const PREVIEW_RESIDENTS: Resident[] = [
-  { id: "preview-1", name: "王**", room: "A棟 5樓 501室", phone: "0912-***-***", email: "w***@email.com", relationship: "owner", role: "resident" as const },
-  { id: "preview-2", name: "李**", room: "B棟 3樓 302室", phone: "0923-***-***", email: "l***@email.com", relationship: "household_member", role: "resident" as const },
-  { id: "preview-3", name: "張**", room: "A棟 8樓 801室", phone: "0934-***-***", email: "z***@email.com", relationship: "tenant", role: "committee" as const },
+  { id: "preview-1", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", relationship: "owner", role: "resident" as const },
+  { id: "preview-2", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", relationship: "household_member", role: "resident" as const },
+  { id: "preview-3", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", relationship: "tenant", role: "committee" as const },
 ]
 
 interface ResidentManagementAdminProps {
   isPreviewMode?: boolean
 }
+
+type AdminTab = "residents" | "permissions"
+type PermissionPageMode = "resident" | "admin"
+
+const SECTION_LABELS_BY_MODE: Record<PermissionPageMode, Partial<Record<Section, string>>> = {
+  resident: {
+    profile: "個人資料",
+    announcements: "公告",
+    votes: "社區投票",
+    maintenance: "設備/維護",
+    finance: "管理費/收支",
+    packages: "我的包裹",
+    visitors: "訪客紀錄",
+    meetings: "會議記錄",
+    emergencies: "緊急事件",
+    facilities: "設施預約",
+    community: "社區討論",
+    "knowledge-base": "知識庫",
+    "handover-knowledge": "交接知識庫",
+  },
+  admin: {
+  profile: "個人資料",
+  announcements: "公告管理",
+  "announcement-details": "公告詳情",
+  votes: "投票管理",
+  maintenance: "設備/維護管理",
+  finance: "財務管理",
+  residents: "住戶/人員",
+  packages: "包裹管理",
+  visitors: "訪客管理",
+  meetings: "會議管理",
+  emergencies: "緊急事件管理",
+  facilities: "設施管理",
+  community: "社區討論管理",
+  "knowledge-base": "知識庫管理",
+  "handover-knowledge": "交接知識庫",
+  moderation: "內容審核",
+  "audit-logs": "稽核紀錄",
+  decryption: "解密申請",
+  },
+}
+
+const RESIDENT_MODE_SECTIONS: Section[] = [
+  "profile",
+  "announcements",
+  "votes",
+  "maintenance",
+  "finance",
+  "packages",
+  "visitors",
+  "meetings",
+  "emergencies",
+  "facilities",
+  "community",
+  "knowledge-base",
+  "handover-knowledge",
+]
+
+const ADMIN_MODE_SECTIONS: Section[] = [
+  "profile",
+  "announcements",
+  "announcement-details",
+  "votes",
+  "maintenance",
+  "finance",
+  "residents",
+  "packages",
+  "visitors",
+  "meetings",
+  "emergencies",
+  "facilities",
+  "community",
+  "knowledge-base",
+  "handover-knowledge",
+  "moderation",
+  "audit-logs",
+  "decryption",
+]
 
 export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManagementAdminProps) {
   const { residents: realResidents, loading, addNewRow, updateRow, handleSave, handleDelete, refresh } = useResidents()
@@ -172,10 +264,55 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
   // 預覽模式使用模擬資料
   const residents = isPreviewMode ? PREVIEW_RESIDENTS : realResidents
 
+  const [activeTab, setActiveTab] = useState<AdminTab>("residents")
+  const [permissionPageMode, setPermissionPageMode] = useState<PermissionPageMode>("admin")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [formData, setFormData] = useState<Partial<Resident>>({})
   const [searchTerm, setSearchTerm] = useState("")
+  const [permissionSaving, setPermissionSaving] = useState(false)
+  const [permissionDraft, setPermissionDraft] = useState<Record<PermissionPageMode, Record<UserRole, Section[]>>>(() => {
+    const empty = {} as Record<PermissionPageMode, Record<UserRole, Section[]>>
+    empty.resident = {} as Record<UserRole, Section[]>
+    empty.admin = {} as Record<UserRole, Section[]>
+
+    USER_ROLES.forEach((role) => {
+      empty.resident[role] = getAllowedSections(role, true).filter((section) => section !== "dashboard")
+      empty.admin[role] = getAllowedSections(role, false).filter((section) => section !== "dashboard")
+    })
+
+    return empty
+  })
+
+  const displayedSections = useMemo(
+    () => (permissionPageMode === "resident" ? RESIDENT_MODE_SECTIONS : ADMIN_MODE_SECTIONS),
+    [permissionPageMode],
+  )
+
+  useEffect(() => {
+    if (isPreviewMode) return
+
+    const loadPermissionSettings = async () => {
+      const payload = await loadRolePermissionsFromSupabase()
+      if (!payload) return
+
+      applyRolePermissionOverridesToLocal(payload)
+      setPermissionDraft((prev) => {
+        const next = { ...prev }
+        for (const role of USER_ROLES) {
+          if (payload.residentMode?.[role]) {
+            next.resident[role] = payload.residentMode[role] || []
+          }
+          if (payload.adminMode?.[role]) {
+            next.admin[role] = payload.adminMode[role] || []
+          }
+        }
+        return next
+      })
+    }
+
+    loadPermissionSettings()
+  }, [isPreviewMode])
 
   const filteredResidents = residents.filter((resident) => {
     if (!searchTerm) return true
@@ -248,6 +385,62 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
     handleCloseModal()
   }
 
+  const togglePermission = (role: UserRole, section: Section) => {
+    setPermissionDraft((prev) => {
+      const current = prev[permissionPageMode][role] || []
+      const next = current.includes(section) ? current.filter((s) => s !== section) : [...current, section]
+      return {
+        ...prev,
+        [permissionPageMode]: {
+          ...prev[permissionPageMode],
+          [role]: next,
+        },
+      }
+    })
+  }
+
+  const handleSavePermissions = async () => {
+    setPermissionSaving(true)
+
+    USER_ROLES.forEach((role) => {
+      setRolePermissionOverrides(role, permissionDraft.resident[role] || [], true)
+      setRolePermissionOverrides(role, permissionDraft.admin[role] || [], false)
+    })
+
+    const residentMode: Partial<Record<UserRole, Section[]>> = {}
+    const adminMode: Partial<Record<UserRole, Section[]>> = {}
+    USER_ROLES.forEach((role) => {
+      residentMode[role] = permissionDraft.resident[role] || []
+      adminMode[role] = permissionDraft.admin[role] || []
+    })
+
+    const saved = await saveRolePermissionsToSupabase({ residentMode, adminMode })
+    setPermissionSaving(false)
+
+    if (saved) {
+      window.alert("權限設定已儲存至 Supabase，重新整理後所有頁面會套用最新設定。")
+      return
+    }
+
+    window.alert("已先儲存在本機。Supabase 儲存失敗，請確認已建立 system_settings 資料表。")
+  }
+
+  const handleResetPermissions = () => {
+    clearRolePermissionOverrides()
+    setPermissionDraft(() => {
+      const empty = {} as Record<PermissionPageMode, Record<UserRole, Section[]>>
+      empty.resident = {} as Record<UserRole, Section[]>
+      empty.admin = {} as Record<UserRole, Section[]>
+
+      USER_ROLES.forEach((role) => {
+        empty.resident[role] = getAllowedSections(role, true).filter((section) => section !== "dashboard")
+        empty.admin[role] = getAllowedSections(role, false).filter((section) => section !== "dashboard")
+      })
+
+      return empty
+    })
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -266,6 +459,94 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
         </h2>
       </div>
 
+      <div className="flex gap-2 mb-4 border-b border-[var(--theme-border)] pb-3">
+        <Button
+          variant={activeTab === "residents" ? "default" : "outline"}
+          onClick={() => setActiveTab("residents")}
+          className="rounded-lg"
+        >
+          住戶資料
+        </Button>
+        <Button
+          variant={activeTab === "permissions" ? "default" : "outline"}
+          onClick={() => setActiveTab("permissions")}
+          className="rounded-lg"
+        >
+          身分權限設定
+        </Button>
+      </div>
+
+      {activeTab === "permissions" && (
+        <div className="space-y-4 mb-4">
+          <div className="bg-[var(--theme-accent-light)] border border-[var(--theme-border)] rounded-xl p-3 text-sm text-[var(--theme-text-primary)]">
+            透過勾選調整各身分可使用的功能，且可分別設定住戶端與管理端。首頁固定保留，不在此清單中。
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              variant={permissionPageMode === "resident" ? "default" : "outline"}
+              onClick={() => setPermissionPageMode("resident")}
+            >
+              住戶頁面權限
+            </Button>
+            <Button
+              variant={permissionPageMode === "admin" ? "default" : "outline"}
+              onClick={() => setPermissionPageMode("admin")}
+            >
+              管理頁面權限
+            </Button>
+          </div>
+
+          <div className="overflow-x-auto border border-[var(--theme-border)] rounded-xl">
+            <table className="w-full table-auto border-collapse text-sm min-w-[960px]">
+              <thead>
+                <tr className="bg-[var(--theme-accent-light)]">
+                  <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] w-[220px]">功能</th>
+                  {USER_ROLES.map((role) => (
+                    <th key={role} className="p-3 text-center text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
+                      {getRoleLabel(role)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {displayedSections.map((section) => (
+                  <tr key={section} className="hover:bg-[var(--theme-accent-light)] transition-colors">
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                      {SECTION_LABELS_BY_MODE[permissionPageMode][section] || section}
+                    </td>
+                    {USER_ROLES.map((role) => {
+                      const checked = (permissionDraft[permissionPageMode][role] || []).includes(section)
+                      return (
+                        <td key={`${role}-${section}`} className="p-3 border-b border-[var(--theme-border)] text-center">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => togglePermission(role, section)}
+                            className="w-4 h-4 accent-[var(--theme-accent)]"
+                          />
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap gap-2 justify-end">
+            <Button variant="outline" onClick={handleResetPermissions}>
+              重設為預設
+            </Button>
+            <Button onClick={handleSavePermissions} disabled={permissionSaving}>
+              {permissionSaving ? "儲存中..." : "儲存權限設定"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "residents" && (
+      <>
       <div className="flex flex-col sm:flex-row gap-3 justify-between mb-4">
         <div className="flex-1 max-w-md">
           <div className="flex items-center gap-2 mb-2">
@@ -327,7 +608,7 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
                       {row.email || "-"}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
-                      {getRoleLabel(row.role)}
+                      {getResidentRoleLabel(row.role)}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
                       {getRelationshipLabel(row.relationship)}
@@ -373,6 +654,8 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
         onChange={handleFormChange}
         isEditing={editingIndex !== null}
       />
+      </>
+      )}
     </div>
   )
 }

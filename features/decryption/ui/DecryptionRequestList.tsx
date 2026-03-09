@@ -8,9 +8,36 @@ import { useDecryptionRequests } from "../hooks/useDecryption"
 import { Shield, Clock, CheckCircle, XCircle } from "lucide-react"
 import { HelpHint } from "@/components/ui/help-hint"
 
-export function DecryptionRequestList() {
+const PREVIEW_REQUESTS = [
+  {
+    id: "dec-preview-1",
+    target_type: "post",
+    reason: "疑似偽造訊息需要追查發布者",
+    status: "pending",
+    created_at: new Date().toISOString(),
+    reviewed_at: null,
+    review_note: null,
+  },
+  {
+    id: "dec-preview-2",
+    target_type: "comment",
+    reason: "留言涉及人身攻擊，需進一步處理",
+    status: "approved",
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+    reviewed_at: new Date(Date.now() - 43200000).toISOString(),
+    review_note: "已完成覆核，進入追蹤流程",
+  },
+]
+
+interface DecryptionRequestListProps {
+  isPreviewMode?: boolean
+}
+
+export function DecryptionRequestList({ isPreviewMode = false }: DecryptionRequestListProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const { requests, isLoading } = useDecryptionRequests(statusFilter === "all" ? {} : { status: statusFilter })
+  const previewFiltered = PREVIEW_REQUESTS.filter((r) => statusFilter === "all" || r.status === statusFilter)
+  const displayedRequests = isPreviewMode ? previewFiltered : requests
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -40,7 +67,7 @@ export function DecryptionRequestList() {
     }
   }
 
-  if (isLoading) {
+  if (!isPreviewMode && isLoading) {
     return <div className="text-center py-8 text-muted-foreground">載入中...</div>
   }
 
@@ -91,9 +118,9 @@ export function DecryptionRequestList() {
         </Button>
       </div>
 
-      {requests && requests.length > 0 ? (
+      {displayedRequests && displayedRequests.length > 0 ? (
         <div className="space-y-3">
-          {requests.map((request: any) => (
+          {displayedRequests.map((request: any) => (
             <Card key={request.id} className="p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1">

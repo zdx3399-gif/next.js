@@ -8,7 +8,7 @@ import { MaintenanceManagementAdmin } from "@/features/maintenance/ui/Maintenanc
 import { FinanceManagementAdmin } from "@/features/finance/ui/FinanceManagementAdmin"
 import { VisitorManagementAdmin } from "@/features/visitors/ui/VisitorManagementAdmin"
 import { MeetingManagementAdmin } from "@/features/meetings/ui/MeetingManagementAdmin"
-import { EmergencyManagementAdmin } from "@/features/emergencies/ui/EmergencyManagementAdmin"
+// import { EmergencyManagementAdmin } from "@/features/emergencies/ui/EmergencyManagementAdmin"
 import { FacilityManagementAdmin } from "@/features/facilities/ui/FacilityManagementAdmin"
 import { ResidentManagementAdmin } from "@/features/residents/ui/ResidentManagementAdmin"
 import { AnnouncementDetailsAdmin } from "@/features/announcements/ui/AnnouncementDetailsAdmin"
@@ -27,6 +27,8 @@ import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCa
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getSupabaseClient } from "@/lib/supabase"
 import type { User } from "@/features/profile/api/profile"
+import { syncRolePermissionsFromSupabase } from "@/lib/role-permission-service"
+import type { Announcement } from "@/features/announcements/api/announcements"
 
 type Section =
   | "dashboard"
@@ -54,7 +56,11 @@ export default function AdminPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [currentSlide, setCurrentSlide] = useState(0)
-  const { announcements, loading: announcementsLoading, reload } = useAnnouncements(false)
+  const { announcements, loading: announcementsLoading, reload } = useAnnouncements(
+    false,
+    null,
+    !currentUser || currentUser.role === "admin",
+  )
 
   useEffect(() => {
     const initAuth = async () => {
@@ -66,6 +72,10 @@ export default function AdminPage() {
 
       try {
         const user = JSON.parse(storedUser)
+        if (user.role === "vendor") {
+          user.role = "guard"
+          localStorage.setItem("currentUser", JSON.stringify(user))
+        }
 
         if (!shouldUseBackend(user.role as UserRole)) {
           router.push("/dashboard")
@@ -78,6 +88,14 @@ export default function AdminPage() {
           setCurrentUser(user)
           return
         }
+
+        if (user.role === "admin") {
+          // Security policy: admin should not read tenant data directly from DB.
+          setCurrentUser(user)
+          return
+        }
+
+        await syncRolePermissionsFromSupabase()
 
         const { data: userDataArray, error } = await supabase
           .from("profiles")
@@ -130,6 +148,12 @@ export default function AdminPage() {
       router.push("/dashboard")
     }
   }
+  const switchToResidentPreview = () => {
+    if (currentUser?.role === "admin") {
+      localStorage.setItem("currentUser", JSON.stringify({ ...currentUser, role: "admin" }))
+      router.push("/dashboard")
+    }
+  }
 
   const toggleSidebar = () => {
     if (window.innerWidth >= 1024) {
@@ -155,7 +179,7 @@ export default function AdminPage() {
     { id: "packages", icon: "inventory_2", label: "包裹管理" },
     { id: "visitors", icon: "how_to_reg", label: "訪客管理" },
     { id: "meetings", icon: "event", label: "會議記錄" },
-    { id: "emergencies", icon: "emergency", label: "緊急事件管理" },
+    // { id: "emergencies", icon: "emergency", label: "緊急事件管理" },
     { id: "facilities", icon: "meeting_room", label: "設施管理" },
     { id: "community", icon: "forum", label: "社區討論管理" },
     { id: "knowledge-base", icon: "school", label: "知識庫管理" },
@@ -170,6 +194,27 @@ export default function AdminPage() {
 
   const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection, false) : false
   const isPreviewMode = currentUser ? isAdminPreviewMode(currentUser.role as UserRole, currentSection as any) : false
+  const isAdminUser = currentUser?.role === "admin"
+  const previewAnnouncements: Announcement[] = [
+    {
+      id: "admin-preview-a1",
+      title: "測試資料",
+      content: "測試資料",
+      created_at: new Date().toISOString(),
+      status: "published",
+      author_name: "測試資料",
+      image_url: "",
+    },
+    {
+      id: "admin-preview-a2",
+      title: "測試資料",
+      content: "測試資料",
+      created_at: new Date(Date.now() - 86400000).toISOString(),
+      status: "published",
+      author_name: "測試資料",
+      image_url: "",
+    },
+  ]
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[var(--theme-gradient-from)] to-[var(--theme-gradient-to)]">
@@ -239,7 +284,16 @@ export default function AdminPage() {
                 className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-2 border-[var(--theme-border-accent)] rounded-lg text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all font-semibold text-xs sm:text-sm"
               >
                 <span className="material-icons text-base sm:text-lg">home</span>
-                <span className="hidden sm:inline">住戶功能</span>
+                <span>切換住戶介面</span>
+              </button>
+            )}
+            {currentUser?.role === "admin" && (
+              <button
+                onClick={switchToResidentPreview}
+                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-2 border-[var(--theme-border-accent)] rounded-lg text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all font-semibold text-xs sm:text-sm"
+              >
+                <span className="material-icons text-base sm:text-lg">home</span>
+                <span>切換住戶介面</span>
               </button>
             )}
             <button
@@ -266,10 +320,15 @@ export default function AdminPage() {
             </div>
           ) : currentSection === "dashboard" ? (
             <div className="space-y-4">
-              {announcements.length > 0 && (
+              <AdminPreviewBanner show={isPreviewMode} />
+
+              {!isAdminUser && announcements.length > 0 && (
                 <AnnouncementCarousel announcements={announcements} loading={announcementsLoading} />
               )}
 
+              {isAdminUser && <AnnouncementCarousel announcements={previewAnnouncements} loading={false} />}
+
+              {/* Emergency panel (temporarily disabled)
               <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-4 sm:p-6">
                 <h2 className="flex items-center gap-2 text-lg sm:text-xl font-bold text-[var(--theme-danger)] mb-4">
                   <span className="material-icons">emergency</span>
@@ -292,6 +351,7 @@ export default function AdminPage() {
                   ))}
                 </div>
               </div>
+              */}
             </div>
           ) : currentSection === "visitors" ? (
             <>
@@ -319,18 +379,25 @@ export default function AdminPage() {
               <VoteManagementAdmin isPreviewMode={isPreviewMode} />
             </>
           ) : currentSection === "announcement-details" ? (
-            <AnnouncementDetailsAdmin onClose={() => setCurrentSection("dashboard")} currentUser={currentUser} />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <AnnouncementDetailsAdmin
+                onClose={() => setCurrentSection("dashboard")}
+                currentUser={currentUser}
+                isPreviewMode={isPreviewMode}
+              />
+            </>
           ) : currentSection === "meetings" ? (
             <>
               <AdminPreviewBanner show={isPreviewMode} />
               <MeetingManagementAdmin isPreviewMode={isPreviewMode} />
             </>
-          ) : currentSection === "emergencies" ? (
+          ) /* : currentSection === "emergencies" ? (
             <>
               <AdminPreviewBanner show={isPreviewMode} />
               <EmergencyManagementAdmin currentUserName={currentUser?.name} isPreviewMode={isPreviewMode} />
             </>
-          ) : currentSection === "facilities" ? (
+          ) */ : currentSection === "facilities" ? (
             <>
               <AdminPreviewBanner show={isPreviewMode} />
               <FacilityManagementAdmin isPreviewMode={isPreviewMode} />
@@ -341,7 +408,10 @@ export default function AdminPage() {
               <ResidentManagementAdmin isPreviewMode={isPreviewMode} />
             </>
           ) : currentSection === "announcements" ? (
-            <AnnouncementManagementAdmin />
+            <>
+              <AdminPreviewBanner show={isPreviewMode} />
+              <AnnouncementManagementAdmin isPreviewMode={isPreviewMode} />
+            </>
           ) : currentSection === "community" ? (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
               <AdminPreviewBanner show={isPreviewMode} />
@@ -375,7 +445,7 @@ export default function AdminPage() {
                 <span className="material-icons">history</span>
                 稽核紀錄
               </h2>
-              <AuditLogViewer />
+              <AuditLogViewer isPreviewMode={isPreviewMode} />
             </div>
           ) : currentSection === "decryption" ? (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
@@ -396,12 +466,10 @@ export default function AdminPage() {
                     <p className="text-sm text-[var(--theme-text-secondary)] mb-3">
                       審核新進的解密申請，通過後將送交系統管理員覆核
                     </p>
-                    <DecryptionReviewPanel 
-                      reviewerId={currentUser?.id || ""} 
-                      reviewerRole="committee"
-                    />
+                    <DecryptionReviewPanel reviewerId={currentUser?.id || ""} reviewerRole="committee" isPreviewMode={false} />
                   </div>
                 )}
+
                 {/* 系統管理員覆核區（第二層）- 只有 admin 可以操作 */}
                 {currentUser?.role === "admin" && (
                   <div>
@@ -414,15 +482,13 @@ export default function AdminPage() {
                     <p className="text-sm text-[var(--theme-text-secondary)] mb-3">
                       覆核管委會已通過的解密申請，確認後將解密作者身份
                     </p>
-                    <DecryptionReviewPanel 
-                      reviewerId={currentUser?.id || ""} 
-                      reviewerRole="admin"
-                    />
+                    <DecryptionReviewPanel reviewerId={currentUser?.id || ""} reviewerRole="admin" isPreviewMode={false} />
                   </div>
                 )}
+
                 <div>
                   <h3 className="text-lg font-semibold mb-3 text-[var(--theme-text-primary)]">所有申請記錄</h3>
-                  <DecryptionRequestList />
+                  <DecryptionRequestList isPreviewMode={false} />
                 </div>
               </div>
             </div>

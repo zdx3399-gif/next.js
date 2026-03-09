@@ -1,4 +1,5 @@
-export type UserRole = "resident" | "guard" | "committee" | "vendor" | "admin"
+export type UserRole = "resident" | "guard" | "committee" | "admin"
+export type PermissionMode = "resident" | "admin"
 
 export type Section =
   | "dashboard"
@@ -20,6 +21,32 @@ export type Section =
   | "moderation"
   | "audit-logs"
   | "decryption"
+
+export const USER_ROLES: UserRole[] = ["resident", "guard", "committee", "admin"]
+
+export const CUSTOMIZABLE_SECTIONS: Section[] = [
+  "profile",
+  "announcements",
+  "announcement-details",
+  "votes",
+  "maintenance",
+  "finance",
+  "residents",
+  "packages",
+  "visitors",
+  "meetings",
+  "emergencies",
+  "facilities",
+  "community",
+  "knowledge-base",
+  "handover-knowledge",
+  "moderation",
+  "audit-logs",
+  "decryption",
+]
+
+const ROLE_PERMISSION_STORAGE_KEY = "customRolePermissionsByMode"
+type RolePermissionOverrides = Record<PermissionMode, Partial<Record<UserRole, Section[]>>>
 
 // Define which sections each role can access
 const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
@@ -63,9 +90,6 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "decryption",
   ],
 
-  // 廠商 (Vendor): Backend - maintenance only
-  vendor: ["dashboard", "maintenance"],
-
   // 系統管理員 (Admin): 可看所有功能 UI，但用戶隱私資料會被遮蔽
   // 主要負責：解密申請覆核（第二層）、系統監控、稽核紀錄
   admin: [
@@ -96,6 +120,10 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
 
 // Admin 可以存取但只能預覽（不能看到真實資料）的區塊
 export const ADMIN_PREVIEW_ONLY_SECTIONS: Section[] = [
+  "dashboard",
+  "profile",
+  "announcements",
+  "announcement-details",
   "residents",
   "community",
   "moderation",
@@ -107,21 +135,20 @@ export const ADMIN_PREVIEW_ONLY_SECTIONS: Section[] = [
   "facilities",
   "knowledge-base",
   "handover-knowledge",
-]
-
-// Admin 可以正常操作的區塊（解密覆核、稽核紀錄）
-export const ADMIN_FULL_ACCESS_SECTIONS: Section[] = [
-  "dashboard",
-  "profile",
-  "announcements",
-  "announcement-details",
+  "packages",
+  "visitors",
   "decryption",
   "audit-logs",
 ]
 
+// Admin 可以正常操作的區塊（解密覆核、稽核紀錄）
+export const ADMIN_FULL_ACCESS_SECTIONS: Section[] = [
+  // Security policy: admin is UI preview only and cannot access real database records.
+]
+
 // 檢查 admin 是否為預覽模式（只能看 UI，不能看真實資料）
 export function isAdminPreviewMode(role: UserRole, section: Section): boolean {
-  return role === "admin" && ADMIN_PREVIEW_ONLY_SECTIONS.includes(section)
+  return role === "admin"
 }
 
 // 檢查是否可以修改資料（admin 在預覽模式下不能修改）
@@ -199,21 +226,120 @@ const COMMITTEE_RESIDENT_PERMISSIONS: Section[] = [
   "handover-knowledge",
 ]
 
-export function canAccessSection(role: UserRole, section: Section, isResidentMode = false): boolean {
-  if (role === "committee" && isResidentMode) {
-    return COMMITTEE_RESIDENT_PERMISSIONS.includes(section)
-  }
-
-  const allowedSections = ROLE_PERMISSIONS[role] || []
-  return allowedSections.includes(section)
+function normalizeOverrideSections(rawSections: unknown): Section[] {
+  if (!Array.isArray(rawSections)) return []
+  return rawSections.filter((section): section is Section => {
+    return typeof section === "string" && CUSTOMIZABLE_SECTIONS.includes(section as Section)
+  })
 }
 
-export function getAllowedSections(role: UserRole, isResidentMode = false): Section[] {
+function getEmptyOverrides(): RolePermissionOverrides {
+  return { resident: {}, admin: {} }
+}
+
+function getModeKey(isResidentMode = false): PermissionMode {
+  return isResidentMode ? "resident" : "admin"
+}
+
+function getStoredRolePermissionOverrides(): RolePermissionOverrides {
+  if (typeof window === "undefined") return getEmptyOverrides()
+
+  try {
+    const raw = window.localStorage.getItem(ROLE_PERMISSION_STORAGE_KEY)
+    if (!raw) return getEmptyOverrides()
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const overrides: RolePermissionOverrides = getEmptyOverrides()
+
+    // Backward compatibility: old shape { role: Section[] }
+    const looksLegacy = USER_ROLES.some((role) => Array.isArray(parsed[role]))
+    if (looksLegacy) {
+      for (const role of USER_ROLES) {
+        if (role in parsed) {
+          overrides.admin[role] = normalizeOverrideSections(parsed[role])
+        }
+      }
+      return overrides
+    }
+
+    for (const mode of ["resident", "admin"] as const) {
+      const modeBlock = parsed[mode]
+      if (!modeBlock || typeof modeBlock !== "object") continue
+      for (const role of USER_ROLES) {
+        if (role in (modeBlock as Record<string, unknown>)) {
+          overrides[mode][role] = normalizeOverrideSections((modeBlock as Record<string, unknown>)[role])
+        }
+      }
+    }
+
+    return overrides
+  } catch {
+    return getEmptyOverrides()
+  }
+}
+
+function getBaseAllowedSections(role: UserRole, isResidentMode = false): Section[] {
   if (role === "committee" && isResidentMode) {
     return COMMITTEE_RESIDENT_PERMISSIONS
   }
 
   return ROLE_PERMISSIONS[role] || []
+}
+
+export function setRolePermissionOverrides(role: UserRole, sections: Section[], isResidentMode = false): void {
+  if (typeof window === "undefined") return
+
+  const mode = getModeKey(isResidentMode)
+  const current = getStoredRolePermissionOverrides()
+  current[mode][role] = normalizeOverrideSections(sections)
+  window.localStorage.setItem(ROLE_PERMISSION_STORAGE_KEY, JSON.stringify(current))
+}
+
+export function clearRolePermissionOverrides(role?: UserRole, isResidentMode?: boolean): void {
+  if (typeof window === "undefined") return
+
+  if (!role && isResidentMode === undefined) {
+    window.localStorage.removeItem(ROLE_PERMISSION_STORAGE_KEY)
+    return
+  }
+
+  const current = getStoredRolePermissionOverrides()
+
+  if (!role && isResidentMode !== undefined) {
+    const mode = getModeKey(isResidentMode)
+    current[mode] = {}
+  } else if (role && isResidentMode !== undefined) {
+    const mode = getModeKey(isResidentMode)
+    delete current[mode][role]
+  } else if (role) {
+    delete current.admin[role]
+    delete current.resident[role]
+  }
+
+  window.localStorage.setItem(ROLE_PERMISSION_STORAGE_KEY, JSON.stringify(current))
+}
+
+export function getRolePermissionOverride(role: UserRole, isResidentMode = false): Section[] | null {
+  const mode = getModeKey(isResidentMode)
+  const overrides = getStoredRolePermissionOverrides()
+  if (!(role in overrides[mode])) return null
+  return overrides[mode][role] || []
+}
+
+export function canAccessSection(role: UserRole, section: Section, isResidentMode = false): boolean {
+  const allowedSections = getAllowedSections(role, isResidentMode)
+  return allowedSections.includes(section)
+}
+
+export function getAllowedSections(role: UserRole, isResidentMode = false): Section[] {
+  const base = getBaseAllowedSections(role, isResidentMode)
+
+  const override = getRolePermissionOverride(role, isResidentMode)
+  if (override) {
+    return ["dashboard", ...override]
+  }
+
+  return base
 }
 
 export function shouldUseBackend(role: UserRole): boolean {
@@ -226,7 +352,6 @@ export function getRoleLabel(role: UserRole): string {
     resident: "租戶",
     guard: "警衛",
     committee: "管委會",
-    vendor: "廠商",
     admin: "管理員",
   }
   return roleLabels[role] || "未知"

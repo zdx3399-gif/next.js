@@ -214,11 +214,11 @@ const getRelationshipLabel = (relationship?: string): string => {
 // 預覽模式的模擬資料
 const PREVIEW_PACKAGES: { pending: Package[]; pickedUp: Package[] } = {
   pending: [
-    { id: "preview-1", courier: "黑貓宅急便", recipient_name: "王**", recipient_room: "A棟 5樓 501室", tracking_number: "TW***123", arrived_at: new Date().toISOString(), status: "pending" as const },
-    { id: "preview-2", courier: "郵局", recipient_name: "李**", recipient_room: "B棟 3樓 302室", tracking_number: "PO***456", arrived_at: new Date().toISOString(), status: "pending" as const },
+    { id: "preview-1", courier: "測試資料", recipient_name: "測試資料", recipient_room: "測試資料", tracking_number: "測試資料", arrived_at: new Date().toISOString(), status: "pending" as const },
+    { id: "preview-2", courier: "測試資料", recipient_name: "測試資料", recipient_room: "測試資料", tracking_number: "測試資料", arrived_at: new Date().toISOString(), status: "pending" as const },
   ],
   pickedUp: [
-    { id: "preview-3", courier: "UPS", recipient_name: "張**", recipient_room: "A棟 8樓 801室", tracking_number: "UP***789", arrived_at: new Date(Date.now() - 86400000).toISOString(), picked_up_at: new Date().toISOString(), picked_up_by: "張**", status: "picked_up" as const },
+    { id: "preview-3", courier: "測試資料", recipient_name: "測試資料", recipient_room: "測試資料", tracking_number: "測試資料", arrived_at: new Date(Date.now() - 86400000).toISOString(), picked_up_at: new Date().toISOString(), picked_up_by: "測試資料", status: "picked_up" as const },
   ],
 }
 

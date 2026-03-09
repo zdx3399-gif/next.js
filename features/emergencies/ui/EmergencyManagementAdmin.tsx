@@ -21,8 +21,8 @@ const emergencyTypes = [
 
 // 預覽模式的模擬資料
 const PREVIEW_EMERGENCIES = [
-  { id: "preview-1", type: "救護車119", time: new Date().toISOString(), by: "王**", reported_by_name: "王**", note: "醫療緊急狀況" },
-  { id: "preview-2", type: "可疑人員", time: new Date(Date.now() - 3600000).toISOString(), by: "管理員", reported_by_name: "管理員", note: "陌生人員闖入警告" },
+  { id: "preview-1", type: "測試資料", time: new Date().toISOString(), by: "測試資料", reported_by_name: "測試資料", note: "測試資料" },
+  { id: "preview-2", type: "測試資料", time: new Date(Date.now() - 3600000).toISOString(), by: "測試資料", reported_by_name: "測試資料", note: "測試資料" },
 ]
 
 export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = false }: EmergencyManagementAdminProps) {

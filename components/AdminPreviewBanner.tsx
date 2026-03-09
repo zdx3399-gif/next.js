@@ -21,10 +21,10 @@ export function AdminPreviewBanner({ show }: AdminPreviewBannerProps) {
             系統管理員預覽模式
           </h4>
           <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-            您正在以系統管理員身份預覽此頁面。為保護用戶隱私，實際社區資料已被遮蔽，且您無法進行任何修改操作。
+            您正在以系統管理員身份預覽此頁面。此頁面目前顯示測試資料，不會讀取真實住戶資料。
           </p>
           <p className="text-xs text-amber-600/70 dark:text-amber-400/70 mt-2">
-            如需查看或管理實際資料，請聯繫管委會成員。
+            預覽操作僅供介面確認與流程檢視。
           </p>
         </div>
       </div>

@@ -72,6 +72,33 @@ const categoryBadgeClassMap: Record<string, string> = {
   emergency: "bg-red-500/20 text-red-500 border-red-500/50",
 }
 
+const PREVIEW_HANDOVER_CARDS: HandoverKnowledgeCard[] = [
+  {
+    id: "preview-handover-1",
+    title: "測試資料",
+    summary: "測試資料",
+    category: "visitor",
+    status: "active",
+    created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 1 * 86400000).toISOString(),
+    view_count: 86,
+    helpful_count: 18,
+    not_helpful_count: 1,
+  },
+  {
+    id: "preview-handover-2",
+    title: "測試資料",
+    summary: "測試資料",
+    category: "fee",
+    status: "unverified",
+    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 3 * 86400000).toISOString(),
+    view_count: 54,
+    helpful_count: 10,
+    not_helpful_count: 0,
+  },
+]
+
 export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: HandoverKnowledgeAdminProps) {
   const [cards, setCards] = useState<HandoverKnowledgeCard[]>([])
   const [loading, setLoading] = useState(true)
@@ -91,6 +118,21 @@ export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: H
 
   const loadCards = useCallback(async () => {
     setLoading(true)
+    if (isPreviewMode) {
+      const filtered = PREVIEW_HANDOVER_CARDS.filter((card) => {
+        const matchCategory = category === "all" || card.category === category
+        const matchStatus = status === "all" || card.status === status
+        const matchSearch =
+          !search.trim() ||
+          card.title.toLowerCase().includes(search.trim().toLowerCase()) ||
+          card.summary.toLowerCase().includes(search.trim().toLowerCase())
+        return matchCategory && matchStatus && matchSearch
+      })
+      setCards(filtered)
+      setLoading(false)
+      return
+    }
+
     try {
       const data = await getHandoverCards({ category, status, search: search.trim() || undefined })
       setCards(data)
@@ -100,13 +142,17 @@ export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: H
     } finally {
       setLoading(false)
     }
-  }, [category, status, search])
+  }, [category, isPreviewMode, search, status])
 
   useEffect(() => {
     loadCards()
   }, [loadCards])
 
   const handleCreateCard = async () => {
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
     if (!currentUser) return
     if (!formData.title.trim() || !formData.summary.trim()) {
       alert("請填寫標題與摘要")
@@ -144,6 +190,10 @@ export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: H
   }
 
   const handleEditCard = async () => {
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
     if (!selectedCard) return
     if (!formData.title.trim() || !formData.summary.trim()) {
       alert("請填寫標題與摘要")
@@ -175,6 +225,10 @@ export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: H
   }
 
   const handleDeleteCard = async () => {
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
     if (!selectedCard) return
 
     setSubmitting(true)

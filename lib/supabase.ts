@@ -41,6 +41,16 @@ export function createTenantClient() {
 
 export function getSupabaseClient() {
   try {
+    if (typeof window !== "undefined") {
+      const currentUserRaw = localStorage.getItem("currentUser")
+      if (currentUserRaw) {
+        const currentUser = JSON.parse(currentUserRaw) as { role?: string }
+        if (currentUser?.role === "admin") {
+          return null
+        }
+      }
+    }
+
     const config = getTenantConfigFromStorage()
     if (!config) {
       return null

@@ -107,13 +107,85 @@ const POST_STATUS_HELP =
 const QUEUE_STATUS_HELP =
   "審核隊列狀態說明：\n• 審核待處理 = moderation_queue.status 為 pending 或 in_review。\n• 審核已完成 = moderation_queue.status 為 resolved。\n• 隊列依 priority 及建立時間排序，優先處理 urgent/high。\n• 處理完成後會更新案件狀態並可在已完成頁籤追蹤處置結果。"
 
+const PREVIEW_POSTS: CommunityPost[] = [
+  {
+    id: "preview-post-1",
+    author_id: "preview-author-1",
+    author_name: "測試資料",
+    display_name: "測試資料",
+    is_anonymous: false,
+    anonymous_mode: "none",
+    title: "測試資料",
+    content: "測試資料",
+    category: "alert",
+    tags: ["測試資料"],
+    status: "published",
+    created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+    view_count: 126,
+    like_count: 34,
+    comment_count: 12,
+    ai_risk_level: "low",
+    ai_risk_reason: "測試資料",
+  } as CommunityPost,
+  {
+    id: "preview-post-2",
+    author_id: "preview-author-2",
+    author_name: "測試資料",
+    display_name: "測試資料",
+    is_anonymous: false,
+    anonymous_mode: "none",
+    title: "測試資料",
+    content: "測試資料",
+    category: "howto",
+    tags: ["測試資料"],
+    status: "pending",
+    created_at: new Date(Date.now() - 27 * 3600 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 27 * 3600 * 1000).toISOString(),
+    view_count: 58,
+    like_count: 9,
+    comment_count: 4,
+    ai_risk_level: "medium",
+    ai_risk_reason: "測試資料",
+  } as CommunityPost,
+]
+
+const PREVIEW_QUEUE: ModerationQueueItem[] = [
+  {
+    id: "preview-queue-1",
+    item_type: "post",
+    item_id: "preview-post-2",
+    priority: "high",
+    status: "pending",
+    ai_risk_summary: "測試資料",
+    ai_suggested_action: "approve",
+    created_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
+    deadline: new Date(Date.now() + 20 * 3600 * 1000).toISOString(),
+    post: PREVIEW_POSTS[1],
+  },
+  {
+    id: "preview-queue-2",
+    item_type: "post",
+    item_id: "preview-post-1",
+    priority: "medium",
+    status: "resolved",
+    ai_risk_summary: "測試資料",
+    ai_suggested_action: "approve",
+    created_at: new Date(Date.now() - 30 * 3600 * 1000).toISOString(),
+    resolved_at: new Date(Date.now() - 12 * 3600 * 1000).toISOString(),
+    resolution: "approved",
+    post: PREVIEW_POSTS[0],
+  },
+]
+
 export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: CommunityBoardAdminProps) {
   const [activeTab, setActiveTab] = useState("posts")
   
-  // 預覽模式下遮蔽資料的輔助函數
+  // 預覽模式仍顯示完整測試資料，維持與住戶端一致的 UI 體驗
   const maskData = (text: string | null | undefined, type: "title" | "content" | "name" = "content") => {
-    if (!isPreviewMode || !text) return text
-    return `[${type === "title" ? "標題" : type === "name" ? "用戶" : "內容"}已遮蔽 - 系統管理員無權查看]`
+    void type
+    if (!text) return text
+    return text
   }
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [moderationQueue, setModerationQueue] = useState<ModerationQueueItem[]>([])
@@ -144,6 +216,28 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
 
   const loadPosts = async () => {
     setLoading(true)
+    if (isPreviewMode) {
+      const filteredPreview = PREVIEW_POSTS.filter((post) => {
+        const matchCategory = selectedCategory === "all" || post.category === selectedCategory
+        const matchStatus = selectedStatus === "all" || post.status === selectedStatus
+        return matchCategory && matchStatus
+      })
+
+      setPosts(filteredPreview)
+      setStats({
+        total: PREVIEW_POSTS.length,
+        published: PREVIEW_POSTS.filter((p) => p.status === "published").length,
+        pending: PREVIEW_POSTS.filter((p) => p.status === "pending").length,
+        shadow: PREVIEW_POSTS.filter((p) => p.status === "shadow").length,
+        redacted: PREVIEW_POSTS.filter((p) => p.status === "redacted").length,
+        removed: PREVIEW_POSTS.filter((p) => p.status === "removed" || p.status === "deleted").length,
+        queuePending: PREVIEW_QUEUE.filter((q) => q.status === "pending" || q.status === "in_review").length,
+        queueResolved: PREVIEW_QUEUE.filter((q) => q.status === "resolved").length,
+      })
+      setLoading(false)
+      return
+    }
+
     const supabase = getSupabaseClient()
     if (!supabase) {
       setLoading(false)
@@ -195,6 +289,12 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
   }
 
   const loadModerationQueue = async () => {
+    if (isPreviewMode) {
+      const previewStatusFilter = queueFilter === "pending" ? ["pending", "in_review"] : ["resolved"]
+      setModerationQueue(PREVIEW_QUEUE.filter((item) => previewStatusFilter.includes(item.status)))
+      return
+    }
+
     const supabase = getSupabaseClient()
     if (!supabase) return
 
@@ -237,6 +337,10 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
 
   const handleAction = async () => {
     if (!selectedPost) return
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
 
     const supabase = getSupabaseClient()
     if (!supabase) return
@@ -303,6 +407,11 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
   const handleModerationResolve = async (action: "approve" | "remove" | "reject_report" | "redact" | "shadow") => {
     if (!selectedQueueItem) {
       alert("請選擇要處理的項目")
+      return
+    }
+
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
       return
     }
 
@@ -608,7 +717,7 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
                           <Clock className="w-3 h-3" />
                           {new Date(post.created_at).toLocaleDateString("zh-TW")}
                         </span>
-                        <span>作者: {isPreviewMode ? "***" : (post.display_name || "匿名")}</span>
+                        <span>作者: {post.display_name || "測試使用者"}</span>
                       </div>
 
                       {post.ai_risk_reason && (

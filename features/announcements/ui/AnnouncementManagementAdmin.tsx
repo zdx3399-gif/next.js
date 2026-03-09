@@ -202,9 +202,9 @@ function AnnouncementFormModal({
 
 // 預覽模式的模擬資料
 const PREVIEW_ANNOUNCEMENTS = [
-  { id: "preview-1", title: "社區年度大會通知", content: "本年度區分所有權人會議將於...", author_name: "管委會", status: "published", created_at: new Date().toISOString(), image_url: "" },
-  { id: "preview-2", title: "電梯保養通知", content: "電梯將於下週進行例行保養...", author_name: "管理員", status: "published", created_at: new Date(Date.now() - 86400000).toISOString(), image_url: "" },
-  { id: "preview-3", title: "停車場施工公告", content: "停車場將進行地坪修復工程...", author_name: "管委會", status: "draft", created_at: new Date(Date.now() - 2 * 86400000).toISOString(), image_url: "" },
+  { id: "preview-1", title: "測試資料", content: "測試資料", author_name: "測試資料", status: "published", created_at: new Date().toISOString(), image_url: "" },
+  { id: "preview-2", title: "測試資料", content: "測試資料", author_name: "測試資料", status: "published", created_at: new Date(Date.now() - 86400000).toISOString(), image_url: "" },
+  { id: "preview-3", title: "測試資料", content: "測試資料", author_name: "測試資料", status: "draft", created_at: new Date(Date.now() - 2 * 86400000).toISOString(), image_url: "" },
 ]
 
 interface AnnouncementManagementAdminProps {

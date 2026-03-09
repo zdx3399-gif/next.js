@@ -6,7 +6,7 @@ export interface Resident {
   room?: string // 顯示用，從 units.unit_code 來
   phone: string // 從 profiles 獲取
   email?: string // 從 profiles 獲取
-  role?: "resident" | "committee" | "vendor"
+  role?: "resident" | "committee" | "guard"
   relationship?: "owner" | "family_member" | "tenant" | "household_member"
   created_at?: string
   updated_at?: string
@@ -72,7 +72,7 @@ export async function createResident(
   const supabase = getSupabaseClient()
   if (!supabase) return null
 
-  const normalizedRole = resident.role === "guard" ? "vendor" : resident.role
+  const normalizedRole = resident.role
 
   const insertData: Record<string, unknown> = {
     name: resident.name,
@@ -118,7 +118,7 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
   const supabase = getSupabaseClient()
   if (!supabase) return null
 
-  const normalizedRole = updates.role === "guard" ? "vendor" : updates.role
+  const normalizedRole = updates.role
   const { room, phone, email, profile_id, role, ...dbUpdates } = updates
 
   if (normalizedRole !== undefined) {

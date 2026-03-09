@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -25,7 +25,31 @@ import { HelpHint } from "@/components/ui/help-hint"
 interface DecryptionReviewPanelProps {
   reviewerId: string
   reviewerRole: "admin" | "committee"
+  isPreviewMode?: boolean
 }
+
+const PREVIEW_DECRYPTION_REQUESTS = [
+  {
+    id: "preview-dr-1",
+    target_type: "post",
+    target_id: "post-7788",
+    reason: "內容疑似涉及詐騙招募，需要追溯來源",
+    trigger_condition: "serious_violation",
+    status: "pending",
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "preview-dr-2",
+    target_type: "comment",
+    target_id: "comment-4501",
+    reason: "多名住戶檢舉同一留言，疑似惡意騷擾",
+    trigger_condition: "multiple_reports",
+    status: "committee_approved",
+    committee_approval_notes: "初審確認有必要進入第二層覆核",
+    committee_approved_at: new Date(Date.now() - 7200000).toISOString(),
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+  },
+]
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending: { label: "待管委會初審", color: "bg-yellow-500" },
@@ -41,7 +65,7 @@ const TRIGGER_MAP: Record<string, string> = {
   legal_request: "法律要求",
 }
 
-export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionReviewPanelProps) {
+export function DecryptionReviewPanel({ reviewerId, reviewerRole, isPreviewMode = false }: DecryptionReviewPanelProps) {
   // 根據角色顯��不同的申請
   // committee (第一層): 看 pending 的申請
   // admin (第二層): 看 committee_approved 的申請
@@ -55,6 +79,7 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
   const { review: adminReview, isLoading: isAdminLoading } = useAdminReviewDecryptionRequest()
   const { review: committeeReview, isLoading: isCommitteeLoading } = useCommitteeReviewDecryptionRequest()
   const { getAuthor, authorInfo, isLoading: isAuthorLoading } = useDecryptedAuthorInfo()
+  const [previewAuthorInfo, setPreviewAuthorInfo] = useState<any>(null)
   
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null)
   const [reviewNote, setReviewNote] = useState("")
@@ -62,8 +87,22 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
   const [selectedForView, setSelectedForView] = useState<any>(null)
 
   const isLoading = isAdminLoading || isCommitteeLoading
+  const displayedRequests = useMemo(() => {
+    if (!isPreviewMode) return requests
+    return PREVIEW_DECRYPTION_REQUESTS.filter((request) =>
+      reviewerRole === "committee" ? request.status === "pending" : request.status === "committee_approved",
+    )
+  }, [isPreviewMode, requests, reviewerRole])
+  const displayedAuthorInfo = isPreviewMode ? previewAuthorInfo : authorInfo
 
   const handleReview = async (requestId: string, approved: boolean) => {
+    if (isPreviewMode) {
+      toast.success(approved ? "[預覽] 已核准解密申請" : "[預覽] 已拒絕解密申請")
+      setSelectedRequest(null)
+      setReviewNote("")
+      return
+    }
+
     try {
       if (reviewerRole === "admin") {
         await adminReview(requestId, {
@@ -88,6 +127,18 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
   }
 
   const handleViewAuthor = async (request: any) => {
+    if (isPreviewMode) {
+      setPreviewAuthorInfo({
+        full_name: "黃志誠",
+        unit_number: "A-1203",
+        email: "preview.author@example.com",
+        phone: "0912-345-678",
+      })
+      setSelectedForView(request)
+      setShowAuthorDialog(true)
+      return
+    }
+
     try {
       await getAuthor(request.id, reviewerId)
       setSelectedForView(request)
@@ -97,7 +148,7 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
     }
   }
 
-  if (isLoadingRequests) {
+  if (!isPreviewMode && isLoadingRequests) {
     return <div className="text-center py-8 text-muted-foreground">載入中...</div>
   }
 
@@ -147,13 +198,13 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
       </div>
 
       {/* 申請列表 */}
-      {requests.length === 0 ? (
+      {displayedRequests.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
           目前沒有待審核的解密申請
         </div>
       ) : (
         <div className="space-y-4">
-          {requests.map((request: any) => {
+          {displayedRequests.map((request: any) => {
             const status = STATUS_MAP[request.status] || { label: request.status, color: "bg-gray-500" }
             
             return (
@@ -337,24 +388,24 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole }: DecryptionRe
             </DialogDescription>
           </DialogHeader>
           
-          {authorInfo ? (
+          {displayedAuthorInfo ? (
             <div className="space-y-3 p-4 bg-muted rounded-lg">
               <div>
                 <span className="text-muted-foreground">姓名:</span>{" "}
-                <span className="font-medium">{authorInfo.full_name}</span>
+                <span className="font-medium">{displayedAuthorInfo.full_name}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">戶號:</span>{" "}
-                <span className="font-medium">{authorInfo.unit_number}</span>
+                <span className="font-medium">{displayedAuthorInfo.unit_number}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">Email:</span>{" "}
-                <span className="font-medium">{authorInfo.email}</span>
+                <span className="font-medium">{displayedAuthorInfo.email}</span>
               </div>
-              {authorInfo.phone && (
+              {displayedAuthorInfo.phone && (
                 <div>
                   <span className="text-muted-foreground">電話:</span>{" "}
-                  <span className="font-medium">{authorInfo.phone}</span>
+                  <span className="font-medium">{displayedAuthorInfo.phone}</span>
                 </div>
               )}
               {selectedForView?.accessible_until && (

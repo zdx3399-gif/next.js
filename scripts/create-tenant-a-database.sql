@@ -305,3 +305,48 @@ VALUES
   ((SELECT id FROM votes WHERE title = '是否增設監視器' LIMIT 1), (SELECT id FROM profiles WHERE email = 'resident3@tenant-a.com' LIMIT 1), '陳志明', '反對'),
   ((SELECT id FROM votes WHERE title = '是否同意調整管理費' LIMIT 1), (SELECT id FROM profiles WHERE email = 'admin@tenant-a.com' LIMIT 1), '王大明', '同意'),
   ((SELECT id FROM votes WHERE title = '是否同意調整管理費' LIMIT 1), (SELECT id FROM profiles WHERE email = 'resident1@tenant-a.com' LIMIT 1), '李小華', '棄權');
+
+-- Routine task templates (rule table)
+CREATE TABLE IF NOT EXISTS routine_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'quarterly', 'yearly')),
+  assignee_role TEXT NOT NULL CHECK (assignee_role IN ('resident', 'committee', 'guard', 'admin')),
+  action_link TEXT NOT NULL DEFAULT '/admin',
+  kms_link TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Routine task instances (actual to-do items)
+CREATE TABLE IF NOT EXISTS routine_instances (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  template_id UUID NOT NULL REFERENCES routine_templates(id) ON DELETE CASCADE,
+  due_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
+  assignee_role TEXT NOT NULL CHECK (assignee_role IN ('resident', 'committee', 'guard', 'admin')),
+  completed_at TIMESTAMP WITH TIME ZONE,
+  completed_by UUID,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(template_id, due_date)
+);
+
+-- Notification events for bell reminders (not a central to-do table)
+CREATE TABLE IF NOT EXISTS notification_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  message TEXT,
+  module_key TEXT,
+  action_link TEXT,
+  target_role TEXT,
+  target_user_id UUID,
+  payload JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_routine_templates_frequency ON routine_templates(frequency);
+CREATE INDEX IF NOT EXISTS idx_routine_instances_status_due_date ON routine_instances(status, due_date);
+CREATE INDEX IF NOT EXISTS idx_notification_events_created_at ON notification_events(created_at DESC);
+

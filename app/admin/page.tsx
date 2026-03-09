@@ -8,7 +8,7 @@ import { MaintenanceManagementAdmin } from "@/features/maintenance/ui/Maintenanc
 import { FinanceManagementAdmin } from "@/features/finance/ui/FinanceManagementAdmin"
 import { VisitorManagementAdmin } from "@/features/visitors/ui/VisitorManagementAdmin"
 import { MeetingManagementAdmin } from "@/features/meetings/ui/MeetingManagementAdmin"
-// import { EmergencyManagementAdmin } from "@/features/emergencies/ui/EmergencyManagementAdmin"
+import { EmergencyManagementAdmin } from "@/features/emergencies/ui/EmergencyManagementAdmin"
 import { FacilityManagementAdmin } from "@/features/facilities/ui/FacilityManagementAdmin"
 import { ResidentManagementAdmin } from "@/features/residents/ui/ResidentManagementAdmin"
 import { AnnouncementDetailsAdmin } from "@/features/announcements/ui/AnnouncementDetailsAdmin"
@@ -22,13 +22,11 @@ import { DecryptionRequestList } from "@/features/decryption/ui/DecryptionReques
 import { canAccessSection, getRoleLabel, shouldUseBackend, isAdminPreviewMode, type UserRole } from "@/lib/permissions"
 import { AdminPreviewBanner } from "@/components/AdminPreviewBanner"
 import { ProfileDropdown } from "@/features/profile/ui/ProfileDropdown"
-import { useAnnouncements } from "@/features/announcements/hooks/useAnnouncements"
-import { AnnouncementCarousel } from "@/features/announcements/ui/AnnouncementCarousel"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { getSupabaseClient } from "@/lib/supabase"
 import type { User } from "@/features/profile/api/profile"
 import { syncRolePermissionsFromSupabase } from "@/lib/role-permission-service"
-import type { Announcement } from "@/features/announcements/api/announcements"
+import { ActionSpotlightPanel } from "@/features/dashboard/ui/ActionSpotlightPanel"
 
 type Section =
   | "dashboard"
@@ -55,12 +53,6 @@ export default function AdminPage() {
   const [currentSection, setCurrentSection] = useState<Section>("dashboard")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [currentSlide, setCurrentSlide] = useState(0)
-  const { announcements, loading: announcementsLoading, reload } = useAnnouncements(
-    false,
-    null,
-    !currentUser || currentUser.role === "admin",
-  )
 
   useEffect(() => {
     const initAuth = async () => {
@@ -137,6 +129,17 @@ export default function AdminPage() {
     initAuth()
   }, [router])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    const section = params.get("section")
+    if (!section) return
+    const sectionExists = allNavItems.some((item) => item.id === section)
+    if (sectionExists) {
+      setCurrentSection(section as Section)
+    }
+  }, [])
+
   const logout = () => {
     localStorage.removeItem("currentUser")
     router.push("/")
@@ -168,6 +171,24 @@ export default function AdminPage() {
     }
   }
 
+  const navigateByActionLink = (link: string) => {
+    try {
+      const url = new URL(link, window.location.origin)
+      if (url.pathname === "/admin") {
+        const section = url.searchParams.get("section")
+        if (section && allNavItems.some((item) => item.id === section)) {
+          setCurrentSection(section as Section)
+          return
+        }
+      }
+      if (url.pathname !== "/admin") {
+        router.push(`${url.pathname}${url.search}`)
+      }
+    } catch {
+      if (link.startsWith("/")) router.push(link)
+    }
+  }
+
   const allNavItems = [
     { id: "dashboard", icon: "dashboard", label: "首頁" },
     { id: "announcement-details", icon: "article", label: "公告詳情" },
@@ -179,7 +200,7 @@ export default function AdminPage() {
     { id: "packages", icon: "inventory_2", label: "包裹管理" },
     { id: "visitors", icon: "how_to_reg", label: "訪客管理" },
     { id: "meetings", icon: "event", label: "會議記錄" },
-    // { id: "emergencies", icon: "emergency", label: "緊急事件管理" },
+    { id: "emergencies", icon: "emergency", label: "緊急事件管理" },
     { id: "facilities", icon: "meeting_room", label: "設施管理" },
     { id: "community", icon: "forum", label: "社區討論管理" },
     { id: "knowledge-base", icon: "school", label: "知識庫管理" },
@@ -194,27 +215,6 @@ export default function AdminPage() {
 
   const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection, false) : false
   const isPreviewMode = currentUser ? isAdminPreviewMode(currentUser.role as UserRole, currentSection as any) : false
-  const isAdminUser = currentUser?.role === "admin"
-  const previewAnnouncements: Announcement[] = [
-    {
-      id: "admin-preview-a1",
-      title: "測試資料",
-      content: "測試資料",
-      created_at: new Date().toISOString(),
-      status: "published",
-      author_name: "測試資料",
-      image_url: "",
-    },
-    {
-      id: "admin-preview-a2",
-      title: "測試資料",
-      content: "測試資料",
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-      status: "published",
-      author_name: "測試資料",
-      image_url: "",
-    },
-  ]
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[var(--theme-gradient-from)] to-[var(--theme-gradient-to)]">
@@ -321,12 +321,11 @@ export default function AdminPage() {
           ) : currentSection === "dashboard" ? (
             <div className="space-y-4">
               <AdminPreviewBanner show={isPreviewMode} />
-
-              {!isAdminUser && announcements.length > 0 && (
-                <AnnouncementCarousel announcements={announcements} loading={announcementsLoading} />
-              )}
-
-              {isAdminUser && <AnnouncementCarousel announcements={previewAnnouncements} loading={false} />}
+              <ActionSpotlightPanel
+                userId={currentUser?.id}
+                role={currentUser?.role}
+                onNavigate={navigateByActionLink}
+              />
 
               {/* Emergency panel (temporarily disabled)
               <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-4 sm:p-6">
@@ -392,12 +391,12 @@ export default function AdminPage() {
               <AdminPreviewBanner show={isPreviewMode} />
               <MeetingManagementAdmin isPreviewMode={isPreviewMode} />
             </>
-          ) /* : currentSection === "emergencies" ? (
+          ) : currentSection === "emergencies" ? (
             <>
               <AdminPreviewBanner show={isPreviewMode} />
               <EmergencyManagementAdmin currentUserName={currentUser?.name} isPreviewMode={isPreviewMode} />
             </>
-          ) */ : currentSection === "facilities" ? (
+          ) : currentSection === "facilities" ? (
             <>
               <AdminPreviewBanner show={isPreviewMode} />
               <FacilityManagementAdmin isPreviewMode={isPreviewMode} />

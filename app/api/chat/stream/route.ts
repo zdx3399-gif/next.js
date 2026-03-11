@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       };
 
       await chat(message, (status: string) => {
-        sendEvent({ type: 'status', content: status });
+        sendEvent({ type: 'status', status });
       })
         .then((result) => {
           sendEvent({ type: 'result', ...result });

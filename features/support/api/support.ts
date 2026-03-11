@@ -57,7 +57,7 @@ export async function fetchUserChatHistory(userId: string): Promise<ChatMessage[
 // AI 回應邏輯 - 呼叫後端 RAG API
 export async function getAIResponse(message: string): Promise<{ answer: string; images?: string[]; chatId?: number | null } | string> {
   try {
-    const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:3001';
+    const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || '';
     
     const response = await fetch(`${API_URL}/api/chat`, {
       method: 'POST',
@@ -91,7 +91,7 @@ export async function getAIResponseStream(
   onStatus: (status: string) => void
 ): Promise<{ answer: string; images?: string[]; chatId?: number | null } | string> {
   try {
-    const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:3001';
+    const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || '';
 
     const response = await fetch(`${API_URL}/api/chat/stream`, {
       method: 'POST',

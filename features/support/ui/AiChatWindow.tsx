@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useRef, useState, useEffect } from "react"
 import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
+import { ChatFeedback } from "./ChatFeedback"
 
 interface User {
   id?: string
@@ -17,12 +18,15 @@ interface Message {
   type: "user" | "bot"
   text: string
   images?: string[]
+  chatId?: number | null
 }
 
 interface AiChatWindowProps {
   isOpen: boolean
   onClose: () => void
   messages: Message[]
+  isLoading?: boolean
+  thinkingStatus?: string | null
   input: string
   setInput: (value: string) => void
   sendMessage: () => void
@@ -37,6 +41,8 @@ export function AiChatWindow({
   isOpen,
   onClose,
   messages,
+  isLoading,
+  thinkingStatus,
   input,
   setInput,
   sendMessage,
@@ -47,8 +53,19 @@ export function AiChatWindow({
   onDrag,
 }: AiChatWindowProps) {
   const windowRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [ratedChatIds, setRatedChatIds] = useState<Set<number>>(new Set())
+
+  const handleFeedbackSubmit = (chatId: number) => {
+    setRatedChatIds(prev => new Set(prev).add(chatId))
+  }
+
+  // 自動捲動到底部
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, thinkingStatus])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -178,9 +195,31 @@ export function AiChatWindow({
                   ))}
                 </div>
               )}
+              {msg.type === "bot" && msg.chatId && (
+                <ChatFeedback
+                  chatId={msg.chatId}
+                  alreadyRated={ratedChatIds.has(msg.chatId)}
+                  onFeedbackSubmit={handleFeedbackSubmit}
+                />
+              )}
             </div>
           </div>
         ))}
+        {isLoading && thinkingStatus && (
+          <div className="flex justify-start">
+            <div className="max-w-xs p-3 rounded-lg bg-[var(--theme-bg-secondary)] text-[var(--theme-text-muted)]">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex">
+                  <span className="w-1.5 h-1.5 bg-[var(--theme-accent)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-[var(--theme-accent)] rounded-full animate-bounce ml-1" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 bg-[var(--theme-accent)] rounded-full animate-bounce ml-1" style={{ animationDelay: '300ms' }} />
+                </span>
+                <span className="text-sm">{thinkingStatus}</span>
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* 輸入區域 */}
@@ -193,12 +232,14 @@ export function AiChatWindow({
             onKeyPress={(e) => {
               if (e.key === "Enter") sendMessage()
             }}
-            placeholder="輸入訊息..."
-            className="theme-input flex-1 p-2 rounded-lg"
+            placeholder={isLoading ? "AI 正在思考中..." : "輸入訊息..."}
+            disabled={isLoading}
+            className="theme-input flex-1 p-2 rounded-lg disabled:opacity-50"
           />
           <button
             onClick={sendMessage}
-            className="p-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg font-bold hover:opacity-90 transition-all disabled:opacity-500 disabled:cursor-not-allowed"
+            disabled={isLoading}
+            className="p-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="material-icons">send</span>
           </button>

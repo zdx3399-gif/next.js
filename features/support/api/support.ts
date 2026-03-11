@@ -47,7 +47,7 @@ export async function fetchUserChatHistory(userId: string): Promise<ChatMessage[
 }
 
 // AI 回應邏輯 - 呼叫後端 RAG API
-export async function getAIResponse(message: string): Promise<{ answer: string; images?: string[] } | string> {
+export async function getAIResponse(message: string): Promise<{ answer: string; images?: string[]; chatId?: number | null } | string> {
   try {
     const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:3001';
     
@@ -65,13 +65,81 @@ export async function getAIResponse(message: string): Promise<{ answer: string; 
 
     const data = await response.json();
     
-    // 回傳完整物件，包含 answer 和 images
+    // 回傳完整物件，包含 answer、images 和 chatId
     return {
       answer: data.answer || '抱歉，我無法回答這個問題。',
-      images: data.images || []
+      images: data.images || [],
+      chatId: data.chatId || null
     };
   } catch (error) {
     console.error('AI API 錯誤:', error);
+    return '抱歉，AI 服務暫時無法使用，請稍後再試。';
+  }
+}
+
+// AI 串流回應（含思考狀態更新）
+export async function getAIResponseStream(
+  message: string,
+  onStatus: (status: string) => void
+): Promise<{ answer: string; images?: string[]; chatId?: number | null } | string> {
+  try {
+    const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:3001';
+
+    const response = await fetch(`${API_URL}/api/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message }),
+    });
+
+    if (!response.ok) {
+      throw new Error('API 請求失敗');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('無法讀取串流');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // 解析 SSE 格式的行
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // 保留未完成的最後一行
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+
+        try {
+          const payload = JSON.parse(trimmed.slice(6));
+
+          if (payload.type === 'status') {
+            onStatus(payload.status);
+          } else if (payload.type === 'result') {
+            return {
+              answer: payload.answer || '抱歉，我無法回答這個問題。',
+              images: payload.images || [],
+              chatId: payload.chatId || null,
+            };
+          } else if (payload.type === 'error') {
+            throw new Error(payload.error);
+          }
+        } catch (parseErr) {
+          // 忽略解析失敗的行
+        }
+      }
+    }
+
+    return '抱歉，回應中斷，請稍後再試。';
+  } catch (error) {
+    console.error('AI Stream API 錯誤:', error);
     return '抱歉，AI 服務暫時無法使用，請稍後再試。';
   }
 }

@@ -5,6 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { useMaintenance } from "../hooks/useMaintenance"
 import type { MaintenanceFormData } from "../api/maintenance"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface MaintenanceFormProps {
   userId?: string
@@ -53,10 +54,37 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
       <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
         <span className="material-icons">build</span>
         提交維修申請
+        <HelpHint
+          title="住戶端報修申請"
+          description="填寫報修資料後送出，管理端會依內容安排處理。建議資訊越完整越好，可加速派工。"
+          workflow={[
+            "先選維修類型，再填位置與問題描述。",
+            "必要時附上照片後送出申請。",
+            "送出後到維修紀錄追蹤處理狀態。",
+          ]}
+          logic={[
+            "表單資訊完整度會直接影響派工速度與處理精準度。",
+            "送出後會進入管理端維修流程並更新狀態。",
+          ]}
+        />
       </h2>
       <form onSubmit={onFormSubmit} className="space-y-4 max-w-2xl">
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">維修類型</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">維修類型</label>
+            <HelpHint
+              title="住戶端維修類型"
+              description="先分類問題類型（如水電、門窗），可幫助管理端快速指派對應處理人員。"
+              workflow={[
+                "依實際故障性質選擇類型。",
+                "不確定時先選最接近項目並在描述補充。",
+              ]}
+              logic={[
+                "類型是派工分流依據，錯誤分類可能延長處理時間。",
+              ]}
+              align="center"
+            />
+          </div>
           <select
             value={form.type}
             onChange={(e) => setForm({ ...form, type: e.target.value })}
@@ -69,7 +97,21 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
           </select>
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">位置</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">位置</label>
+            <HelpHint
+              title="住戶端位置"
+              description="請填寫明確位置（棟別/樓層/區域），可減少現場尋找時間。"
+              workflow={[
+                "輸入棟別、樓層與區域等關鍵位置。",
+                "若在公共區域可加註附近地標。",
+              ]}
+              logic={[
+                "位置越精準，維修人員越能快速到點處理。",
+              ]}
+              align="center"
+            />
+          </div>
           <input
             type="text"
             value={form.location}
@@ -80,7 +122,21 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
           />
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">問題描述</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">問題描述</label>
+            <HelpHint
+              title="住戶端問題描述"
+              description="建議描述『何時發生、異常現象、影響範圍』，有助於先行判斷嚴重程度。"
+              workflow={[
+                "依序描述發生時間、異常現象與影響範圍。",
+                "如有臨時處理方式也可一併補充。",
+              ]}
+              logic={[
+                "完整描述可降低來回確認成本，提升一次到位率。",
+              ]}
+              align="center"
+            />
+          </div>
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -90,7 +146,21 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
           />
         </div>
         <div>
-          <label className="block text-[var(--theme-text-primary)] mb-2">上傳照片（選填）</label>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-[var(--theme-text-primary)]">上傳照片（選填）</label>
+            <HelpHint
+              title="住戶端照片"
+              description="附上現場照片可提高判斷效率，管理端可更快安排適當工具與人力。"
+              workflow={[
+                "上傳可清楚看見故障點的照片。",
+                "若不方便拍攝可留空改由文字描述。",
+              ]}
+              logic={[
+                "照片屬輔助資訊，可提升前期判斷與備料效率。",
+              ]}
+              align="center"
+            />
+          </div>
           <input
             type="file"
             accept="image/*"

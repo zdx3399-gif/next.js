@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useMaintenance } from "../hooks/useMaintenance"
 import { MaintenanceForm } from "./MaintenanceForm"
+import { HelpHint } from "@/components/ui/help-hint"
 
 interface MaintenanceListProps {
   userId?: string
@@ -44,9 +45,38 @@ export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
           <span className="material-icons">list</span>
           我的維修申請
+          <HelpHint
+            title="住戶端維修紀錄"
+            description="這裡顯示你提交過的維修申請與處理狀態，可用於追蹤進度。"
+            workflow={[
+              "先在上方填寫維修申請並送出。",
+              "回到此清單查看每筆案件的最新狀態與處理人。",
+              "若案件已完成，可比對備註與時間確認是否結案。",
+            ]}
+            logic={[
+              "住戶端清單以你本人的申請為主，避免混入他人資料。",
+              "狀態會跟著管理端流程更新：待處理 → 處理中 → 已完成。",
+            ]}
+          />
         </h2>
 
         <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+            <HelpHint
+              title="住戶端維修搜尋"
+              description="可用設備、項目、描述或申請人關鍵字快速查找申請單。"
+              workflow={[
+                "在搜尋框輸入設備、位置、描述或申請人關鍵字。",
+                "列表會立即篩選出符合條件的案件。",
+                "清空搜尋文字可恢復顯示全部申請紀錄。",
+              ]}
+              logic={[
+                "搜尋同時比對多個欄位，方便快速定位舊案。",
+                "僅影響前端顯示，不會更動原始資料。",
+              ]}
+            />
+          </div>
           <input
             type="text"
             placeholder="搜尋設備、項目、描述或報修人..."
@@ -82,6 +112,23 @@ export function MaintenanceList({ userId, userName }: MaintenanceListProps) {
                   >
                     {item.status === "open" ? "待處理" : item.status === "progress" ? "處理中" : "已完成"}
                   </div>
+                </div>
+                <div className="mb-2 inline-flex items-center gap-2">
+                  <span className="text-xs text-[var(--theme-text-muted)]">狀態說明</span>
+                  <HelpHint
+                    title="住戶端維修狀態"
+                    description="待處理：已送出待分派。處理中：已開始修繕。已完成：案件已結案。"
+                    workflow={[
+                      "看到「待處理」代表案件已建立，等待管理端派工。",
+                      "狀態變成「處理中」表示已安排人員開始修繕。",
+                      "狀態變成「已完成」代表管理端已結案。",
+                    ]}
+                    logic={[
+                      "狀態是由管理端操作派工與結案後推進。",
+                      "住戶端以追蹤為主，不提供直接改狀態操作。",
+                    ]}
+                    align="center"
+                  />
                 </div>
                 {item.description && <div className="text-[var(--theme-text-primary)] mb-2">{item.description}</div>}
                 {item.image_url && (

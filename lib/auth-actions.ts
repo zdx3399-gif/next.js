@@ -4,18 +4,18 @@ import { createClient } from "@supabase/supabase-js"
 
 export type TenantId = "tenant_a" | "tenant_b"
 
-export type UserRole = "resident" | "guard" | "committee" | "vendor" | "admin"
+export type UserRole = "resident" | "guard" | "committee" | "admin"
 
 // Server-side tenant configuration (can access non-public env vars)
 const TENANT_CONFIG = {
   tenant_a: {
-    url: process.env.TENANT_A_SUPABASE_URL || "",
-    anonKey: process.env.TENANT_A_SUPABASE_ANON_KEY || "",
+    url: process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || "",
+    anonKey: process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || "",
     name: "社區 A",
   },
   tenant_b: {
-    url: process.env.TENANT_B_SUPABASE_URL || "",
-    anonKey: process.env.TENANT_B_SUPABASE_ANON_KEY || "",
+    url: process.env.NEXT_PUBLIC_TENANT_B_SUPABASE_URL || "",
+    anonKey: process.env.NEXT_PUBLIC_TENANT_B_SUPABASE_ANON_KEY || "",
     name: "社區 B",
   },
 }
@@ -128,84 +128,56 @@ function parseUnitInput(input: string): ParsedUnit {
   }
 }
 
+import { performLogin } from "./auth-service"
+
 // Server action to detect user tenant and authenticate
 export async function authenticateUser(email: string, password: string) {
   console.log("[v0] Starting authentication for email:", email)
-  const tenants: TenantId[] = ["tenant_a", "tenant_b"]
-  const errors: string[] = []
 
-  for (const tenantId of tenants) {
-    try {
-      console.log(`[v0] Trying to authenticate in ${tenantId}`)
-      const config = validateTenantConfig(tenantId)
+  try {
+    // 直接調用共享的登入邏輯（不用 HTTP fetch，避免 server-side 相對路徑問題）
+    const result = await performLogin(email, password)
 
-      const supabase = createClient(config.url, config.anonKey)
-
-      const { data: users, error } = await supabase
-        .from("profiles")
-        .select(`
-          *,
-          units ( id, unit_code )
-        `)
-        .eq("email", email)
-        .eq("password", password)
-
-      console.log(`[v0] ${tenantId} query result:`, {
-        userCount: users?.length || 0,
-        hasError: !!error,
-        errorMessage: error?.message,
-      })
-
-      if (error) {
-        errors.push(`${config.name}: ${error.message}`)
-        continue
+    // 檢查登入是否成功
+    if (!result.success || !result.user) {
+      console.error("[v0] Login failed:", result.error)
+      return {
+        success: false,
+        error: result.error || result.message || "登入失敗",
       }
-
-      if (users && users.length > 0) {
-        const user = users[0]
-        console.log(`[v0] User found in ${tenantId}:`, user.email)
-        // Found user in this tenant
-        return {
-          success: true,
-          tenantId,
-          tenantConfig: {
-            url: config.url,
-            anonKey: config.anonKey,
-            name: config.name,
-          },
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-            phone: user.phone,
-            room: user.units?.unit_code || "",
-            unit_id: user.unit_id,
-            status: user.status,
-          },
-        }
-      }
-
-      console.log(`[v0] No user found in ${tenantId}`)
-    } catch (err: any) {
-      console.error(`[v0] Error in ${tenantId}:`, err)
-      if (err.message.includes("環境變數未設定")) {
-        return {
-          success: false,
-          error: err.message,
-        }
-      }
-      errors.push(`${tenantId}: ${err.message}`)
     }
-  }
 
-  console.log("[v0] Authentication failed for all tenants")
-  return {
-    success: false,
-    error:
-      errors.length > 0
-        ? `登入失敗：${errors.join("; ")}`
-        : "登入失敗，請檢查您的帳號密碼。此帳號可能不存在於任何社區資料庫中。",
+    // 使用 tenant_a 作為預設租戶（與原邏輯保持一致）
+    const tenantId: TenantId = "tenant_a"
+    const config = validateTenantConfig(tenantId)
+
+    console.log("[v0] User authenticated successfully:", result.user.email)
+
+    return {
+      success: true,
+      tenantId,
+      tenantConfig: {
+        url: config.url,
+        anonKey: config.anonKey,
+        name: config.name,
+      },
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        role: result.user.role,
+        phone: result.user.phone,
+        room: "", // 暫時留空，後續可從 unit_id 查詢
+        unit_id: result.user.unit_id,
+        status: result.user.status,
+      },
+    }
+  } catch (err: any) {
+    console.error("[v0] Authentication error:", err)
+    return {
+      success: false,
+      error: err.message || "登入失敗，伺服器錯誤",
+    }
   }
 }
 
@@ -220,191 +192,66 @@ export async function registerUser(
   relationship: string,
 ) {
   try {
-    console.log(`[v0] Registering user in ${tenantId}:`, email)
+    console.log(`[v0] Registering user:`, email)
     console.log("[v0] Input data:", { email, name, phone, unitNumber, role, relationship })
-    const config = validateTenantConfig(tenantId)
-    const supabase = createClient(config.url, config.anonKey)
 
-    const parsedUnit = parseUnitInput(unitNumber)
-    console.log("[v0] Parsed unit:", parsedUnit)
+    // 安全地拼接 API URL（移除結尾斜線，確保不產生雙斜線）
+    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "")
+    const apiUrl = `${baseUrl}/api/auth/register`
+    console.log("[v0] Calling API:", apiUrl)
 
-    let unitId: string | null = null
-
-    // Step 1: Find or create unit
-    console.log("[v0] Step 1: Looking for existing unit...")
-    const { data: existingUnit, error: findUnitError } = await supabase
-      .from("units")
-      .select("id")
-      .or(`unit_number.eq.${parsedUnit.unit_number},unit_code.eq.${parsedUnit.unit_code}`)
-      .maybeSingle()
-
-    if (findUnitError) {
-      console.error("[v0] Error finding unit:", findUnitError)
-      return {
-        success: false,
-        error: `查找單位失敗：${findUnitError.message}`,
-      }
-    }
-
-    if (existingUnit) {
-      unitId = existingUnit.id
-      console.log("[v0] Found existing unit with id:", unitId)
-    } else {
-      console.log("[v0] Unit not found, creating new unit...")
-      const { data: newUnit, error: createUnitError } = await supabase
-        .from("units")
-        .insert([
-          {
-            unit_number: parsedUnit.unit_number,
-            unit_code: parsedUnit.unit_code,
-          },
-        ])
-        .select("id")
-        .single()
-
-      console.log("[v0] Create unit result:", {
-        hasData: !!newUnit,
-        hasError: !!createUnitError,
-        errorCode: createUnitError?.code,
-        errorMessage: createUnitError?.message,
-      })
-
-      if (createUnitError) {
-        console.error("[v0] Error creating unit:", createUnitError)
-        // If unit creation fails due to unique constraint, try to fetch it again
-        if (createUnitError.code === "23505") {
-          console.log("[v0] Unique constraint violation, retrying fetch...")
-          const { data: retryUnit, error: retryError } = await supabase
-            .from("units")
-            .select("id")
-            .or(`unit_number.eq.${parsedUnit.unit_number},unit_code.eq.${parsedUnit.unit_code}`)
-            .maybeSingle()
-
-          console.log("[v0] Retry fetch result:", { hasData: !!retryUnit, hasError: !!retryError })
-
-          if (retryUnit) {
-            unitId = retryUnit.id
-            console.log("[v0] Found unit on retry with id:", unitId)
-          } else {
-            return {
-              success: false,
-              error: "無法創建或查找單位",
-            }
-          }
-        } else {
-          return {
-            success: false,
-            error: `創建單位失敗：${createUnitError.message}`,
-          }
-        }
-      } else if (newUnit) {
-        unitId = newUnit.id
-        console.log("[v0] Successfully created new unit with id:", unitId)
-      } else {
-        console.error("[v0] No unit data returned and no error")
-        return {
-          success: false,
-          error: "創建單位失敗：未返回資料",
-        }
-      }
-    }
-
-    // Verify we have unitId before proceeding
-    if (!unitId) {
-      console.error("[v0] unitId is null, cannot proceed")
-      return {
-        success: false,
-        error: "無法取得單位 ID",
-      }
-    }
-
-    // Step 2: Create profile
-    console.log("[v0] Step 2: Creating profile with unit_id:", unitId)
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .insert([
-        {
-          email,
-          password,
-          name,
-          phone,
-          role,
-          status: "active",
-          unit_id: unitId,
-        },
-      ])
-      .select()
-      .single()
-
-    console.log("[v0] Create profile result:", {
-      hasData: !!profileData,
-      hasError: !!profileError,
-      errorCode: profileError?.code,
-      errorMessage: profileError?.message,
+    // 調用新的 /api/auth/register API
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ 
+        email, 
+        password, 
+        name, 
+        phone,
+        role,
+        relationship,
+        unit: unitNumber
+      }),
     })
 
-    if (profileError) {
-      console.error("[v0] Register error:", profileError)
-      if (profileError.code === "23505") {
-        return {
-          success: false,
-          error: "此電子郵件已被註冊",
-        }
-      }
+    // 檢查 HTTP 狀態碼
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("[v0] Register API returned error status:", response.status, errorText)
       return {
         success: false,
-        error: `註冊失敗：${profileError.message}`,
+        error: `API 錯誤 (${response.status}): ${errorText}`,
       }
     }
 
-    if (!profileData) {
-      console.error("[v0] No profile data returned")
+    // 嘗試解析 JSON
+    let result
+    try {
+      result = await response.json()
+    } catch (parseError) {
+      console.error("[v0] Failed to parse register JSON response:", parseError)
       return {
         success: false,
-        error: "註冊失敗：未能建立用戶資料",
+        error: "API 回應格式錯誤",
       }
     }
 
-    const profile = profileData
-    console.log("[v0] Successfully created profile with id:", profile.id)
-
-    // Step 3: Create household member
-    console.log("[v0] Step 3: Creating household member...")
-    console.log("[v0] Household member data:", { name, role, relationship, unit_id: unitId, profile_id: profile.id })
-
-    const { data: householdData, error: householdError } = await supabase
-      .from("household_members")
-      .insert([
-        {
-          name,
-          role,
-          relationship: relationship || "owner",
-          unit_id: unitId,
-          profile_id: profile.id,
-        },
-      ])
-      .select()
-      .single()
-
-    console.log("[v0] Create household member result:", {
-      hasData: !!householdData,
-      hasError: !!householdError,
-      errorCode: householdError?.code,
-      errorMessage: householdError?.message,
-    })
-
-    if (householdError) {
-      console.error("[v0] Error creating household member:", householdError)
-      // Don't fail registration if household member creation fails, but log it
-      console.warn("[v0] Registration succeeded but household member creation failed")
-    } else {
-      console.log("[v0] Successfully created household member with id:", householdData?.id)
+    if (!result || !result.success) {
+      console.error("[v0] Register API failed:", result?.message)
+      return {
+        success: false,
+        error: result?.message || "註冊失敗，請稍後再試",
+      }
     }
 
-    console.log("[v0] Registration complete for user:", profile.email)
+    console.log("[v0] User registered successfully:", result.user.email)
+
     return {
       success: true,
-      user: profile,
+      user: result.user,
     }
   } catch (err: any) {
     console.error("[v0] Register exception:", err)

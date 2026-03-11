@@ -1,28 +1,36 @@
+"use client"
+
 import { useEffect, useState, useCallback } from "react"
 import { fetchAnnouncements, fetchAllAnnouncements, type Announcement } from "../api/announcements"
 
-export function useAnnouncements(publishedOnly: boolean = true, currentUserId: string | null = null) {
+export function useAnnouncements(publishedOnly = true, currentUserId: string | null = null, disabled = false) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [likes, setLikes] = useState<any[]>([])
 
   useEffect(() => {
+    if (disabled) {
+      setAnnouncements([])
+      setLoading(false)
+      return
+    }
+
     loadAnnouncements()
     if (currentUserId) {
       loadLikes()
     }
-  }, [publishedOnly, currentUserId])
+  }, [publishedOnly, currentUserId, disabled])
 
   async function loadAnnouncements() {
     try {
       setLoading(true)
       setError(null)
-      const { data, error: fetchError} = publishedOnly 
-        ? await fetchAnnouncements() 
-        : await fetchAllAnnouncements()
-      
-      if (fetchError) throw fetchError
+      const { data, error: fetchError } = publishedOnly ? await fetchAnnouncements() : await fetchAllAnnouncements()
+
+      if (fetchError && typeof fetchError === "object" && "message" in fetchError) {
+        throw new Error(fetchError.message)
+      }
       setAnnouncements(data || [])
     } catch (e) {
       setError(e as Error)
@@ -56,35 +64,38 @@ export function useAnnouncements(publishedOnly: boolean = true, currentUserId: s
     }
   }, [])
 
-  const toggleLike = useCallback((announcementId: string) => {
-    if (!currentUserId) return
+  const toggleLike = useCallback(
+    (announcementId: string) => {
+      if (!currentUserId) return
 
-    try {
-      const likesStr = localStorage.getItem("announcement_likes")
-      const likesObj = likesStr ? JSON.parse(likesStr) : {}
+      try {
+        const likesStr = localStorage.getItem("announcement_likes")
+        const likesObj = likesStr ? JSON.parse(likesStr) : {}
 
-      if (!likesObj[announcementId]) {
-        likesObj[announcementId] = []
+        if (!likesObj[announcementId]) {
+          likesObj[announcementId] = []
+        }
+
+        const userLikeIndex = likesObj[announcementId].indexOf(currentUserId)
+        if (userLikeIndex > -1) {
+          likesObj[announcementId].splice(userLikeIndex, 1)
+        } else {
+          likesObj[announcementId].push(currentUserId)
+        }
+
+        localStorage.setItem("announcement_likes", JSON.stringify(likesObj))
+        loadLikes()
+      } catch (e) {
+        console.error("Error toggling like:", e)
       }
+    },
+    [currentUserId, loadLikes],
+  )
 
-      const userLikeIndex = likesObj[announcementId].indexOf(currentUserId)
-      if (userLikeIndex > -1) {
-        likesObj[announcementId].splice(userLikeIndex, 1)
-      } else {
-        likesObj[announcementId].push(currentUserId)
-      }
-
-      localStorage.setItem("announcement_likes", JSON.stringify(likesObj))
-      loadLikes()
-    } catch (e) {
-      console.error("Error toggling like:", e)
-    }
-  }, [currentUserId, loadLikes])
-
-  return { 
-    announcements, 
-    loading, 
-    error, 
+  return {
+    announcements,
+    loading,
+    error,
     reload: loadAnnouncements,
     likes,
     toggleLike,

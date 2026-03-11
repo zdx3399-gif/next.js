@@ -13,7 +13,9 @@ export interface Announcement {
 
 export async function fetchAnnouncements() {
   const supabase = getSupabaseClient()
-  if (!supabase) return { data: [], error: null }
+  if (!supabase) {
+    return { data: [], error: undefined }
+  }
 
   const { data, error } = await supabase
     .from("announcements")
@@ -23,10 +25,10 @@ export async function fetchAnnouncements() {
 
   if (error) {
     console.error("Error fetching announcements:", error)
-    return { data: [], error }
+    return { data: [], error: { message: error.message || "Failed to fetch announcements" } }
   }
 
-  if (!data || data.length === 0) return { data: [], error: null }
+  if (!data || data.length === 0) return { data: [], error: undefined }
 
   // 收集所有 created_by IDs
   const authorIds = [...new Set(data.filter((a) => a.created_by).map((a) => a.created_by))]
@@ -45,13 +47,15 @@ export async function fetchAnnouncements() {
       ...item,
       author_name: item.created_by ? authorsMap[item.created_by] || "管理員" : "管理員",
     })),
-    error: null,
+    error: undefined,
   }
 }
 
 export async function fetchAllAnnouncements() {
   const supabase = getSupabaseClient()
-  if (!supabase) return { data: [], error: null }
+  if (!supabase) {
+    return { data: [], error: undefined }
+  }
 
   const { data, error } = await supabase
     .from("announcements")
@@ -61,10 +65,10 @@ export async function fetchAllAnnouncements() {
 
   if (error) {
     console.error("Error fetching all announcements:", error)
-    return { data: [], error }
+    return { data: [], error: { message: error.message || "Failed to fetch announcements" } }
   }
 
-  if (!data || data.length === 0) return { data: [], error: null }
+  if (!data || data.length === 0) return { data: [], error: undefined }
 
   // 收集所有 created_by IDs
   const authorIds = [...new Set(data.filter((a) => a.created_by).map((a) => a.created_by))]
@@ -83,25 +87,74 @@ export async function fetchAllAnnouncements() {
       ...item,
       author_name: item.created_by ? authorsMap[item.created_by] || "管理員" : "管理員",
     })),
-    error: null,
+    error: undefined,
   }
 }
 
-export async function createAnnouncement(data: Partial<Announcement>) {
+export async function createAnnouncement(data: Partial<Announcement>, userId?: string) {
   const supabase = getSupabaseClient()
-  const { id, author_name, ...rowWithoutId } = data as any
-  return supabase.from("announcements").insert([rowWithoutId])
+  if (!supabase) {
+    return { data: null, error: { message: "請先登入" } }
+  }
+
+  const { id, author_name, ...rest } = data as any
+  const insertData = {
+    ...rest,
+    created_by: userId || null,
+  }
+
+  console.log("[v0] Creating announcement with data:", insertData)
+
+  const { data: result, error } = await supabase.from("announcements").insert([insertData]).select().single()
+
+  if (error) {
+    console.error("[v0] Error creating announcement:", error)
+    return { data: null, error }
+  }
+
+  console.log("[v0] Announcement created successfully:", result)
+  return { data: result, error: null }
 }
 
 export async function updateAnnouncement(id: string, data: Partial<Announcement>) {
   const supabase = getSupabaseClient()
+  if (!supabase) {
+    return { data: null, error: { message: "請先登入" } }
+  }
+
   const { author_name, ...dbData } = data as any
-  return supabase.from("announcements").update(dbData).eq("id", id)
+  delete dbData.id // 確保不會更新 id
+
+  console.log("[v0] Updating announcement", id, "with data:", dbData)
+
+  const { data: result, error } = await supabase.from("announcements").update(dbData).eq("id", id).select().single()
+
+  if (error) {
+    console.error("[v0] Error updating announcement:", error)
+    return { data: null, error }
+  }
+
+  console.log("[v0] Announcement updated successfully:", result)
+  return { data: result, error: null }
 }
 
 export async function deleteAnnouncement(id: string) {
   const supabase = getSupabaseClient()
-  return supabase.from("announcements").delete().eq("id", id)
+  if (!supabase) {
+    return { data: null, error: { message: "請先登入" } }
+  }
+
+  console.log("[v0] Deleting announcement:", id)
+
+  const { error } = await supabase.from("announcements").delete().eq("id", id)
+
+  if (error) {
+    console.error("[v0] Error deleting announcement:", error)
+    return { data: null, error }
+  }
+
+  console.log("[v0] Announcement deleted successfully")
+  return { data: { id }, error: null }
 }
 
 export async function uploadAnnouncementImage(file: File): Promise<string> {
@@ -119,8 +172,10 @@ export async function uploadAnnouncementImage(file: File): Promise<string> {
 
 export async function markAnnouncementAsRead(announcementId: string, userId: string) {
   const supabase = getSupabaseClient()
+  if (!supabase) {
+    return { error: null } // Return null error to prevent crashes
+  }
 
-  // 使用 announcement_reads 表
   const { error } = await supabase
     .from("announcement_reads")
     .upsert([{ announcement_id: announcementId, user_id: userId }], {
@@ -137,6 +192,9 @@ export async function markAnnouncementAsRead(announcementId: string, userId: str
 
 export async function fetchUserReadAnnouncements(userId: string): Promise<Set<string>> {
   const supabase = getSupabaseClient()
+  if (!supabase) {
+    return new Set()
+  }
   const { data, error } = await supabase.from("announcement_reads").select("announcement_id").eq("user_id", userId)
 
   if (error) {

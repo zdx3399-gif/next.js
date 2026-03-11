@@ -1,0 +1,109 @@
+"use client"
+
+import { useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { HelpHint } from "@/components/ui/help-hint"
+
+interface ReportDialogProps {
+  open: boolean
+  onClose: () => void
+  onSubmit: (report: {
+    reporter_id: string
+    target_type: string
+    target_id: string
+    reason: string
+    description?: string
+  }) => Promise<any>
+  targetType: string
+  targetId: string
+  reporterId: string
+}
+
+export function ReportDialog({ open, onClose, onSubmit, targetType, targetId, reporterId }: ReportDialogProps) {
+  const [loading, setLoading] = useState(false)
+  const [reason, setReason] = useState<string>("spam")
+  const [description, setDescription] = useState("")
+
+  const handleSubmit = async () => {
+    setLoading(true)
+    try {
+      const result = await onSubmit({
+        reporter_id: reporterId,
+        target_type: targetType,
+        target_id: targetId,
+        reason,
+        description: description.trim() || undefined,
+      })
+      if (result) {
+        alert("檢舉已送出，管理方將盡快審核")
+      }
+    } catch (error: any) {
+      alert(`檢舉失敗: ${error.message}`)
+    } finally {
+      setLoading(false)
+      setDescription("")
+      onClose()
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex gap-2 items-center">
+            <span className="material-icons">flag</span>
+            檢舉內容
+            <HelpHint title="住戶端檢舉" description="請選擇最符合的原因並補充事實，協助管理端判斷。" workflow={["先選檢舉原因。","必要時補充客觀描述後送出。"]} logic={["檢舉資料會進入審核流程並留存紀錄。"]} />
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div>
+            <Label className="flex items-center gap-2">檢舉原因<HelpHint title="住戶端檢舉原因" description="選擇對應違規類型可提升審核效率。" workflow={["選最貼近違規情況的選項。"]} logic={["分類正確可加速審核分流。"]} align="center" /></Label>
+            <Select value={reason} onValueChange={setReason}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pii">包含個人資料</SelectItem>
+                <SelectItem value="defamation">誹謗中傷</SelectItem>
+                <SelectItem value="harassment">騷擾攻擊</SelectItem>
+                <SelectItem value="misinformation">不實資訊</SelectItem>
+                <SelectItem value="spam">垃圾訊息</SelectItem>
+                <SelectItem value="hate_speech">仇恨言論</SelectItem>
+                <SelectItem value="other">其他</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label className="flex items-center gap-2">詳細說明（選填）<HelpHint title="住戶端補充說明" description="可補充時間、情境與影響，避免僅主觀描述。" workflow={["補充事件時間、情境與影響。"]} logic={["客觀描述可提升判斷品質並降低誤判。"]} align="center" /></Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="請說明檢舉原因..."
+              rows={4}
+            />
+          </div>
+
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+            <p className="text-xs text-yellow-600 flex items-center gap-2">檢舉將由管理方審核。濫用檢舉功能可能影響您的信用分。<HelpHint title="住戶端檢舉提醒" description="請基於事實提交檢舉，避免惡意或重複檢舉。" workflow={["送出前確認內容真實且必要。"]} logic={["濫用檢舉會干擾審核資源並影響信用。"]} align="center" /></p>
+          </div>
+        </div>
+
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            取消
+          </Button>
+          <Button onClick={handleSubmit} disabled={loading}>
+            {loading ? "送出中..." : "送出檢舉"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

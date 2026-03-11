@@ -7,12 +7,19 @@ CREATE TABLE IF NOT EXISTS profiles (
   email TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
   name TEXT,
-  role TEXT CHECK (role IN ('resident', 'committee', 'vendor')) DEFAULT 'resident',
+  role TEXT CHECK (role IN ('resident', 'committee', 'guard', 'admin')) DEFAULT 'resident',
   phone TEXT,
   room TEXT,
   unit TEXT,
   status TEXT DEFAULT 'active',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- System-wide settings table (used for role permission customization)
+CREATE TABLE IF NOT EXISTS system_settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -137,7 +144,7 @@ CREATE TABLE IF NOT EXISTS residents (
   room TEXT NOT NULL,
   phone TEXT DEFAULT '',
   email TEXT DEFAULT '',
-  role TEXT DEFAULT 'resident' CHECK (role IN ('resident', 'committee', 'vendor')),
+  role TEXT DEFAULT 'resident' CHECK (role IN ('resident', 'committee', 'guard', 'admin')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -197,7 +204,7 @@ VALUES
   ('resident1@tenant-b.com', 'password123', '周小姐', '0976543210', 'B-102', '1F', 'resident', 'active'),
   ('resident2@tenant-b.com', 'password123', '吳先生', '0965432109', 'B-201', '2F', 'resident', 'active'),
   ('resident3@tenant-b.com', 'password123', '鄭太太', '0954321098', 'B-202', '2F', 'resident', 'active'),
-  ('vendor@tenant-b.com', 'vendor123', '陳技師', '0943210987', '', '', 'vendor', 'active')
+  ('guard@tenant-b.com', 'guard123', '陳技師', '0943210987', '', '', 'guard', 'active')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO announcements (title, content, author, status, created_by, image_url)
@@ -298,3 +305,48 @@ VALUES
   ((SELECT id FROM votes WHERE title = '是否更換社區大門' LIMIT 1), (SELECT id FROM profiles WHERE email = 'resident3@tenant-b.com' LIMIT 1), '鄭太太', '同意'),
   ((SELECT id FROM votes WHERE title = '是否同意增設電動車充電樞' LIMIT 1), (SELECT id FROM profiles WHERE email = 'admin@tenant-b.com' LIMIT 1), '劉主委', '同意'),
   ((SELECT id FROM votes WHERE title = '是否同意增設電動車充電樞' LIMIT 1), (SELECT id FROM profiles WHERE email = 'resident1@tenant-b.com' LIMIT 1), '周小姐', '同意');
+
+-- Routine task templates (rule table)
+CREATE TABLE IF NOT EXISTS routine_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'quarterly', 'yearly')),
+  assignee_role TEXT NOT NULL CHECK (assignee_role IN ('resident', 'committee', 'guard', 'admin')),
+  action_link TEXT NOT NULL DEFAULT '/admin',
+  kms_link TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Routine task instances (actual to-do items)
+CREATE TABLE IF NOT EXISTS routine_instances (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  template_id UUID NOT NULL REFERENCES routine_templates(id) ON DELETE CASCADE,
+  due_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
+  assignee_role TEXT NOT NULL CHECK (assignee_role IN ('resident', 'committee', 'guard', 'admin')),
+  completed_at TIMESTAMP WITH TIME ZONE,
+  completed_by UUID,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(template_id, due_date)
+);
+
+-- Notification events for bell reminders (not a central to-do table)
+CREATE TABLE IF NOT EXISTS notification_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  message TEXT,
+  module_key TEXT,
+  action_link TEXT,
+  target_role TEXT,
+  target_user_id UUID,
+  payload JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_routine_templates_frequency ON routine_templates(frequency);
+CREATE INDEX IF NOT EXISTS idx_routine_instances_status_due_date ON routine_instances(status, due_date);
+CREATE INDEX IF NOT EXISTS idx_notification_events_created_at ON notification_events(created_at DESC);
+

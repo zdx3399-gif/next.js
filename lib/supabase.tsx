@@ -33,8 +33,8 @@ export function getTenantConfigFromStorage() {
   // This helps recover from config loss when navigating between pages
   const tenantId = getCurrentTenant()
   if (typeof process !== "undefined" && process.env) {
-    const urlKey = tenantId === "tenant_a" ? "TENANT_A_SUPABASE_URL" : "TENANT_B_SUPABASE_URL"
-    const keyKey = tenantId === "tenant_a" ? "TENANT_A_SUPABASE_ANON_KEY" : "TENANT_B_SUPABASE_ANON_KEY"
+    const urlKey = tenantId === "tenant_a" ? "NEXT_PUBLIC_TENANT_A_SUPABASE_URL" : "NEXT_PUBLIC_TENANT_B_SUPABASE_URL"
+    const keyKey = tenantId === "tenant_a" ? "NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY" : "NEXT_PUBLIC_TENANT_B_SUPABASE_ANON_KEY"
 
     const url = process.env[`NEXT_PUBLIC_${urlKey}`] || process.env[urlKey]
     const anonKey = process.env[`NEXT_PUBLIC_${keyKey}`] || process.env[keyKey]

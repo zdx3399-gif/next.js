@@ -56,10 +56,8 @@ export function usePackages(options: UsePackagesOptions = {}) {
 
   const handleMarkAsPickedUp = async (packageId: string, pickedUpBy: string) => {
     try {
-      const updatedPackage = await markPackageAsPickedUp(packageId, pickedUpBy)
-      if (updatedPackage) {
-        setPackages((prev) => prev.map((pkg) => (pkg.id === packageId ? updatedPackage : pkg)))
-      }
+      await markPackageAsPickedUp(packageId, pickedUpBy)
+      await loadPackages()
       return true
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : "Unknown error"

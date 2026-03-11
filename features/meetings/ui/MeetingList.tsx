@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useMeetings } from "../hooks/useMeetings"
 import { MeetingDetails } from "./MeetingDetails"
+import { HelpHint } from "@/components/ui/help-hint"
 
 export function MeetingList() {
   const { meetings, loading, error } = useMeetings()
@@ -47,9 +48,36 @@ export function MeetingList() {
       <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
         <span className="material-icons">event</span>
         會議/活動
+        <HelpHint
+          title="住戶端會議/活動"
+          description="可查閱社區會議與活動資訊，點選卡片可進入詳情查看重點與附件。"
+          workflow={[
+            "先瀏覽會議清單掌握近期活動。",
+            "點選目標卡片進入會議詳情。",
+            "在詳情頁查看重點與附件後再返回清單。",
+          ]}
+          logic={[
+            "此頁為會議入口，詳細內容集中在詳情頁。",
+          ]}
+        />
       </h2>
 
       <div className="mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+          <HelpHint
+            title="住戶端會議搜尋"
+            description="可用主題、地點或日期關鍵字快速找出指定會議。"
+            workflow={[
+              "輸入主題、地點或日期關鍵字。",
+              "從過濾後清單點選目標會議。",
+              "查無結果時清空關鍵字恢復全部會議。",
+            ]}
+            logic={[
+              "搜尋只影響列表顯示，不會修改會議資料。",
+            ]}
+          />
+        </div>
         <input
           type="text"
           placeholder="搜尋會議主題、地點或日期..."
@@ -81,6 +109,19 @@ export function MeetingList() {
                   <p className="text-[var(--theme-accent)] flex items-center gap-2 mt-1">
                     <span className="material-icons text-sm">list</span>
                     {meeting.key_takeaways.length} 項重點摘要
+                    <HelpHint
+                      title="住戶端重點摘要"
+                      description="顯示該會議整理出的重點決議數量，進入詳情可查看完整內容。"
+                      workflow={[
+                        "先看摘要數量判斷會議資訊密度。",
+                        "點進詳情逐項閱讀重點內容。",
+                        "必要時再下載完整會議記錄交叉確認。",
+                      ]}
+                      logic={[
+                        "摘要數量僅為指標，完整決議仍以詳情內容為準。",
+                      ]}
+                      align="center"
+                    />
                   </p>
                 )}
                 {meeting.pdf_file_url && (

@@ -28,10 +28,19 @@ export default function AuthPage() {
     const currentUser = localStorage.getItem("currentUser")
     if (currentUser) {
       const user = JSON.parse(currentUser)
+      if (user.role === "vendor") {
+        user.role = "guard"
+        localStorage.setItem("currentUser", JSON.stringify(user))
+      }
       const useBackend = shouldUseBackend(user.role)
       router.push(useBackend ? "/admin" : "/dashboard")
     }
   }, [searchParams, router])
+
+  // 👇 LINE Binding - Simply redirect to bind-line page
+  const handleLineBind = () => {
+    router.push("/bind-line")
+  }
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -65,7 +74,8 @@ export default function AuthPage() {
 
       setSuccessMessage("登入成功！正在跳轉...")
 
-      const useBackend = shouldUseBackend(result.user.role as UserRole)
+      const normalizedRole = result.user.role === "vendor" ? "guard" : result.user.role
+      const useBackend = shouldUseBackend(normalizedRole as UserRole)
       setTimeout(() => {
         router.push(useBackend ? "/admin" : "/dashboard")
       }, 1500)
@@ -355,6 +365,25 @@ export default function AuthPage() {
           >
             {isLoginMode ? "立即註冊" : "立即登入"}
           </button>
+        </div>
+
+        {/* 👇 BIND LINE BUTTON (New Addition) */}
+        <div className="mt-6 pt-6 border-t" style={{ borderColor: "var(--theme-border)" }}>
+          <button
+            onClick={handleLineBind}
+            type="button"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+            style={{
+              background: "#06C755", // LINE Green color
+              color: "#ffffff",
+            }}
+          >
+            <span className="material-icons">chat</span>
+            綁定 LINE 帳號
+          </button>
+          <p className="text-xs text-center mt-2" style={{ color: "var(--theme-text-muted)" }}>
+            綁定後可接收社區重要通知
+          </p>
         </div>
       </div>
     </div>

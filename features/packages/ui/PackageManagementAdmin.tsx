@@ -5,9 +5,14 @@ import { usePackages } from "../hooks/usePackages"
 import { fetchResidentsByRoom } from "@/features/residents/api/residents"
 import type { Package } from "../api/packages"
 import type { Resident } from "@/features/residents/api/residents"
+import { HelpHint } from "@/components/ui/help-hint"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Plus, RefreshCw, Search } from "lucide-react"
 
 interface PackageManagementAdminProps {
   currentUser?: any
+  isPreviewMode?: boolean
 }
 
 interface NewPackage {
@@ -34,7 +39,21 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave }: Packa
       <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
-          <h3 className="text-lg font-bold text-[var(--theme-accent)]">新增包裹</h3>
+          <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">
+            新增包裹
+            <HelpHint
+              title="管理端新增包裹"
+              description="建立新到貨包裹資料。資料越完整，住戶查詢與後續領取確認會更順利。"
+              workflow={[
+                "填寫快遞公司、收件人與房號等必要欄位。",
+                "可補追蹤號與到達時間提高可追溯性。",
+                "儲存後到待領取區確認資料已建立。",
+              ]}
+              logic={[
+                "新增資料會直接進入待領取流程，供管理端後續交付。",
+              ]}
+            />
+          </h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors">
             <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
           </button>
@@ -43,7 +62,21 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave }: Packa
         {/* Form Content */}
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">快遞公司 *</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">快遞公司 *</label>
+              <HelpHint
+                title="管理端快遞公司"
+                description="填寫物流來源（例如黑貓、郵局）。有助於住戶辨識包裹來源與後續客服查詢。"
+                workflow={[
+                  "輸入實際物流或快遞公司名稱。",
+                  "避免縮寫不一致造成搜尋困難。",
+                  "儲存前確認與包裹單一致。",
+                ]}
+                logic={[
+                  "快遞公司欄位是查詢與客服追蹤的重要索引。",
+                ]}
+              />
+            </div>
             <input
               type="text"
               value={formData.courier || ""}
@@ -53,7 +86,21 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave }: Packa
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">收件人 *</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">收件人 *</label>
+              <HelpHint
+                title="管理端收件人"
+                description="請填寫包裹上的收件姓名，避免通知到錯誤住戶。"
+                workflow={[
+                  "依包裹面單輸入收件姓名。",
+                  "與房號交叉檢查避免誤登記。",
+                  "若姓名不明可先向住戶確認。",
+                ]}
+                logic={[
+                  "收件人欄位影響通知與交付準確性。",
+                ]}
+              />
+            </div>
             <input
               type="text"
               value={formData.recipient_name || ""}
@@ -63,7 +110,21 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave }: Packa
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">房號 *</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">房號 *</label>
+              <HelpHint
+                title="管理端房號"
+                description="請輸入住戶對應房號，系統會依房號協助帶出可選領取人名單。"
+                workflow={[
+                  "填寫住戶正確房號。",
+                  "儲存後在待領取區確認可帶出住戶名單。",
+                  "若名單不符先檢查房號格式。",
+                ]}
+                logic={[
+                  "房號是領取人名單與包裹歸屬的關聯鍵。",
+                ]}
+              />
+            </div>
             <input
               type="text"
               value={formData.recipient_room || ""}
@@ -73,7 +134,21 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave }: Packa
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">追蹤號碼</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">追蹤號碼</label>
+              <HelpHint
+                title="管理端追蹤號碼"
+                description="可選填。若後續有爭議或延遲，追蹤號可作為物流查核依據。"
+                workflow={[
+                  "有追蹤號時建議一併填寫。",
+                  "保留完整格式避免查詢失敗。",
+                  "爭議處理時可直接用此欄追查。",
+                ]}
+                logic={[
+                  "追蹤號雖為選填，但可大幅提升異常處理效率。",
+                ]}
+              />
+            </div>
             <input
               type="text"
               value={formData.tracking_number || ""}
@@ -83,7 +158,21 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave }: Packa
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">到達時間</label>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">到達時間</label>
+              <HelpHint
+                title="管理端到達時間"
+                description="記錄包裹實際到件時間，可用於管理逾期未領與對帳。"
+                workflow={[
+                  "設定包裹實際到件日期時間。",
+                  "與收件記錄或物流資訊對照確認。",
+                  "必要時用於逾期未領追蹤。",
+                ]}
+                logic={[
+                  "到達時間是待領期管理與稽核依據。",
+                ]}
+              />
+            </div>
             <input
               type="datetime-local"
               value={formData.arrived_at || ""}
@@ -122,10 +211,25 @@ const getRelationshipLabel = (relationship?: string): string => {
   return labels[relationship || "household_member"] || "住戶成員"
 }
 
-export function PackageManagementAdmin({ currentUser }: PackageManagementAdminProps) {
-  const { pendingPackages, pickedUpPackages, loading, handleAddPackage, handleMarkAsPickedUp } = usePackages({
+// 預覽模式的模擬資料
+const PREVIEW_PACKAGES: { pending: Package[]; pickedUp: Package[] } = {
+  pending: [
+    { id: "preview-1", courier: "測試資料", recipient_name: "測試資料", recipient_room: "測試資料", tracking_number: "測試資料", arrived_at: new Date().toISOString(), status: "pending" as const },
+    { id: "preview-2", courier: "測試資料", recipient_name: "測試資料", recipient_room: "測試資料", tracking_number: "測試資料", arrived_at: new Date().toISOString(), status: "pending" as const },
+  ],
+  pickedUp: [
+    { id: "preview-3", courier: "測試資料", recipient_name: "測試資料", recipient_room: "測試資料", tracking_number: "測試資料", arrived_at: new Date(Date.now() - 86400000).toISOString(), picked_up_at: new Date().toISOString(), picked_up_by: "測試資料", status: "picked_up" as const },
+  ],
+}
+
+export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: PackageManagementAdminProps) {
+  const { pendingPackages: realPending, pickedUpPackages: realPickedUp, loading, handleAddPackage, handleMarkAsPickedUp, reload } = usePackages({
     isAdmin: true,
   })
+
+  // 預覽模式使用模擬資料
+  const pendingPackages = isPreviewMode ? PREVIEW_PACKAGES.pending : realPending
+  const pickedUpPackages = isPreviewMode ? PREVIEW_PACKAGES.pickedUp : realPickedUp
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedPickers, setSelectedPickers] = useState<{ [key: string]: Resident | null }>({})
   const [roomResidents, setRoomResidents] = useState<{ [room: string]: Resident[] }>({})
@@ -228,23 +332,60 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
           <span className="material-icons">inventory_2</span>
           包裹管理
+          <HelpHint
+            title="管理端包裹管理"
+            description="用於建立到件資料、指派領取人、標記已領並保留歷史紀錄，支援管理端完整包裹流程。"
+            workflow={[
+              "先新增到件包裹資料。",
+              "在待領取區選擇實際領取人並標記已領。",
+              "到已領取區回查交付紀錄。",
+            ]}
+            logic={[
+              "流程為 pending → picked_up，重點在交付可追溯性。",
+            ]}
+          />
         </h2>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold border border-[var(--theme-btn-add-border)] text-[var(--theme-btn-add-text)] bg-transparent hover:bg-[var(--theme-btn-add-hover)] transition-all"
-        >
-          <span className="material-icons text-sm">add</span>
-          新增一筆
-        </button>
       </div>
 
-      <input
-        type="text"
-        placeholder="搜尋快遞商、收件人或追蹤號碼..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="w-full p-3 rounded-xl theme-input outline-none mb-4"
-      />
+      <div className="flex flex-col sm:flex-row gap-3 justify-between mb-4">
+        <div className="flex-1 max-w-md">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[var(--theme-text-primary)] text-sm">搜尋</span>
+            <HelpHint
+              title="管理端搜尋"
+              description="可用快遞商、收件人或追蹤號快速篩選資料，方便在大量包裹中定位目標。"
+              workflow={[
+                "輸入快遞商、收件人或追蹤號關鍵字。",
+                "確認待領取/已領取清單同步過濾。",
+                "查無結果時清空關鍵字恢復完整資料。",
+              ]}
+              logic={[
+                "搜尋僅影響畫面顯示，不會變更包裹狀態。",
+              ]}
+            />
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-text-secondary)]" />
+            <Input
+              placeholder="搜尋快遞商、收件人或追蹤號碼..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-end gap-2">
+          <Button variant="outline" onClick={reload} disabled={loading || isPreviewMode}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            重新整理
+          </Button>
+          <Button onClick={() => setIsModalOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            新增一筆
+          </Button>
+        </div>
+      </div>
 
       <div className="space-y-6">
         {/* 待領取 */}
@@ -252,6 +393,18 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
           <h3 className="flex gap-2 items-center text-yellow-500 font-bold text-lg mb-4">
             <span className="material-icons">schedule</span>
             待領取 ({filteredPending.length})
+            <HelpHint
+              title="管理端待領取"
+              description="顯示尚未完成交付的包裹。管理員需確認領取人身份後再標記已領。"
+              workflow={[
+                "先核對包裹資訊與房號。",
+                "選擇實際領取人後點標記已領。",
+                "交付完成後至已領取區確認紀錄。",
+              ]}
+              logic={[
+                "此區僅顯示 pending 狀態，包含可操作交付按鈕。",
+              ]}
+            />
           </h3>
           <div className="space-y-3">
             {filteredPending.length > 0 ? (
@@ -289,7 +442,22 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
                     </div>
                     <div className="flex gap-2 items-end">
                       <div className="flex-1">
-                        <label className="text-[var(--theme-accent)] text-sm font-bold mb-1 block">領取人</label>
+                        <div className="flex items-center gap-2 mb-1">
+                          <label className="text-[var(--theme-accent)] text-sm font-bold block">領取人</label>
+                          <HelpHint
+                            title="管理端領取人選擇"
+                            description="請從同房號住戶中選擇實際領取人，確保紀錄可追蹤。"
+                            workflow={[
+                              "從下拉選單選擇同房號住戶。",
+                              "確認姓名與關係後再標記已領。",
+                              "若無對應住戶請先確認房號資料。",
+                            ]}
+                            logic={[
+                              "未選領取人不可標記已領，避免交付紀錄失真。",
+                            ]}
+                            align="center"
+                          />
+                        </div>
                         <select
                           value={selectedResident?.id || ""}
                           onChange={(e) => {
@@ -333,6 +501,18 @@ export function PackageManagementAdmin({ currentUser }: PackageManagementAdminPr
           <h3 className="flex gap-2 items-center text-green-500 font-bold text-lg mb-4">
             <span className="material-icons">check_circle</span>
             已領取 ({filteredPickedUp.length})
+            <HelpHint
+              title="管理端已領取紀錄"
+              description="保留完成交付的包裹紀錄，可回查領取人與領取時間，供客服與稽核使用。"
+              workflow={[
+                "在此區回查已交付包裹。",
+                "核對領取人與領取時間資訊。",
+                "客服或稽核需求時可依紀錄追溯。",
+              ]}
+              logic={[
+                "此區為歷史查閱用途，不提供交付操作。",
+              ]}
+            />
           </h3>
           <div className="space-y-3">
             {filteredPickedUp.length > 0 ? (

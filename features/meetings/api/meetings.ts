@@ -40,6 +40,7 @@ export async function createMeeting(
   userId?: string,
 ): Promise<Meeting | null> {
   const supabase = getSupabaseClient()
+  // 先保存會議到資料庫
   const { data, error } = await supabase
     .from("meetings")
     .insert([{ ...meeting, created_by: userId }])
@@ -50,6 +51,29 @@ export async function createMeeting(
     console.error("Error creating meeting:", error)
     return null
   }
+
+  // 同步發送 LINE 通知（確保在 serverless 環境中完成）
+  if (data?.id) {
+    try {
+      const notifyRes = await fetch("/api/meeting/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meeting: data,
+        }),
+      })
+      
+      if (!notifyRes.ok) {
+        const notifyError = await notifyRes.json()
+        console.warn("Meeting notification response:", notifyError)
+        // 不因為通知失敗而中斷會議建立
+      }
+    } catch (err) {
+      console.warn("Meeting notification fetch error:", err)
+      // 不因為通知失敗而中斷會議建立
+    }
+  }
+
   return data
 }
 

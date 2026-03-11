@@ -3,6 +3,10 @@
 import { useState } from "react"
 import { useFacilitiesAdmin } from "../hooks/useFacilities"
 import type { Facility } from "../api/facilities"
+import { HelpHint } from "@/components/ui/help-hint"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { RefreshCw, Plus, Search } from "lucide-react"
 
 interface FacilityFormModalProps {
   isOpen: boolean
@@ -32,7 +36,7 @@ function FacilityFormModal({
       <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
-          <h3 className="text-lg font-bold text-[var(--theme-accent)]">{isEditing ? "編輯設施" : "新增設施"}</h3>
+          <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">{isEditing ? "編輯設施" : "新增設施"}<HelpHint title="管理端設施編輯" description="可建立或更新設施屬性，影響住戶可預約規則。" workflow={["新增或編輯設施時先填基本資料。","再設定點數、冷卻、抽籤與可用狀態。","儲存後回列表確認規則是否正確。"]} logic={["設施設定會直接影響住戶端預約可行性與成本。","錯誤規則可能導致不可預約或超賣風險。"]} /></h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors">
             <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
           </button>
@@ -41,7 +45,7 @@ function FacilityFormModal({
         {/* Form Content */}
         <div className="p-4 space-y-4">
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">設施名稱</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">設施名稱<HelpHint title="管理端設施名稱" description="住戶端顯示名稱，建議明確易懂。" workflow={["輸入住戶易懂的設施名稱。","避免重複或模糊命名。"]} logic={["名稱是住戶端搜尋與辨識主要欄位。"]} align="center" /></label>
             <input
               type="text"
               value={formData.name || ""}
@@ -51,7 +55,7 @@ function FacilityFormModal({
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">說明</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">說明<HelpHint title="管理端設施說明" description="描述使用限制與注意事項。" workflow={["填寫使用規範與注意事項。","有特殊限制請明確寫在說明內。"]} logic={["說明可降低住戶誤用與客服反覆解釋成本。"]} align="center" /></label>
             <textarea
               value={formData.description || ""}
               onChange={(e) => onChange("description", e.target.value)}
@@ -61,7 +65,7 @@ function FacilityFormModal({
             />
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">位置</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">位置<HelpHint title="管理端設施位置" description="填寫實際位置，便於住戶到場。" workflow={["輸入棟別/樓層/場地名稱。","更新場地異動時同步修正。"]} logic={["位置資訊會影響住戶到場效率與遲到率。"]} align="center" /></label>
             <input
               type="text"
               value={formData.location || ""}
@@ -73,6 +77,7 @@ function FacilityFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">容納人數</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端容納人數" description="設定單時段最大人數。" workflow={["依場地實際安全容量填寫。","調整後確認不影響既有預約政策。"]} logic={["容量是時段供應上限，影響超賣風險。"]} align="center" /></div>
               <input
                 type="number"
                 value={formData.capacity || 1}
@@ -83,6 +88,7 @@ function FacilityFormModal({
             </div>
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">基礎點數</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端基礎點數" description="一般時段的預約點數基準。" workflow={["填入一般時段標準點數。","再搭配尖峰倍率規則評估合理性。"]} logic={["基礎點數會影響住戶使用意願與資源分配。"]} align="center" /></div>
               <input
                 type="number"
                 value={formData.base_price || 10}
@@ -95,6 +101,7 @@ function FacilityFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">冷卻時間（小時）</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端冷卻時間" description="同戶再次預約同設施需間隔時數。" workflow={["設定同戶連續預約間隔時數。","熱門設施可提高冷卻時間。"]} logic={["冷卻時間可避免少數住戶壟斷時段。"]} align="center" /></div>
               <input
                 type="number"
                 value={formData.cool_down_hours || 24}
@@ -105,6 +112,7 @@ function FacilityFormModal({
             </div>
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">同時預約上限</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端同時預約上限" description="每戶同時可持有的預約數量上限。" workflow={["設定每戶同時預約筆數。","依社區資源公平性調整上限。"]} logic={["同時上限可控制佔用量並提升可用性。"]} align="center" /></div>
               <input
                 type="number"
                 value={formData.max_concurrent_bookings || 2}
@@ -115,7 +123,7 @@ function FacilityFormModal({
             </div>
           </div>
           <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">圖片</label>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">圖片<HelpHint title="管理端設施圖片" description="上傳後可提升住戶辨識度。" workflow={["選擇清晰場地照片上傳。","更換圖片後確認預覽資訊已更新。"]} logic={["圖片有助住戶辨識場地，降低預約錯場機率。"]} align="center" /></label>
             <input
               type="file"
               accept="image/*"
@@ -132,6 +140,7 @@ function FacilityFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">狀態</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端可用狀態" description="不可用時住戶將無法預約。" workflow={["維修或停用時切換為不可用。","恢復服務後再改回可用。"]} logic={["可用狀態是住戶端預約入口開關。"]} align="center" /></div>
               <select
                 value={String(formData.available)}
                 onChange={(e) => onChange("available", e.target.value === "true")}
@@ -143,6 +152,7 @@ function FacilityFormModal({
             </div>
             <div>
               <label className="block text-[var(--theme-text-primary)] font-medium mb-2">熱門時段抽籤</label>
+              <div className="inline-flex ml-2"><HelpHint title="管理端抽籤" description="開啟後熱門時段可改為抽籤機制。" workflow={["需要公平分配熱門時段時開啟抽籤。","一般時段維持直接預約可關閉。"]} logic={["抽籤可降低搶位不公平，但流程會增加等待時間。"]} align="center" /></div>
               <select
                 value={String(formData.is_lottery_enabled)}
                 onChange={(e) => onChange("is_lottery_enabled", e.target.value === "true")}
@@ -175,9 +185,29 @@ function FacilityFormModal({
   )
 }
 
-export function FacilityManagementAdmin() {
-  const { facilities, bookings, loading, imageFiles, handleImageFileChange, handleSave, handleDelete, addNewFacility } =
+// 預覽模式的模擬資料
+const PREVIEW_FACILITIES = [
+  { id: "preview-1", name: "測試資料", description: "測試資料", location: "測試資料", capacity: 10, image_url: "", available: true, base_price: 20, cool_down_hours: 24, is_lottery_enabled: false, max_concurrent_bookings: 2 },
+  { id: "preview-2", name: "測試資料", description: "測試資料", location: "測試資料", capacity: 30, image_url: "", available: true, base_price: 30, cool_down_hours: 48, is_lottery_enabled: true, max_concurrent_bookings: 1 },
+  { id: "preview-3", name: "測試資料", description: "測試資料", location: "測試資料", capacity: 10, image_url: "", available: false, base_price: 50, cool_down_hours: 72, is_lottery_enabled: false, max_concurrent_bookings: 1 },
+]
+
+const PREVIEW_BOOKINGS = [
+  { id: "preview-b1", facilities: { name: "測試資料" }, user_name: "測試資料", user_room: "測試資料", booking_date: new Date().toISOString().split("T")[0], start_time: "09:00", end_time: "10:00", points_used: 20, points_spent: 20, check_in_time: null, status: "confirmed" },
+  { id: "preview-b2", facilities: { name: "測試資料" }, user_name: "測試資料", user_room: "測試資料", booking_date: new Date().toISOString().split("T")[0], start_time: "14:00", end_time: "15:00", points_used: 30, points_spent: 30, check_in_time: new Date().toISOString(), status: "completed" },
+]
+
+interface FacilityManagementAdminProps {
+  isPreviewMode?: boolean
+}
+
+export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManagementAdminProps) {
+  const { facilities: realFacilities, bookings: realBookings, loading, imageFiles, handleImageFileChange, handleSave, handleDelete, addNewFacility, reload } =
     useFacilitiesAdmin()
+
+  // 預覽模式使用模擬資料
+  const facilities = isPreviewMode ? PREVIEW_FACILITIES : realFacilities
+  const bookings = isPreviewMode ? PREVIEW_BOOKINGS : realBookings
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
@@ -317,41 +347,51 @@ export function FacilityManagementAdmin() {
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
             <span className="material-icons">meeting_room</span>
             設施管理
+            <HelpHint title="管理端設施管理" description="管理設施資料與預約規則，直接影響住戶端可見內容。" workflow={["先用搜尋定位設施，再新增或編輯。","更新後檢查列表欄位與狀態標籤。","必要時刪除停用設施資料。"]} logic={["此頁是設施主檔，所有住戶端預約都依此規則運作。"]} />
           </h2>
-          <button
-            onClick={handleAdd}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold border border-[var(--theme-btn-add-border)] text-[var(--theme-btn-add-text)] bg-transparent hover:bg-[var(--theme-btn-add-hover)] transition-all"
-          >
-            <span className="material-icons text-sm">add</span>
-            新增一筆
-          </button>
         </div>
 
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="搜尋設施名稱或位置..."
-            value={searchTermFacility}
-            onChange={(e) => setSearchTermFacility(e.target.value)}
-            className="w-full p-3 rounded-xl theme-input outline-none"
-          />
+        <div className="flex flex-col sm:flex-row gap-3 justify-between mb-4">
+          <div className="flex-1 max-w-md">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[var(--theme-text-primary)] text-sm">搜尋設施</span>
+              <HelpHint title="管理端設施搜尋" description="可用名稱或位置快速定位設施。" workflow={["輸入設施名稱或位置關鍵字。","從結果中快速進行編輯或刪除。"]} logic={["搜尋只影響顯示，不會修改資料。"]} />
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--theme-text-secondary)]" />
+              <Input
+                type="text"
+                placeholder="搜尋設施名稱或位置..."
+                value={searchTermFacility}
+                onChange={(e) => setSearchTermFacility(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <Button variant="outline" onClick={reload} disabled={loading || isPreviewMode}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              重新整理
+            </Button>
+            <Button onClick={handleAdd}>
+              <Plus className="w-4 h-4 mr-2" />
+              新增一筆
+            </Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full min-w-[1120px] table-fixed border-collapse">
             <thead>
               <tr className="bg-[var(--theme-accent-light)]">
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  設施名稱
-                </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">位置</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  基礎點數
-                </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">冷卻</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">抽籤</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">設施名稱<HelpHint title="設施名稱欄" description="顯示設施名稱。" workflow={["查看設施主名稱。","同名時再對照位置欄辨識。"]} logic={["名稱欄是列表第一識別欄位。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">位置<HelpHint title="設施位置欄" description="顯示設施所在位置。" workflow={["核對場地棟別與樓層。","位置變更時應同步更新。"]} logic={["位置欄影響住戶到場與客服指引。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">基礎點數<HelpHint title="基礎點數欄" description="顯示預約此設施的基本點數。" workflow={["查看設施標準扣點。","調整前先評估使用公平性。"]} logic={["基礎點數決定預約成本門檻。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">冷卻<HelpHint title="冷卻欄" description="顯示同戶再次預約需間隔時數。" workflow={["查看是否設置冷卻間隔。","熱門設施可提高以分散使用。"]} logic={["冷卻欄直接影響同戶重複預約頻率。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">抽籤<HelpHint title="抽籤欄" description="顯示是否啟用熱門時段抽籤機制。" workflow={["查看目前為開啟或關閉。","必要時進編輯切換模式。"]} logic={["抽籤模式改變住戶端預約路徑。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">狀態<HelpHint title="狀態欄" description="顯示設施是否可供預約。" workflow={["查看可用/不可用狀態。","維修中設施應標為不可用。"]} logic={["狀態欄控制是否對住戶開放預約。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">操作<HelpHint title="操作欄" description="可編輯或刪除設施資料。" workflow={["點編輯更新設施規則。","確認不再使用時再刪除。"]} logic={["刪除屬高風險操作，建議先確認是否仍有關聯。"]} align="center" /></span></th>
               </tr>
             </thead>
             <tbody>
@@ -424,10 +464,15 @@ export function FacilityManagementAdmin() {
           <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
             <span className="material-icons">event</span>
             預約紀錄
+            <HelpHint title="管理端預約紀錄" description="查詢住戶預約、簽到與狀態，支援客服與稽核。" workflow={["先用搜尋定位預約紀錄。","查看簽到時間與狀態處理客服查詢。"]} logic={["預約紀錄是稽核與爭議處理的主要依據。"]} />
           </h2>
         </div>
 
         <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[var(--theme-text-primary)] text-sm">搜尋預約</span>
+            <HelpHint title="管理端預約搜尋" description="可依設施、預約人、房號或狀態查詢。" workflow={["輸入設施、住戶或狀態關鍵字。","從結果快速查看目標紀錄。"]} logic={["多欄位搜尋可縮短客服查詢時間。"]} />
+          </div>
           <input
             type="text"
             placeholder="搜尋設施、預約人、房號或狀態..."
@@ -438,18 +483,16 @@ export function FacilityManagementAdmin() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full min-w-[1120px] table-fixed border-collapse">
             <thead>
               <tr className="bg-[var(--theme-accent-light)]">
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">設施</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">
-                  預約人
-                </th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">日期</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">時間</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">點數</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">簽到</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">狀態</th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">設施<HelpHint title="預約設施欄" description="顯示預約的設施名稱。" workflow={["查看住戶預約哪一項設施。"]} logic={["可用於統計設施使用率。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">預約人<HelpHint title="預約人欄" description="顯示住戶姓名與房號。" workflow={["核對住戶姓名與房號。"]} logic={["住戶識別欄位用於客服與責任追蹤。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">日期<HelpHint title="預約日期欄" description="顯示預約日期。" workflow={["確認預約發生日期。"]} logic={["日期是檢查規則與爭議時間點基準。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">時間<HelpHint title="預約時間欄" description="顯示時段範圍。" workflow={["查看開始與結束時間。"]} logic={["時段決定簽到窗口與衝突判定。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">點數<HelpHint title="點數欄" description="顯示此筆預約消耗點數。" workflow={["核對扣點是否符合規則。"]} logic={["點數欄可協助對帳與異常檢核。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">簽到<HelpHint title="簽到欄" description="顯示簽到時間，未簽到則為空。" workflow={["查看是否在有效窗口內簽到。"]} logic={["簽到欄可判斷是否未到場或逾時。"]} align="center" /></span></th>
+                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap">狀態<HelpHint title="預約狀態欄" description="顯示預約目前狀態。" workflow={["查看已確認/取消/完成等狀態。"]} logic={["狀態是客服與稽核判斷流程節點依據。"]} align="center" /></span></th>
               </tr>
             </thead>
             <tbody>

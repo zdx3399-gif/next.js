@@ -91,12 +91,20 @@ export async function fetchPackages(room?: string, isAdmin = false, userUnitId?:
   }
 
   const packages: Package[] = packagesData.map((pkg: any) => {
+    // 優先使用資料庫上儲存的 recipient_name / recipient_room（server route 或 insert 時可能已寫入）
     const recipientName =
-      (pkg.recipient_id ? recipientNamesMap[pkg.recipient_id] : null) ||
-      (pkg.unit_id ? unitOwnerMap[pkg.unit_id] : null) ||
-      ""
+      (pkg.recipient_name && pkg.recipient_name !== "")
+        ? pkg.recipient_name
+        : (pkg.recipient_id ? recipientNamesMap[pkg.recipient_id] : null) ||
+          (pkg.unit_id ? unitOwnerMap[pkg.unit_id] : null) ||
+          ""
 
-    const recipientRoom = pkg.unit_id ? unitsMap[pkg.unit_id] : ""
+    const recipientRoom =
+      (pkg.recipient_room && pkg.recipient_room !== "")
+        ? pkg.recipient_room
+        : pkg.unit_id
+        ? unitsMap[pkg.unit_id]
+        : ""
 
     return {
       id: pkg.id,
@@ -128,46 +136,25 @@ export async function fetchPackages(room?: string, isAdmin = false, userUnitId?:
 }
 
 export async function addPackage(packageData: AddPackageData): Promise<Package | null> {
-  const supabase = getSupabaseClient()
-  if (!supabase) return null
+  const res = await fetch("/api/packages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(packageData),
+  })
 
-  let unitId = packageData.unit_id
-  if (!unitId && packageData.recipient_room) {
-    const { data: unitData } = await supabase
-      .from("units")
-      .select("id")
-      .eq("unit_code", packageData.recipient_room)
-      .single()
+  const result = await res.json().catch(() => ({}))
 
-    if (unitData) {
-      unitId = unitData.id
-    }
+  if (!res.ok) {
+    console.error("[v0] Error adding package via API:", result)
+    throw new Error(result?.error || "新增包裹失敗")
   }
-
-  const insertData: Record<string, unknown> = {
-    courier: packageData.courier,
-    tracking_number: packageData.tracking_number || null,
-    arrived_at: packageData.arrived_at,
-    status: "pending",
-  }
-
-  if (unitId) {
-    insertData.unit_id = unitId
-  }
-
-  console.log("[v0] Adding package with data:", insertData)
-
-  const { data, error } = await supabase.from("packages").insert([insertData]).select().single()
-
-  if (error) {
-    console.error("[v0] Error adding package:", error.message, error.details, error.hint)
-    throw new Error(error.message || "新增包裹失敗")
-  }
-
-  console.log("[v0] Package added successfully:", data)
 
   return {
-    ...data,
+    id: result.id,
+    courier: packageData.courier,
+    tracking_number: packageData.tracking_number,
+    arrived_at: packageData.arrived_at,
+    status: "pending",
     recipient_name: packageData.recipient_name || "",
     recipient_room: packageData.recipient_room || "",
   }
@@ -178,57 +165,24 @@ export async function markPackageAsPickedUp(
   pickedUpBy: string,
   pickedUpById?: string,
 ): Promise<Package | null> {
-  const supabase = getSupabaseClient()
-  if (!supabase) return null
+  const res = await fetch("/api/packages", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ packageId, picked_up_by: pickedUpBy, picked_up_by_id: pickedUpById }),
+  })
 
-  const pickedUpTime = new Date().toISOString()
+  const result = await res.json().catch(() => ({}))
 
-  const updateData: Record<string, unknown> = {
-    status: "picked_up",
-    picked_up_at: pickedUpTime,
-    picked_up_by: pickedUpBy, // 領取人名字
+  if (!res.ok) {
+    console.error("[v0] Error marking package as picked up via API:", result)
+    throw new Error(result?.error || "標記領取失敗")
   }
-
-  if (pickedUpById) {
-    updateData.picked_up_by_id = pickedUpById
-  }
-
-  console.log("[v0] Marking package as picked up:", packageId, updateData)
-
-  const { data, error } = await supabase.from("packages").update(updateData).eq("id", packageId).select().single()
-
-  if (error) {
-    console.log("[v0] First attempt failed, trying without picked_up_by column")
-    const fallbackData: Record<string, unknown> = {
-      status: "picked_up",
-      picked_up_at: pickedUpTime,
-    }
-    if (pickedUpById) {
-      fallbackData.picked_up_by_id = pickedUpById
-    }
-
-    const { data: data2, error: error2 } = await supabase
-      .from("packages")
-      .update(fallbackData)
-      .eq("id", packageId)
-      .select()
-      .single()
-
-    if (error2) {
-      console.error("[v0] Error marking package as picked up:", error2.message)
-      throw new Error(error2.message)
-    }
-
-    return {
-      ...data2,
-      picked_up_by: pickedUpBy,
-    }
-  }
-
-  console.log("[v0] Package marked as picked up:", data)
 
   return {
-    ...data,
+    id: packageId,
+    courier: "",
+    arrived_at: new Date().toISOString(),
+    status: "picked_up",
     picked_up_by: pickedUpBy,
   }
 }

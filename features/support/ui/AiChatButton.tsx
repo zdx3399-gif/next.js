@@ -120,7 +120,7 @@ export function AiChatButton({ onClick, isOpen, position, onDrag }: AiChatButton
         top: position.y,
         cursor: isDragging ? "grabbing" : "grab",
       }}
-      className="w-[70px] h-[70px] rounded-2xl bg-[var(--theme-accent)] border-[3px] border-[var(--theme-bg-primary)] flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:scale-110 hover:shadow-[0_6px_30px_var(--theme-accent-glow)] transition-transform z-[1000] select-none"
+      className="w-[70px] h-[70px] rounded-2xl bg-[var(--theme-accent)] border-[3px] border-[var(--theme-bg-primary)] flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:scale-110 hover:shadow-[0_6px_30px_var(--theme-accent-glow)] transition-transform z-[1210] select-none"
     >
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 pointer-events-none">
         <rect x="7" y="5" width="10" height="12" rx="2" fill="var(--theme-bg-primary)" />

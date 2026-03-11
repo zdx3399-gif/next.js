@@ -64,7 +64,7 @@ export function useFinanceAdmin() {
     setRecords((prev) => [...prev, newRow])
   }
 
-  const saveRecord = async (record: FinanceRecord, index: number) => {
+  const saveRecord = async (record: Omit<FinanceRecord, 'id'> & { id?: string }, index: number) => {
     console.log("[v0] saveRecord called with:", { record, index })
 
     if (record.id) {

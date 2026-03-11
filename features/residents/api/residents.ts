@@ -6,7 +6,7 @@ export interface Resident {
   room?: string // 顯示用，從 units.unit_code 來
   phone: string // 從 profiles 獲取
   email?: string // 從 profiles 獲取
-  role?: "resident" | "committee" | "vendor"
+  role?: "resident" | "committee" | "guard"
   relationship?: "owner" | "family_member" | "tenant" | "household_member"
   created_at?: string
   updated_at?: string
@@ -34,11 +34,11 @@ export async function fetchResidents(): Promise<Resident[]> {
   const unitIds = [...new Set(data.filter((r) => r.unit_id).map((r) => r.unit_id))]
 
   // 分開查詢 profiles
-  let profilesMap: Record<string, { phone?: string; email?: string }> = {}
+  let profilesMap: Record<string, { phone?: string; email?: string; role?: string }> = {}
   if (profileIds.length > 0) {
-    const { data: profiles } = await supabase.from("profiles").select("id, phone, email").in("id", profileIds)
+    const { data: profiles } = await supabase.from("profiles").select("id, phone, email, role").in("id", profileIds)
     if (profiles) {
-      profilesMap = Object.fromEntries(profiles.map((p) => [p.id, { phone: p.phone, email: p.email }]))
+      profilesMap = Object.fromEntries(profiles.map((p) => [p.id, { phone: p.phone, email: p.email, role: p.role }]))
     }
   }
 
@@ -56,7 +56,7 @@ export async function fetchResidents(): Promise<Resident[]> {
     name: r.name,
     phone: r.profile_id ? profilesMap[r.profile_id]?.phone || "" : "",
     email: r.profile_id ? profilesMap[r.profile_id]?.email || "" : "",
-    role: r.role,
+    role: r.role || (r.profile_id ? (profilesMap[r.profile_id]?.role as any) : undefined),
     relationship: r.relationship,
     created_at: r.created_at,
     updated_at: r.updated_at,
@@ -72,8 +72,11 @@ export async function createResident(
   const supabase = getSupabaseClient()
   if (!supabase) return null
 
+  const normalizedRole = resident.role
+
   const insertData: Record<string, unknown> = {
     name: resident.name,
+    role: normalizedRole || "resident",
     relationship: resident.relationship || "household_member",
   }
 
@@ -84,17 +87,25 @@ export async function createResident(
   if (resident.profile_id) {
     insertData.profile_id = resident.profile_id
 
-    // 同步更新 profiles 表的 phone/email
-    if (resident.phone || resident.email) {
+    // 同步更新 profiles 表的 phone/email/role
+    if (resident.phone || resident.email || normalizedRole) {
       const profileUpdates: Record<string, string> = {}
       if (resident.phone) profileUpdates.phone = resident.phone
       if (resident.email) profileUpdates.email = resident.email
+      if (normalizedRole) profileUpdates.role = normalizedRole
 
       await supabase.from("profiles").update(profileUpdates).eq("id", resident.profile_id)
     }
   }
 
-  const { data, error } = await supabase.from("household_members").insert([insertData]).select().single()
+  let { data, error } = await supabase.from("household_members").insert([insertData]).select().single()
+
+  if (error && insertData.role) {
+    const { role: _role, ...fallbackInsert } = insertData
+    const retry = await supabase.from("household_members").insert([fallbackInsert]).select().single()
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) {
     console.error("Error creating resident:", error)
@@ -107,15 +118,32 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
   const supabase = getSupabaseClient()
   if (!supabase) return null
 
-  const { room, phone, email, profile_id, ...dbUpdates } = updates
+  const normalizedRole = updates.role
+  const { room, phone, email, profile_id, role, ...dbUpdates } = updates
+
+  if (normalizedRole !== undefined) {
+    dbUpdates.role = normalizedRole
+  }
 
   // 更新 household_members（不含 phone/email）
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("household_members")
     .update(dbUpdates)
     .eq("id", id)
     .select(`*, profile_id`)
     .single()
+
+  if (error && dbUpdates.role !== undefined) {
+    const { role: _role, ...fallbackDbUpdates } = dbUpdates
+    const retry = await supabase
+      .from("household_members")
+      .update(fallbackDbUpdates)
+      .eq("id", id)
+      .select(`*, profile_id`)
+      .single()
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) {
     console.error("Error updating resident:", error)
@@ -123,10 +151,11 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
   }
 
   const targetProfileId = data?.profile_id || profile_id
-  if (targetProfileId && (phone || email)) {
+  if (targetProfileId && (phone || email || normalizedRole)) {
     const profileUpdates: Record<string, string> = {}
     if (phone) profileUpdates.phone = phone
     if (email) profileUpdates.email = email
+    if (normalizedRole) profileUpdates.role = normalizedRole
 
     await supabase.from("profiles").update(profileUpdates).eq("id", targetProfileId)
   }
@@ -151,8 +180,30 @@ export async function fetchResidentsByRoom(room: string): Promise<Resident[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
 
-  // 先查詢 unit_id
-  const { data: units } = await supabase.from("units").select("id").eq("unit_code", room).limit(1)
+  // 先嘗試以 unit_code 或 unit_number 精確比對 room（UI 可能傳不同格式）
+  let unitsResult: any = null
+  try {
+    const res = await supabase
+      .from("units")
+      .select("id")
+      .or(`unit_code.eq.${room},unit_number.eq.${room}`)
+      .limit(1)
+    unitsResult = res
+  } catch (e) {
+    console.warn("Exact unit match failed, will try fallback:", e)
+  }
+
+  let units = unitsResult?.data || []
+
+  // 若找不到，再用模糊比對 unit_code（容錯不同分隔或格式）
+  if ((!units || units.length === 0) && room) {
+    try {
+      const { data: unitsLike } = await supabase.from("units").select("id").ilike("unit_code", `%${room}%`).limit(1)
+      units = unitsLike || []
+    } catch (e) {
+      console.warn("Fuzzy unit match failed:", e)
+    }
+  }
 
   if (!units || units.length === 0) {
     return []
@@ -176,11 +227,11 @@ export async function fetchResidentsByRoom(room: string): Promise<Resident[]> {
   // 收集所有 profile_id
   const profileIds = [...new Set(data.filter((r) => r.profile_id).map((r) => r.profile_id))]
 
-  let profilesMap: Record<string, { phone?: string; email?: string }> = {}
+  let profilesMap: Record<string, { phone?: string; email?: string; role?: string }> = {}
   if (profileIds.length > 0) {
-    const { data: profiles } = await supabase.from("profiles").select("id, phone, email").in("id", profileIds)
+    const { data: profiles } = await supabase.from("profiles").select("id, phone, email, role").in("id", profileIds)
     if (profiles) {
-      profilesMap = Object.fromEntries(profiles.map((p) => [p.id, { phone: p.phone, email: p.email }]))
+      profilesMap = Object.fromEntries(profiles.map((p) => [p.id, { phone: p.phone, email: p.email, role: p.role }]))
     }
   }
 
@@ -189,7 +240,7 @@ export async function fetchResidentsByRoom(room: string): Promise<Resident[]> {
     name: r.name,
     phone: r.profile_id ? profilesMap[r.profile_id]?.phone || "" : "",
     email: r.profile_id ? profilesMap[r.profile_id]?.email || "" : "",
-    role: r.role,
+    role: r.role || (r.profile_id ? (profilesMap[r.profile_id]?.role as any) : undefined),
     relationship: r.relationship,
     created_at: r.created_at,
     updated_at: r.updated_at,
@@ -223,11 +274,11 @@ export async function fetchResidentsByUnitId(unitId: string): Promise<Resident[]
   // 收集所有 profile_id
   const profileIds = [...new Set(data.filter((r) => r.profile_id).map((r) => r.profile_id))]
 
-  let profilesMap: Record<string, { phone?: string; email?: string }> = {}
+  let profilesMap: Record<string, { phone?: string; email?: string; role?: string }> = {}
   if (profileIds.length > 0) {
-    const { data: profiles } = await supabase.from("profiles").select("id, phone, email").in("id", profileIds)
+    const { data: profiles } = await supabase.from("profiles").select("id, phone, email, role").in("id", profileIds)
     if (profiles) {
-      profilesMap = Object.fromEntries(profiles.map((p) => [p.id, { phone: p.phone, email: p.email }]))
+      profilesMap = Object.fromEntries(profiles.map((p) => [p.id, { phone: p.phone, email: p.email, role: p.role }]))
     }
   }
 
@@ -236,7 +287,7 @@ export async function fetchResidentsByUnitId(unitId: string): Promise<Resident[]
     name: r.name,
     phone: r.profile_id ? profilesMap[r.profile_id]?.phone || "" : "",
     email: r.profile_id ? profilesMap[r.profile_id]?.email || "" : "",
-    role: r.role,
+    role: r.role || (r.profile_id ? (profilesMap[r.profile_id]?.role as any) : undefined),
     relationship: r.relationship,
     created_at: r.created_at,
     updated_at: r.updated_at,

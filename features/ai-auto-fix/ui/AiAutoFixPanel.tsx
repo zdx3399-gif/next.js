@@ -79,7 +79,7 @@ function statusLabel(status?: string): string {
   return RERUN_STATUS_LABEL[status] || status
 }
 
-export function AiAutoFixPanel() {
+export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [summary, setSummary] = useState<AutoFixSummary | null>(null)
@@ -144,6 +144,11 @@ export function AiAutoFixPanel() {
       <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-primary)] p-4 sm:p-5">
         <h3 className="text-lg font-bold text-[var(--theme-text-primary)]">AI 自動修正測試看板</h3>
         <p className="mt-1 text-sm text-[var(--theme-text-secondary)]">整合原 ai-auto-fix-system 的 dry-run 視覺化結果，並套用 website 管理後台主題。</p>
+        {readOnly && (
+          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            目前為唯讀模式（管委會可檢視，僅管理員可執行後續操作）。
+          </div>
+        )}
 
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
           <KpiCard label="最近分析筆數" value={summary?.totalRows} />

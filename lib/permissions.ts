@@ -87,6 +87,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "community",
     "knowledge-base",
     "handover-knowledge",
+    "ai-auto-fix",
     "moderation",
     "audit-logs",
     "decryption",

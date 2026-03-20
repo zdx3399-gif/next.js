@@ -224,7 +224,7 @@ export default function AdminPage() {
   const navItems = currentUser
     ? allNavItems.filter((item) => {
         if (item.id === "ai-auto-fix") {
-          return effectiveRole === "admin"
+          return effectiveRole === "admin" || effectiveRole === "committee"
         }
         return canAccessSection(effectiveRole, item.id as any, false)
       })
@@ -232,7 +232,7 @@ export default function AdminPage() {
 
   const hasAccess = currentUser
     ? currentSection === "ai-auto-fix"
-      ? effectiveRole === "admin"
+      ? effectiveRole === "admin" || effectiveRole === "committee"
       : canAccessSection(effectiveRole, currentSection, false)
     : false
   const isPreviewMode = currentUser ? isAdminPreviewMode(effectiveRole, currentSection as any) : false
@@ -465,7 +465,7 @@ export default function AdminPage() {
                 <span className="material-icons">auto_fix_high</span>
                 AI 自動修正
               </h2>
-              <AiAutoFixPanel />
+              <AiAutoFixPanel readOnly={effectiveRole !== "admin"} />
             </div>
           ) : currentSection === "audit-logs" ? (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">

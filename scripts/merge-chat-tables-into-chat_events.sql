@@ -108,7 +108,7 @@ select
   'chat_history' as source,
   ch.id::text as source_pk,
   ch.created_at,
-  ch.user_id::text,
+  null::text as user_id,
   ch.question,
   ch.answer,
   ch.search_method,

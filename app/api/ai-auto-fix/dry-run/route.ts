@@ -12,29 +12,29 @@ function getBaseUrl(): string {
 export async function GET(request: Request) {
   try {
     const baseUrl = getBaseUrl()
+    const { searchParams } = new URL(request.url)
+    const tenant = searchParams.get("tenant") === "tenant_b" ? "tenant_b" : "tenant_a"
 
     if (baseUrl) {
       const url = `${baseUrl}/dry-run`
-      const response = await fetch(url, {
-        method: "GET",
-        cache: "no-store",
-        headers: {
-          Accept: "application/json",
-        },
-      })
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+          },
+        })
 
-      const payload = await response.json().catch(() => null)
-
-      if (!response.ok || !payload) {
-        const message = payload?.error || `AI Auto Fix 服務回應失敗 (${response.status})`
-        return NextResponse.json({ success: false, error: message }, { status: 502 })
+        const payload = await response.json().catch(() => null)
+        if (response.ok && payload) {
+          return NextResponse.json(payload)
+        }
+      } catch {
+        // Fallback to local mode below when external service is unavailable.
       }
-
-      return NextResponse.json(payload)
     }
 
-    const { searchParams } = new URL(request.url)
-    const tenant = searchParams.get("tenant") === "tenant_b" ? "tenant_b" : "tenant_a"
     const data = await runAutoFixDryRun(tenant)
 
     return NextResponse.json({ success: true, data, source: "local" })

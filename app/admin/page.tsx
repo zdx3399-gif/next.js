@@ -228,7 +228,7 @@ export default function AdminPage() {
         }
         return canAccessSection(effectiveRole, item.id as any, false)
       })
-    : allNavItems
+    : []
 
   const hasAccess = currentUser
     ? currentSection === "ai-auto-fix"

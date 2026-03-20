@@ -518,19 +518,72 @@ function createSupabaseClient(tenantId: "tenant_a" | "tenant_b") {
 
 async function loadRecentRows(supabase: any, config: DryRunConfig): Promise<ChatHistoryRow[]> {
   const from = new Date(Date.now() - config.windowDays * 24 * 60 * 60 * 1000).toISOString()
+
+  // Preferred source: unified table after migration.
+  const { data: unifiedRows, error: unifiedError } = await supabase
+    .from("chat_events")
+    .select("source, source_pk, created_at, question, answer, feedback, needs_review, issue_type, user_id")
+    .gte("created_at", from)
+
+  if (!unifiedError && Array.isArray(unifiedRows) && unifiedRows.length > 0) {
+    return unifiedRows.map((row: any) => ({
+      id: String(row.source_pk || ""),
+      created_at: row.created_at,
+      question: row.question || "",
+      answer: row.answer || null,
+      feedback: row.feedback || null,
+      needs_review: Boolean(row.needs_review),
+      issue_type: row.issue_type || null,
+      reporter_id: row.user_id || null,
+    }))
+  }
+
   const { data, error } = await supabase
     .from("chat_history")
     .select("id, created_at, question, answer, feedback, needs_review, issue_type, reporter_id")
     .gte("created_at", from)
 
-  if (error) {
-    console.warn("[ai-auto-fix] loadRecentRows failed:", error)
+  if (!error && Array.isArray(data) && data.length > 0) {
+    return (data || []) as ChatHistoryRow[]
+  }
+
+  // Fallback: many production flows write records to chat_log instead of chat_history.
+  const { data: logRows, error: logError } = await supabase
+    .from("chat_log")
+    .select("id, created_at, raw_question, normalized_question, feedback, fail_count, unclear_count, success_count, user_id, answered")
+    .gte("created_at", from)
+
+  if (logError) {
+    console.warn("[ai-auto-fix] loadRecentRows fallback chat_log failed:", logError)
     return []
   }
-  return (data || []) as ChatHistoryRow[]
+
+  return (logRows || []).map((row: any) => {
+    const failCount = Number(row.fail_count || 0)
+    const needsReview = row.feedback === "not_helpful" || failCount > 0
+
+    return {
+      id: String(row.id),
+      created_at: row.created_at,
+      question: row.raw_question || row.normalized_question || "",
+      answer: null,
+      feedback: row.feedback || null,
+      needs_review: needsReview,
+      issue_type: row.answered === false ? "no_match" : needsReview ? "low_rating" : "fallback",
+      reporter_id: row.user_id || null,
+    }
+  })
 }
 
 async function loadAnswerRows(supabase: any): Promise<AnswerRow[]> {
+  const { data: unifiedRows, error: unifiedError } = await supabase
+    .from("chat_events")
+    .select("question, answer, rating, is_helpful")
+
+  if (!unifiedError && Array.isArray(unifiedRows) && unifiedRows.length > 0) {
+    return (unifiedRows || []) as AnswerRow[]
+  }
+
   const { data, error } = await supabase
     .from("chat_history")
     .select("question, answer, rating, is_helpful")
@@ -554,7 +607,7 @@ export async function runAutoFixDryRun(tenantId: "tenant_a" | "tenant_b"): Promi
   const clusters = buildClusters(recentRows)
   const answerStatsByQ = buildAnswerStatsByQuestion(answerRows)
 
-  const hit = clusters.filter((c) => c.reviewCount >= config.repeatThreshold)
+  const hit = clusters.filter((c) => c.reviewCount >= config.repeatThreshold || c.repeatCount >= config.repeatThreshold)
 
   const items: Item[] = hit
     .map((cluster) => {

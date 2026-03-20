@@ -523,7 +523,10 @@ async function loadRecentRows(supabase: any, config: DryRunConfig): Promise<Chat
     .select("id, created_at, question, answer, feedback, needs_review, issue_type, reporter_id")
     .gte("created_at", from)
 
-  if (error) throw error
+  if (error) {
+    console.warn("[ai-auto-fix] loadRecentRows failed:", error)
+    return []
+  }
   return (data || []) as ChatHistoryRow[]
 }
 
@@ -532,7 +535,10 @@ async function loadAnswerRows(supabase: any): Promise<AnswerRow[]> {
     .from("chat_history")
     .select("question, answer, rating, is_helpful")
 
-  if (error) throw error
+  if (error) {
+    console.warn("[ai-auto-fix] loadAnswerRows failed:", error)
+    return []
+  }
   return (data || []) as AnswerRow[]
 }
 

@@ -39,7 +39,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ success: true, data, source: "local" })
   } catch (error) {
-    const message = error instanceof Error ? error.message : "無法連線到 AI Auto Fix 服務"
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null && "message" in error
+          ? String((error as { message: unknown }).message)
+          : "無法連線到 AI Auto Fix 服務"
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
 }

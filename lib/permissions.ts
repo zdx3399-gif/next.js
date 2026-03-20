@@ -340,7 +340,15 @@ export function getAllowedSections(role: UserRole, isResidentMode = false): Sect
 
   const override = getRolePermissionOverride(role, isResidentMode)
   if (override) {
-    return ["dashboard", ...override]
+    const sections: Section[] = ["dashboard", ...override]
+    if (role === "admin" && !sections.includes("ai-auto-fix")) {
+      sections.push("ai-auto-fix")
+    }
+    return sections
+  }
+
+  if (role === "admin" && !base.includes("ai-auto-fix")) {
+    return [...base, "ai-auto-fix"]
   }
 
   return base

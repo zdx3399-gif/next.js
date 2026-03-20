@@ -212,12 +212,30 @@ export default function AdminPage() {
     { id: "audit-logs", icon: "history", label: "稽核紀錄" },
   ]
 
+  const normalizedRole = String(currentUser?.role || "").trim().toLowerCase()
+  const effectiveRole: UserRole =
+    normalizedRole === "resident" ||
+    normalizedRole === "guard" ||
+    normalizedRole === "committee" ||
+    normalizedRole === "admin"
+      ? (normalizedRole as UserRole)
+      : "resident"
+
   const navItems = currentUser
-    ? allNavItems.filter((item) => canAccessSection(currentUser.role as UserRole, item.id as any, false))
+    ? allNavItems.filter((item) => {
+        if (item.id === "ai-auto-fix") {
+          return effectiveRole === "admin"
+        }
+        return canAccessSection(effectiveRole, item.id as any, false)
+      })
     : allNavItems
 
-  const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection, false) : false
-  const isPreviewMode = currentUser ? isAdminPreviewMode(currentUser.role as UserRole, currentSection as any) : false
+  const hasAccess = currentUser
+    ? currentSection === "ai-auto-fix"
+      ? effectiveRole === "admin"
+      : canAccessSection(effectiveRole, currentSection, false)
+    : false
+  const isPreviewMode = currentUser ? isAdminPreviewMode(effectiveRole, currentSection as any) : false
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[var(--theme-gradient-from)] to-[var(--theme-gradient-to)]">

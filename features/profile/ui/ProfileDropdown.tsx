@@ -16,7 +16,7 @@ interface ProfileDropdownProps {
 
 export function ProfileDropdown({ currentUser, onUpdate, getRoleLabel }: ProfileDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, maxHeight: 0 })
   const dropdownRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
@@ -28,9 +28,28 @@ export function ProfileDropdown({ currentUser, onUpdate, getRoleLabel }: Profile
   useEffect(() => {
     if (isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
+
+      const panelWidth = Math.min(window.innerWidth * 0.9, 400)
+      const margin = 12
+      const gap = 8
+      const preferredTop = rect.bottom + gap
+      const maxHeightBelow = window.innerHeight - preferredTop - margin
+      const maxHeightAbove = rect.top - gap - margin
+
+      const placeAbove = maxHeightBelow < 420 && maxHeightAbove > maxHeightBelow
+      const top = placeAbove
+        ? Math.max(margin, rect.top - gap - Math.min(600, maxHeightAbove))
+        : preferredTop
+
+      const maxHeight = Math.max(280, placeAbove ? maxHeightAbove : maxHeightBelow)
+
+      const rawLeft = rect.left
+      const left = Math.min(Math.max(margin, rawLeft), window.innerWidth - panelWidth - margin)
+
       setDropdownPosition({
-        top: rect.bottom + 8,
-        left: rect.left,
+        top,
+        left,
+        maxHeight,
       })
     }
   }, [isOpen])
@@ -74,11 +93,12 @@ export function ProfileDropdown({ currentUser, onUpdate, getRoleLabel }: Profile
       ? createPortal(
           <div
             ref={dropdownRef}
-            className="w-[90vw] sm:w-[400px] max-w-[400px] shadow-2xl bg-[var(--theme-bg-card)] border border-[var(--theme-border)]"
+            className="w-[90vw] sm:w-[400px] max-w-[400px] shadow-2xl bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl overflow-y-auto"
             style={{
               position: "fixed",
               top: dropdownPosition.top,
               left: dropdownPosition.left,
+              maxHeight: dropdownPosition.maxHeight,
               zIndex: 1200,
             }}
           >
@@ -110,8 +130,12 @@ export function ProfileDropdown({ currentUser, onUpdate, getRoleLabel }: Profile
         tabIndex={0}
         className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer w-full select-none"
       >
-        <div className="w-10 h-10 rounded-full bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] flex items-center justify-center font-bold text-base flex-shrink-0">
-          {currentUser?.name?.charAt(0).toUpperCase() || "U"}
+        <div className="w-10 h-10 rounded-full bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] flex items-center justify-center font-bold text-base flex-shrink-0 overflow-hidden">
+          {currentUser?.line_avatar_url ? (
+            <img key={currentUser.line_avatar_url} src={currentUser.line_avatar_url} alt="頭像" className="w-full h-full object-cover" />
+          ) : (
+            currentUser?.name?.charAt(0).toUpperCase() || "U"
+          )}
         </div>
         <div className="text-left flex-1 min-w-0">
           <div className="text-[var(--theme-text-primary)] font-medium text-sm truncate flex items-center gap-2">

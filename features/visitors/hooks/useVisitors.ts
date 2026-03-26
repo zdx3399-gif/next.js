@@ -4,8 +4,11 @@ import { useState, useEffect, useCallback } from "react"
 import {
   type Visitor,
   type VisitorReservation,
+  type UpdateVisitorReservation,
   fetchVisitors,
   createVisitorReservation,
+  updateVisitorReservation,
+  deleteVisitorReservation,
   checkInVisitor,
   checkOutVisitor,
 } from "../api/visitors"
@@ -110,6 +113,40 @@ export function useVisitors({ userRoom, userUnitId, currentUser, isAdmin = false
     }
   }
 
+  const handleUpdateReservation = async (reservation: UpdateVisitorReservation): Promise<boolean> => {
+    if (!currentUser) {
+      alert("請先登入")
+      return false
+    }
+
+    try {
+      await updateVisitorReservation(reservation, currentUser.id, currentUser.role)
+      alert("預約已更新")
+      await loadVisitors()
+      return true
+    } catch (e: any) {
+      alert("更新失敗：" + e.message)
+      return false
+    }
+  }
+
+  const handleDeleteReservation = async (visitorId: string): Promise<boolean> => {
+    if (!currentUser) {
+      alert("請先登入")
+      return false
+    }
+
+    try {
+      await deleteVisitorReservation(visitorId, currentUser.id, currentUser.role)
+      alert("預約已刪除")
+      await loadVisitors()
+      return true
+    } catch (e: any) {
+      alert("刪除失敗：" + e.message)
+      return false
+    }
+  }
+
   return {
     visitors,
     reservedVisitors,
@@ -119,6 +156,8 @@ export function useVisitors({ userRoom, userUnitId, currentUser, isAdmin = false
     searchTerm,
     setSearchTerm,
     handleReservation,
+    handleUpdateReservation,
+    handleDeleteReservation,
     handleCheckIn,
     handleCheckOut,
     reload: loadVisitors,

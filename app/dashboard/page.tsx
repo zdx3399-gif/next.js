@@ -129,6 +129,7 @@ export default function DashboardPage() {
           status: user.status || "active",
           unit_id: user.unit_id || "",
           room: user.room || "測試資料",
+          line_avatar_url: user.line_avatar_url || "",
         }
         setCurrentUser(previewUser)
         return
@@ -164,6 +165,7 @@ export default function DashboardPage() {
           status: user.status || "active",
           unit_id: user.unit_id || "",
           room: user.room || "",
+          line_avatar_url: user.line_avatar_url || "",
         }
         setCurrentUser(updatedUser)
       } else {
@@ -176,6 +178,7 @@ export default function DashboardPage() {
           status: userData.status || "active",
           unit_id: userData.unit_id || "",
           room: userData.units?.unit_code || "",
+          line_avatar_url: userData.line_avatar_url || "",
         }
         setCurrentUser(updatedUser)
       }

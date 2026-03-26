@@ -240,7 +240,7 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
 
   const handleAdd = () => {
     setEditingAnnouncement(null)
-    setFormData({ status: "draft" })
+    setFormData({ status: "published" })
     setImageFile(null)
     setIsModalOpen(true)
   }
@@ -257,13 +257,20 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
   }
 
   const handleSave = async () => {
+    console.log("[UI] 🔥 handleSave 被呼叫了");
+    console.log("[UI] 📊 formData:", formData);
+    console.log("[UI] 📝 editingAnnouncement:", !!editingAnnouncement);
+
     try {
       const finalData = { ...formData }
+      console.log("[UI] ✅ finalData 初始化:", finalData);
 
       if (imageFile) {
         try {
+          console.log("[UI] ⏳ 上傳圖片...");
           const imageUrl = await uploadAnnouncementImage(imageFile)
           finalData.image_url = imageUrl
+          console.log("[UI] ✅ 圖片上傳完成");
         } catch (uploadError) {
           console.error("Error uploading image:", uploadError)
           alert("圖片上傳失敗，請稍後再試")
@@ -272,26 +279,51 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
       }
 
       if (editingAnnouncement) {
+        console.log("[UI] 📝 編輯模式 - 呼叫 updateAnnouncement");
         const { error } = await updateAnnouncement(editingAnnouncement.id, finalData)
         if (error) {
-          console.error("[v0] Failed to update announcement:", error)
+          console.error("[UI] ❌ updateAnnouncement 失敗:", error)
           alert(`更新失敗: ${error.message || "未知錯誤"}`)
           return
         }
+        console.log("[UI] ✅ updateAnnouncement 成功");
         alert("公告已更新")
       } else {
-        const { error } = await createAnnouncement(finalData)
-        if (error) {
-          console.error("[v0] Failed to create announcement:", error)
-          alert(`新增失敗: ${error.message || "未知錯誤"}`)
+        console.log("[UI] ➕ 新增模式 - 直接呼叫 /api/announce");
+        console.log("[UI] 📤 finalData:", JSON.stringify(finalData));
+        try {
+          const res = await fetch("/api/announce", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: finalData.title,
+              content: finalData.content,
+              image_url: finalData.image_url,
+              author: finalData.author_name || "管理委員會",
+              pushOnly: false,
+              test: false,
+            }),
+          })
+          const payload = await res.json().catch(() => ({}))
+          console.log("[UI] 📥 /api/announce 回應:", res.status, JSON.stringify(payload));
+          if (!res.ok) {
+            alert(`新增失敗: ${payload?.error || "未知錯誤"}`)
+            return
+          }
+          console.log("[UI] ✅ 公告新增+推播成功，推播人數:", payload?.pushed);
+          alert(`公告已新增，已推播給 ${payload?.pushed || 0} 人`)
+        } catch (fetchErr: any) {
+          console.error("[UI] 💥 fetch /api/announce 失敗:", fetchErr);
+          alert(`新增失敗: ${fetchErr?.message || "網路錯誤"}`)
           return
         }
-        alert("公告已新增")
       }
+
+      console.log("[UI] ✅ 儲存完成，刷新清單");
       setIsModalOpen(false)
       loadAnnouncements()
     } catch (error) {
-      console.error("Error saving announcement:", error)
+      console.error("[UI] 💥 handleSave 拋出未捕捉的異常:", error)
       alert("儲存失敗，請稍後再試")
     }
   }

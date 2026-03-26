@@ -192,6 +192,7 @@ CREATE INDEX IF NOT EXISTS idx_votes_status ON votes(status);
 CREATE INDEX IF NOT EXISTS idx_votes_created_by ON votes(created_by);
 CREATE INDEX IF NOT EXISTS idx_vote_records_vote_id ON vote_records(vote_id);
 CREATE INDEX IF NOT EXISTS idx_vote_records_user_id ON vote_records(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vote_records_vote_user ON vote_records(vote_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_maintenance_status ON maintenance(status);
 CREATE INDEX IF NOT EXISTS idx_packages_status ON packages(status);
 CREATE INDEX IF NOT EXISTS idx_packages_room ON packages(recipient_room);

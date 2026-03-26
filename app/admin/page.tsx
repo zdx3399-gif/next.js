@@ -117,6 +117,7 @@ export default function AdminPage() {
             status: userData.status,
             unit_id: userData.unit_id,
             room: userData.units?.unit_code || "",
+            line_avatar_url: userData.line_avatar_url || "",
           }
           setCurrentUser(updatedUser)
         }

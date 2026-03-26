@@ -9,14 +9,23 @@ import { HelpHint } from "@/components/ui/help-hint"
 interface VisitorReservationFormProps {
   onSubmit: (reservation: VisitorReservation) => Promise<boolean>
   onCancel: () => void
+  initialData?: VisitorReservation
+  submitLabel?: string
+  title?: string
 }
 
-export function VisitorReservationForm({ onSubmit, onCancel }: VisitorReservationFormProps) {
+export function VisitorReservationForm({
+  onSubmit,
+  onCancel,
+  initialData,
+  submitLabel = "確認預約",
+  title = "預約訪客",
+}: VisitorReservationFormProps) {
   const [form, setForm] = useState<VisitorReservation>({
-    name: "",
-    phone: "",
-    purpose: "",
-    reservation_time: "",
+    name: initialData?.name || "",
+    phone: initialData?.phone || "",
+    purpose: initialData?.purpose || "",
+    reservation_time: initialData?.reservation_time || "",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,7 +41,7 @@ export function VisitorReservationForm({ onSubmit, onCancel }: VisitorReservatio
     <div className="bg-[var(--theme-bg-secondary)] border-2 border-[var(--theme-border-accent)] rounded-xl p-5">
       <h3 className="flex gap-2 items-center text-[var(--theme-accent)] font-bold text-lg mb-4">
         <span className="material-icons">person_add</span>
-        預約訪客
+        {title}
         <HelpHint
           title="住戶端預約表單"
           description="填寫訪客基本資料與來訪時間，提交後管理端可提前掌握訪客資訊。"
@@ -135,7 +144,7 @@ export function VisitorReservationForm({ onSubmit, onCancel }: VisitorReservatio
             type="submit"
             className="flex-1 px-4 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg font-bold hover:opacity-90 transition-all"
           >
-            確認預約
+            {submitLabel}
           </button>
         </div>
       </form>

@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
-import { updateProfile, type ProfileData, type User } from "../api/profile"
+import { useState, useEffect, useRef } from "react"
+import { getBoundLineAvatarUrl, getProfile, updateProfile, uploadProfileAvatar, type ProfileData, type User } from "../api/profile"
 import { HelpHint } from "@/components/ui/help-hint"
 
 interface ProfileFormProps {
@@ -21,6 +21,9 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
     password: "",
   })
   const [isUpdating, setIsUpdating] = useState(false)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [lineDefaultAvatarUrl, setLineDefaultAvatarUrl] = useState("")
+  const avatarInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (currentUser) {
@@ -30,10 +33,27 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
         room: currentUser.room || "",
         phone: currentUser.phone || "",
         email: currentUser.email || "",
+        line_avatar_url: currentUser.line_avatar_url || "",
         password: "",
       })
+      setAvatarFile(null)
     }
   }, [currentUser])
+
+  useEffect(() => {
+    const loadLineDefaultAvatar = async () => {
+      if (!currentUser?.id) return
+      const url = await getBoundLineAvatarUrl(currentUser.id)
+      setLineDefaultAvatarUrl(url)
+
+      // 只有在目前用戶沒有任何頭像時，才套用 LINE 預設頭貼
+      if (!currentUser?.line_avatar_url && url) {
+        setProfileForm((prev) => ({ ...prev, line_avatar_url: url }))
+      }
+    }
+
+    loadLineDefaultAvatar()
+  }, [currentUser?.id, currentUser?.line_avatar_url])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,10 +66,30 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
     setIsUpdating(true)
 
     try {
-      const updatedUser = await updateProfile(currentUser.id, profileForm)
-      localStorage.setItem("currentUser", JSON.stringify(updatedUser))
+      const submitData: ProfileData = { ...profileForm }
+
+      if (avatarFile) {
+        const avatarUrl = await uploadProfileAvatar(avatarFile)
+        submitData.line_avatar_url = avatarUrl
+      }
+
+      const updatedUser = await updateProfile(currentUser.id, submitData)
+      const latestProfile = await getProfile(currentUser.id)
+
+      const syncedUser: User = {
+        ...currentUser,
+        ...updatedUser,
+        ...(latestProfile || {}),
+        line_avatar_url:
+          latestProfile?.line_avatar_url ||
+          updatedUser.line_avatar_url ||
+          submitData.line_avatar_url ||
+          currentUser.line_avatar_url,
+      }
+
+      localStorage.setItem("currentUser", JSON.stringify(syncedUser))
       alert("個人資料已更新！")
-      if (onUpdate) onUpdate(updatedUser)
+      if (onUpdate) onUpdate(syncedUser)
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : "未知錯誤"
       console.error(e)
@@ -76,7 +116,59 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
           </button>
         )}
       </div>
-      <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl pb-2">
+        <div>
+          <label className="block text-[var(--theme-text-primary)] mb-2">頭像</label>
+          <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-secondary)]/50 p-3">
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[var(--theme-accent)]/50 bg-[var(--theme-bg-secondary)] flex items-center justify-center shadow-sm">
+              {avatarFile ? (
+                <img src={URL.createObjectURL(avatarFile)} alt="新頭像預覽" className="w-full h-full object-cover" />
+              ) : profileForm.line_avatar_url ? (
+                <img src={profileForm.line_avatar_url} alt="目前頭像" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[var(--theme-text-secondary)] text-xs">無</span>
+              )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null
+                      setAvatarFile(file)
+                    }}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="px-3 py-2 rounded-lg bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] text-sm font-semibold hover:brightness-95 transition-all"
+                  >
+                    更換頭像
+                  </button>
+                  {lineDefaultAvatarUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarFile(null)
+                        setProfileForm((prev) => ({ ...prev, line_avatar_url: lineDefaultAvatarUrl }))
+                      }}
+                      className="px-3 py-2 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-medium bg-[var(--theme-bg-card)] hover:bg-[var(--theme-bg-primary)] transition-colors"
+                    >
+                      還原 LINE 頭貼
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-[var(--theme-text-secondary)] mt-2 truncate">
+                  {avatarFile ? `已選擇：${avatarFile.name}` : "尚未選擇新檔案"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
         <div>
           <label className="block text-[var(--theme-text-primary)] mb-2 flex items-center gap-2">姓名<HelpHint title="住戶端姓名" description="請填寫可聯絡與辨識的姓名。" workflow={["輸入日常使用且可辨識的姓名。","確認姓名與聯絡資料對應正確後再儲存。"]} logic={["姓名影響通知與客服核身識別。"]} align="center" /></label>
           <input

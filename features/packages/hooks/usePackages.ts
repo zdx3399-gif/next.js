@@ -1,7 +1,16 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { type Package, type AddPackageData, fetchPackages, addPackage, markPackageAsPickedUp } from "../api/packages"
+import {
+  type Package,
+  type AddPackageData,
+  type UpdatePackageData,
+  fetchPackages,
+  addPackage,
+  updatePackage,
+  deletePackage,
+  markPackageAsPickedUp,
+} from "../api/packages"
 
 interface UsePackagesOptions {
   userRoom?: string
@@ -66,6 +75,30 @@ export function usePackages(options: UsePackagesOptions = {}) {
     }
   }
 
+  const handleUpdatePackage = async (packageData: UpdatePackageData) => {
+    try {
+      await updatePackage(packageData)
+      await loadPackages()
+      return true
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error"
+      setError(errorMessage)
+      return false
+    }
+  }
+
+  const handleDeletePackage = async (packageId: string) => {
+    try {
+      await deletePackage(packageId)
+      await loadPackages()
+      return true
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : "Unknown error"
+      setError(errorMessage)
+      return false
+    }
+  }
+
   const pendingPackages = packages.filter((pkg) => pkg.status === "pending")
   const pickedUpPackages = packages.filter((pkg) => pkg.status === "picked_up")
 
@@ -77,6 +110,8 @@ export function usePackages(options: UsePackagesOptions = {}) {
     error,
     reload: loadPackages,
     handleAddPackage,
+    handleUpdatePackage,
+    handleDeletePackage,
     handleMarkAsPickedUp,
   }
 }

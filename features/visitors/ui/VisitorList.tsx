@@ -5,6 +5,7 @@ import { useVisitors } from "../hooks/useVisitors"
 import { VisitorReservationForm } from "./VisitorReservationForm"
 import { VisitorCard } from "./VisitorCard"
 import { HelpHint } from "@/components/ui/help-hint"
+import type { VisitorReservation } from "../api/visitors"
 
 interface VisitorListProps {
   userRoom?: string | null
@@ -14,12 +15,46 @@ interface VisitorListProps {
 export function VisitorList({ userRoom, currentUser }: VisitorListProps) {
   const [showReservationForm, setShowReservationForm] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [editingVisitorId, setEditingVisitorId] = useState<string | null>(null)
 
-  const { reservedVisitors, checkedInVisitors, historyVisitors, loading, handleReservation } = useVisitors({
+  const {
+    reservedVisitors,
+    checkedInVisitors,
+    historyVisitors,
+    loading,
+    handleReservation,
+    handleUpdateReservation,
+    handleDeleteReservation,
+  } = useVisitors({
     userRoom,
     currentUser,
     isAdmin: false,
   })
+
+  const editingVisitor = reservedVisitors.find((v) => v.id === editingVisitorId)
+
+  const handleSubmitReservation = async (reservation: VisitorReservation) => {
+    if (editingVisitorId) {
+      const success = await handleUpdateReservation({ id: editingVisitorId, ...reservation })
+      if (success) {
+        setEditingVisitorId(null)
+        setShowReservationForm(false)
+      }
+      return success
+    }
+
+    return handleReservation(reservation)
+  }
+
+  const handleEdit = (visitorId: string) => {
+    setEditingVisitorId(visitorId)
+    setShowReservationForm(true)
+  }
+
+  const handleDelete = async (visitorId: string) => {
+    if (!confirm("確定要刪除此預約訪客嗎？")) return
+    await handleDeleteReservation(visitorId)
+  }
 
   const filterVisitors = (visitors: any[]) => {
     if (!searchTerm) return visitors
@@ -60,10 +95,15 @@ export function VisitorList({ userRoom, currentUser }: VisitorListProps) {
           />
         </div>
         <button
-          onClick={() => setShowReservationForm(!showReservationForm)}
+          onClick={() => {
+            if (showReservationForm) {
+              setEditingVisitorId(null)
+            }
+            setShowReservationForm(!showReservationForm)
+          }}
           className="px-4 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-lg font-bold hover:opacity-90 transition-all"
         >
-          {showReservationForm ? "取消預約" : "預約訪客"}
+          {showReservationForm ? "取消" : "預約訪客"}
         </button>
       </div>
 
@@ -95,7 +135,25 @@ export function VisitorList({ userRoom, currentUser }: VisitorListProps) {
 
       {/* 預約表單 */}
       {showReservationForm && (
-        <VisitorReservationForm onSubmit={handleReservation} onCancel={() => setShowReservationForm(false)} />
+        <VisitorReservationForm
+          onSubmit={handleSubmitReservation}
+          onCancel={() => {
+            setShowReservationForm(false)
+            setEditingVisitorId(null)
+          }}
+          initialData={
+            editingVisitor
+              ? {
+                  name: editingVisitor.name,
+                  phone: editingVisitor.phone || "",
+                  purpose: editingVisitor.purpose || "",
+                  reservation_time: editingVisitor.reservation_time ? new Date(editingVisitor.reservation_time).toISOString().slice(0, 16) : "",
+                }
+              : undefined
+          }
+          submitLabel={editingVisitor ? "儲存變更" : "確認預約"}
+          title={editingVisitor ? "編輯預約訪客" : "預約訪客"}
+        />
       )}
 
       {/* 預約訪客 */}
@@ -118,7 +176,14 @@ export function VisitorList({ userRoom, currentUser }: VisitorListProps) {
         </h3>
         <div className="space-y-3">
           {filteredReserved.length > 0 ? (
-            filteredReserved.map((visitor) => <VisitorCard key={visitor.id} visitor={visitor} />)
+            filteredReserved.map((visitor) => (
+              <VisitorCard
+                key={visitor.id}
+                visitor={visitor}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            ))
           ) : (
             <div className="text-center text-[var(--theme-text-muted)] py-6">
               {searchTerm ? "沒有符合條件的預約訪客" : "目前沒有預約訪客"}

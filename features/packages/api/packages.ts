@@ -26,6 +26,15 @@ export interface AddPackageData {
   unit_id?: string
 }
 
+export interface UpdatePackageData {
+  id: string
+  courier: string
+  recipient_name: string
+  recipient_room: string
+  tracking_number?: string
+  arrived_at: string
+}
+
 export async function fetchPackages(room?: string, isAdmin = false, userUnitId?: string): Promise<Package[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
@@ -185,6 +194,36 @@ export async function markPackageAsPickedUp(
     status: "picked_up",
     picked_up_by: pickedUpBy,
   }
+}
+
+export async function updatePackage(packageData: UpdatePackageData): Promise<boolean> {
+  const res = await fetch("/api/packages", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(packageData),
+  })
+
+  const result = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    console.error("[v0] Error updating package via API:", result)
+    throw new Error(result?.error || "編輯包裹失敗")
+  }
+
+  return true
+}
+
+export async function deletePackage(packageId: string): Promise<boolean> {
+  const res = await fetch(`/api/packages?id=${encodeURIComponent(packageId)}`, {
+    method: "DELETE",
+  })
+
+  const result = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    console.error("[v0] Error deleting package via API:", result)
+    throw new Error(result?.error || "刪除包裹失敗")
+  }
+
+  return true
 }
 
 export function getPickedUpByName(pkg: Package): string {

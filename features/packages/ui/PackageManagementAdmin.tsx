@@ -8,7 +8,7 @@ import type { Resident } from "@/features/residents/api/residents"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, RefreshCw, Search } from "lucide-react"
+import { Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react"
 
 interface PackageManagementAdminProps {
   currentUser?: any
@@ -29,9 +29,10 @@ interface PackageFormModalProps {
   formData: NewPackage
   onChange: (field: keyof NewPackage, value: string) => void
   onSave: () => void
+  isEdit: boolean
 }
 
-function PackageFormModal({ isOpen, onClose, formData, onChange, onSave }: PackageFormModalProps) {
+function PackageFormModal({ isOpen, onClose, formData, onChange, onSave, isEdit }: PackageFormModalProps) {
   if (!isOpen) return null
 
   return (
@@ -40,7 +41,7 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave }: Packa
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
           <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">
-            新增包裹
+            {isEdit ? "編輯包裹" : "新增包裹"}
             <HelpHint
               title="管理端新增包裹"
               description="建立新到貨包裹資料。資料越完整，住戶查詢與後續領取確認會更順利。"
@@ -194,7 +195,7 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave }: Packa
             onClick={onSave}
             className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all"
           >
-            新增
+            {isEdit ? "儲存變更" : "新增"}
           </button>
         </div>
       </div>
@@ -223,7 +224,16 @@ const PREVIEW_PACKAGES: { pending: Package[]; pickedUp: Package[] } = {
 }
 
 export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: PackageManagementAdminProps) {
-  const { pendingPackages: realPending, pickedUpPackages: realPickedUp, loading, handleAddPackage, handleMarkAsPickedUp, reload } = usePackages({
+  const {
+    pendingPackages: realPending,
+    pickedUpPackages: realPickedUp,
+    loading,
+    handleAddPackage,
+    handleUpdatePackage,
+    handleDeletePackage,
+    handleMarkAsPickedUp,
+    reload,
+  } = usePackages({
     isAdmin: true,
   })
 
@@ -235,6 +245,7 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
   const [roomResidents, setRoomResidents] = useState<{ [room: string]: Resident[] }>({})
 
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null)
   const [newPackage, setNewPackage] = useState<NewPackage>({
     courier: "",
     recipient_name: "",
@@ -296,26 +307,56 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
     setNewPackage((prev) => ({ ...prev, [field]: value }))
   }
 
-  const onAddPackage = async () => {
+  const resetPackageForm = () => {
+    setNewPackage({
+      courier: "",
+      recipient_name: "",
+      recipient_room: "",
+      tracking_number: "",
+      arrived_at: new Date().toISOString().slice(0, 16),
+    })
+    setEditingPackageId(null)
+  }
+
+  const onAddOrUpdatePackage = async () => {
     if (!newPackage.courier || !newPackage.recipient_name || !newPackage.recipient_room) {
       alert("請填寫快遞公司、收件人和房號")
       return
     }
 
-    const success = await handleAddPackage(newPackage)
+    const success = editingPackageId
+      ? await handleUpdatePackage({ id: editingPackageId, ...newPackage })
+      : await handleAddPackage(newPackage)
+
     if (success) {
-      alert("包裹新增成功")
+      alert(editingPackageId ? "包裹更新成功" : "包裹新增成功")
       setIsModalOpen(false)
-      setNewPackage({
-        courier: "",
-        recipient_name: "",
-        recipient_room: "",
-        tracking_number: "",
-        arrived_at: new Date().toISOString().slice(0, 16),
-      })
+      resetPackageForm()
     } else {
-      alert("新增失敗")
+      alert(editingPackageId ? "更新失敗" : "新增失敗")
     }
+  }
+
+  const onEditPackage = (pkg: Package) => {
+    setEditingPackageId(pkg.id)
+    setNewPackage({
+      courier: pkg.courier || "",
+      recipient_name: pkg.recipient_name || "",
+      recipient_room: pkg.recipient_room || "",
+      tracking_number: pkg.tracking_number || "",
+      arrived_at: pkg.arrived_at ? new Date(pkg.arrived_at).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+    })
+    setIsModalOpen(true)
+  }
+
+  const onDeletePackage = async (pkg: Package) => {
+    if (!confirm(`確定要刪除包裹「${pkg.courier} / ${pkg.recipient_name}」嗎？`)) return
+    const success = await handleDeletePackage(pkg.id)
+    if (!success) {
+      alert("刪除失敗")
+      return
+    }
+    alert("刪除成功")
   }
 
   if (loading) {
@@ -380,7 +421,12 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
             <RefreshCw className="w-4 h-4 mr-2" />
             重新整理
           </Button>
-          <Button onClick={() => setIsModalOpen(true)}>
+          <Button
+            onClick={() => {
+              resetPackageForm()
+              setIsModalOpen(true)
+            }}
+          >
             <Plus className="w-4 h-4 mr-2" />
             新增一筆
           </Button>
@@ -439,6 +485,22 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
                     </div>
                     <div className="text-[var(--theme-text-secondary)] text-sm mb-3">
                       到達: {new Date(pkg.arrived_at).toLocaleString("zh-TW")}
+                    </div>
+                    <div className="flex items-center justify-end gap-2 mb-3">
+                      <button
+                        onClick={() => onEditPackage(pkg)}
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-accent-light)] transition-colors"
+                      >
+                        <Pencil className="w-4 h-4" />
+                        編輯
+                      </button>
+                      <button
+                        onClick={() => onDeletePackage(pkg)}
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        刪除
+                      </button>
                     </div>
                     <div className="flex gap-2 items-end">
                       <div className="flex-1">
@@ -561,10 +623,14 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
 
       <PackageFormModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false)
+          resetPackageForm()
+        }}
         formData={newPackage}
         onChange={handleFormChange}
-        onSave={onAddPackage}
+        onSave={onAddOrUpdatePackage}
+        isEdit={!!editingPackageId}
       />
     </div>
   )

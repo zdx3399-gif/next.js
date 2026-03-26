@@ -1,121 +1,139 @@
-import { getSupabaseClient } from "@/lib/supabase"
-
 export interface Vote {
   id: string
   title: string
   description: string
-  options: string | string[]
+  options: string[]
+  mode: "internal" | "external"
+  external_url?: string
   created_by?: string
-  author_name?: string
+  author?: string
   status: "active" | "closed"
   ends_at: string | null
   created_at?: string
+  results?: Record<string, number>
+  total_votes?: number
 }
 
 export interface VoteRecord {
   id?: string
   vote_id: string
   user_id: string
+  user_name?: string
   option_selected: string
   voted_at?: string
 }
 
-export async function fetchVotes(): Promise<Vote[]> {
-  const supabase = getSupabaseClient()
-  const { data, error } = await supabase
-    .from("votes")
-    .select(`
-      *,
-      author:profiles!votes_created_by_fkey(name)
-    `)
-    .order("created_at", { ascending: false })
+interface FetchVotesOptions {
+  scope?: "all" | "active"
+  userId?: string
+  withResults?: boolean
+}
 
-  if (error) {
+function buildVoteQuery(options?: FetchVotesOptions) {
+  const params = new URLSearchParams()
+  if (options?.scope) params.set("scope", options.scope)
+  if (options?.userId) params.set("userId", options.userId)
+  if (options?.withResults) params.set("withResults", "1")
+  const query = params.toString()
+  return query ? `/api/votes?${query}` : "/api/votes"
+}
+
+export async function fetchVotes(options?: FetchVotesOptions): Promise<{ votes: Vote[]; votedVoteIds: Set<string> }> {
+  try {
+    const res = await fetch(buildVoteQuery(options), { cache: "no-store" })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || "讀取投票失敗")
+    }
+
+    const payload = await res.json()
+    const votes: Vote[] = Array.isArray(payload.votes) ? payload.votes : []
+    const votedVoteIds = new Set<string>(Array.isArray(payload.votedVoteIds) ? payload.votedVoteIds : [])
+    return { votes, votedVoteIds }
+  } catch (error) {
     console.error("Error fetching votes:", error)
-    // Fallback
-    const { data: fallbackData } = await supabase.from("votes").select("*").order("created_at", { ascending: false })
-    return fallbackData || []
+    return { votes: [], votedVoteIds: new Set<string>() }
   }
-
-  return (data || []).map((item: any) => ({
-    ...item,
-    author_name: item.author?.name || "管理員",
-  }))
 }
 
 export async function fetchUserVotedPolls(userId: string): Promise<Set<string>> {
-  const supabase = getSupabaseClient()
-  const { data, error } = await supabase.from("vote_records").select("vote_id").eq("user_id", userId)
-
-  if (error) {
-    console.error("Error fetching user votes:", error)
-    return new Set()
-  }
-
-  return new Set(data?.map((v) => v.vote_id) || [])
+  const { votedVoteIds } = await fetchVotes({ userId })
+  return votedVoteIds
 }
 
 export async function submitVote(voteRecord: VoteRecord): Promise<{ success: boolean; error?: string }> {
-  const supabase = getSupabaseClient()
-  const { error } = await supabase.from("vote_records").insert([
-    {
-      vote_id: voteRecord.vote_id,
-      user_id: voteRecord.user_id,
-      option_selected: voteRecord.option_selected,
-      voted_at: new Date().toISOString(),
-    },
-  ])
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "submit",
+        vote_id: voteRecord.vote_id,
+        user_id: voteRecord.user_id,
+        user_name: voteRecord.user_name || "住戶",
+        option_selected: voteRecord.option_selected,
+      }),
+    })
 
-  if (error) {
-    if (error.code === "23505") {
-      return { success: false, error: "您已經投過票了" }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return { success: false, error: data.error || "投票失敗" }
     }
-    return { success: false, error: error.message }
-  }
 
-  return { success: true }
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error?.message || "投票失敗" }
+  }
 }
 
-export async function createVote(vote: Omit<Vote, "id" | "created_at" | "author_name">): Promise<Vote | null> {
-  const supabase = getSupabaseClient()
-  const { data, error } = await supabase.from("votes").insert([vote]).select().single()
+export async function createVote(vote: {
+  title: string
+  description: string
+  ends_at: string
+  mode: "internal" | "external"
+  external_url?: string
+  options?: string[]
+  author?: string
+  created_by?: string
+}): Promise<Vote | null> {
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create", ...vote }),
+    })
 
-  if (error) {
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data.details ? `${data.error || "建立投票失敗"}: ${data.details}` : data.error || "建立投票失敗")
+    }
+
+    return data.vote || null
+  } catch (error) {
     console.error("Error creating vote:", error)
     return null
   }
-
-  return data
 }
 
-export async function updateVote(id: string, vote: Partial<Vote>): Promise<Vote | null> {
-  const supabase = getSupabaseClient()
-  const { author_name, ...dbData } = vote as any
-  const { data, error } = await supabase.from("votes").update(dbData).eq("id", id).select().single()
+export async function closeVote(voteId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "close", vote_id: voteId }),
+    })
 
-  if (error) {
-    console.error("Error updating vote:", error)
-    return null
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return { success: false, error: data.error || "關閉投票失敗" }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error?.message || "關閉投票失敗" }
   }
-
-  return data
-}
-
-export async function deleteVote(id: string): Promise<boolean> {
-  const supabase = getSupabaseClient()
-  // 先刪除相關的投票記錄
-  await supabase.from("vote_records").delete().eq("vote_id", id)
-
-  const { error } = await supabase.from("votes").delete().eq("id", id)
-
-  if (error) {
-    console.error("Error deleting vote:", error)
-    return false
-  }
-
-  return true
 }
 
 export function getAuthorName(vote: Vote): string {
-  return vote.author_name || "管理員"
+  return vote.author || "管理員"
 }

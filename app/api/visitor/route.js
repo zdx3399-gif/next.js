@@ -335,6 +335,110 @@ export async function PATCH(req) {
   }
 }
 
+// PUT: 住戶修改預約訪客（僅 reserved 狀態）
+export async function PUT(req) {
+  try {
+    const supabase = getSupabase()
+    const body = await req.json()
+    const { visitor_id, name, phone, purpose, reservation_time, actor_id, actor_role } = body
+
+    if (!visitor_id || !name || !phone || !reservation_time) {
+      return Response.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    if (actor_role === "guard") {
+      return Response.json({ error: "警衛不可修改預約訪客" }, { status: 403 })
+    }
+
+    const { data: visitor, error: fetchError } = await supabase
+      .from("visitors")
+      .select("id, status, reserved_by_id")
+      .eq("id", visitor_id)
+      .maybeSingle()
+
+    if (fetchError || !visitor) {
+      return Response.json({ error: "Visitor not found" }, { status: 404 })
+    }
+
+    if (visitor.status !== "reserved") {
+      return Response.json({ error: "僅可修改尚未簽到的預約訪客" }, { status: 400 })
+    }
+
+    const isPrivileged = actor_role === "admin" || actor_role === "committee"
+    if (!isPrivileged && visitor.reserved_by_id && visitor.reserved_by_id !== actor_id) {
+      return Response.json({ error: "僅可修改自己預約的訪客" }, { status: 403 })
+    }
+
+    const { error } = await supabase
+      .from("visitors")
+      .update({
+        name,
+        phone,
+        purpose: purpose || null,
+        reservation_time,
+      })
+      .eq("id", visitor_id)
+
+    if (error) {
+      return Response.json({ error: error.message }, { status: 500 })
+    }
+
+    return Response.json({ success: true })
+  } catch (err) {
+    console.error("[visitor] PUT error:", err)
+    return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 })
+  }
+}
+
+// DELETE: 住戶刪除預約訪客（僅 reserved 狀態）
+export async function DELETE(req) {
+  try {
+    const supabase = getSupabase()
+    const { searchParams } = new URL(req.url)
+
+    const visitor_id = searchParams.get("visitor_id")
+    const actor_id = searchParams.get("actor_id")
+    const actor_role = searchParams.get("actor_role")
+
+    if (!visitor_id) {
+      return Response.json({ error: "Missing visitor_id" }, { status: 400 })
+    }
+
+    if (actor_role === "guard") {
+      return Response.json({ error: "警衛不可刪除預約訪客" }, { status: 403 })
+    }
+
+    const { data: visitor, error: fetchError } = await supabase
+      .from("visitors")
+      .select("id, status, reserved_by_id")
+      .eq("id", visitor_id)
+      .maybeSingle()
+
+    if (fetchError || !visitor) {
+      return Response.json({ error: "Visitor not found" }, { status: 404 })
+    }
+
+    if (visitor.status !== "reserved") {
+      return Response.json({ error: "僅可刪除尚未簽到的預約訪客" }, { status: 400 })
+    }
+
+    const isPrivileged = actor_role === "admin" || actor_role === "committee"
+    if (!isPrivileged && visitor.reserved_by_id && visitor.reserved_by_id !== actor_id) {
+      return Response.json({ error: "僅可刪除自己預約的訪客" }, { status: 403 })
+    }
+
+    const { error } = await supabase.from("visitors").delete().eq("id", visitor_id)
+    if (error) {
+      return Response.json({ error: error.message }, { status: 500 })
+    }
+
+    return Response.json({ success: true })
+  } catch (err) {
+    console.error("[visitor] DELETE error:", err)
+    return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 })
+  }
+}
+
 export async function GET() {
   return Response.json({ error: "Method Not Allowed" }, { status: 405 })
 }

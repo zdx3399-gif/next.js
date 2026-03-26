@@ -9,8 +9,9 @@ export async function POST(req: NextRequest) {
     );
 
     const { email, password, name, phone, role = 'resident', relationship = 'owner', unit } = await req.json();
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return NextResponse.json(
         { success: false, message: 'Email 和密碼為必填' },
         { status: 400 }
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     // 使用 Supabase Auth 註冊
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
     });
 
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
       .insert([
         {
           id: data.user.id,
-          email,
+          email: normalizedEmail,
           password,
           name: name || null,
           phone: phone || null,
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.log('✅ 註冊成功:', email);
+    console.log('✅ 註冊成功:', normalizedEmail);
 
     return NextResponse.json({
       success: true,

@@ -8,9 +8,11 @@ interface VisitorCardProps {
   isAdmin?: boolean
   onCheckIn?: (id: string) => void
   onCheckOut?: (id: string) => void
+  onEdit?: (id: string) => void
+  onDelete?: (id: string) => void
 }
 
-export function VisitorCard({ visitor, isAdmin, onCheckIn, onCheckOut }: VisitorCardProps) {
+export function VisitorCard({ visitor, isAdmin, onCheckIn, onCheckOut, onEdit, onDelete }: VisitorCardProps) {
   const statusConfig: Record<string, { label: string; bgColor: string; textColor: string; borderColor: string }> = {
     reserved: {
       label: "已預約",
@@ -88,6 +90,27 @@ export function VisitorCard({ visitor, isAdmin, onCheckIn, onCheckOut }: Visitor
               訪客簽退
             </button>
             <HelpHint title="管理端簽退" description="訪客離開時點擊簽退，完成一筆訪客流程。" workflow={["確認訪客實際離場。","點擊訪客簽退完成流程。","簽退後到歷史區確認紀錄。"]} logic={["簽退會寫入離場時間並切換狀態為 checked_out。"]} align="center" />
+          </div>
+        )}
+
+        {!isAdmin && visitor.status === "reserved" && (onEdit || onDelete) && (
+          <div className="flex items-center gap-2">
+            {onEdit && (
+              <button
+                onClick={() => onEdit(visitor.id)}
+                className="px-3 py-2 bg-blue-500/20 text-blue-400 rounded-lg text-sm font-bold hover:opacity-90 transition-all"
+              >
+                編輯
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => onDelete(visitor.id)}
+                className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm font-bold hover:opacity-90 transition-all"
+              >
+                刪除
+              </button>
+            )}
           </div>
         )}
       </div>

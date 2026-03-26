@@ -253,36 +253,41 @@ export function ActionSpotlightPanel({ userId, role = "committee", onNavigate }:
         )}
       </div>
 
-      <div className="bg-sky-50/10 border border-sky-400/30 rounded-2xl p-4 sm:p-5 shadow-sm">
-        <h3 className="text-base sm:text-lg font-bold text-[var(--theme-text-primary)] mb-3">週期性任務（Routine Tasks）</h3>
+      <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-4 sm:p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3 className="text-base sm:text-lg font-bold text-[var(--theme-text-primary)]">週期性任務</h3>
+          <span className="px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--theme-accent-light)] text-[var(--theme-accent)]">
+            {data?.routines?.length || 0} 筆
+          </span>
+        </div>
         {(data?.routines || []).length === 0 && (
           <p className="text-sm text-[var(--theme-text-secondary)]">目前沒有到期的例行任務。</p>
         )}
-        <div className="space-y-2">
+        <div className="space-y-3">
           {(data?.routines || []).map((item) => (
-            <div key={item.id} className="border border-[var(--theme-border)] rounded-xl p-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="font-semibold text-[var(--theme-text-primary)]">{item.title}</div>
-                  <div className="text-xs text-[var(--theme-text-secondary)]">期限：{item.dueDate}</div>
+            <div key={item.id} className="border border-[var(--theme-border)] rounded-xl px-4 py-3 bg-[var(--theme-bg-primary)]/40">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold text-[var(--theme-text-primary)] truncate">{item.title}</div>
+                  <div className="text-xs text-[var(--theme-text-secondary)] mt-1">到期日：{item.dueDate}</div>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 justify-end">
                   <button
                     onClick={() => onNavigate(item.actionLink)}
-                    className="px-2 py-1 text-xs rounded border border-[var(--theme-border)] hover:bg-[var(--theme-accent-light)]"
+                    className="px-3 py-1.5 text-xs rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-accent-light)] transition-colors"
                   >
                     去處理
                   </button>
                   <button
                     onClick={() => onNavigate(normalizeSopLink(item.kmsLink))}
-                    className="px-2 py-1 text-xs rounded border border-[var(--theme-border)] hover:bg-[var(--theme-accent-light)]"
+                    className="px-3 py-1.5 text-xs rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-colors"
                   >
-                    SOP（KMS）
+                    SOP / KMS
                   </button>
                   {userId && item.status !== "completed" && (
                     <button
                       onClick={() => completeRoutine(item.id)}
-                      className="px-2 py-1 text-xs rounded bg-[var(--theme-accent)] text-[var(--theme-bg-primary)]"
+                      className="px-3 py-1.5 text-xs rounded-lg bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] font-semibold hover:brightness-95 transition-all"
                     >
                       完成
                     </button>

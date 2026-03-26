@@ -346,6 +346,16 @@ export async function POST(req: Request) {
       lineError = '缺少 LINE_CHANNEL_ACCESS_TOKEN'
     }
 
+    // 6) Delete the maintenance record after completion
+    const { error: deleteError } = await supabase
+      .from('maintenance')
+      .delete()
+      .eq('id', maintenanceId)
+
+    if (deleteError) {
+      console.warn('刪除維修單失敗:', deleteError.message)
+    }
+
     return NextResponse.json({
       success: true,
       message: '結案成功',

@@ -1,12 +1,10 @@
 "use client"
 
-// ==================================================================================
-// 👇👇👇 PASTE YOUR PUBLIC FORM LINK HERE (請在這裡貼上給住戶投票的連結) 👇👇👇
-// ==================================================================================
-
-const PUBLIC_VOTE_LINK = "https://forms.gle/eAnYYKxtKVBRaMmF8" 
-
-// ==================================================================================
+import { useEffect, useMemo, useState } from "react"
+import { fetchVotes, submitVote, type Vote } from "@/features/votes/api/votes"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
 import { HelpHint } from "@/components/ui/help-hint"
 
@@ -16,12 +14,57 @@ interface VoteListProps {
 }
 
 export function VoteList({ userId, userName }: VoteListProps) {
+  const [votes, setVotes] = useState<Vote[]>([])
+  const [votedVoteIds, setVotedVoteIds] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+  const [submittingVoteId, setSubmittingVoteId] = useState<string | null>(null)
+
+  const loadVotes = async () => {
+    setLoading(true)
+    const result = await fetchVotes({ scope: "active", userId })
+    setVotes(result.votes)
+    setVotedVoteIds(result.votedVoteIds)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadVotes()
+  }, [userId])
+
+  const sortedVotes = useMemo(
+    () => [...votes].sort((a, b) => new Date(a.ends_at || 0).getTime() - new Date(b.ends_at || 0).getTime()),
+    [votes]
+  )
+
+  const onSubmitInternalVote = async (vote: Vote, option: string) => {
+    if (!userId) {
+      alert("請先登入後再投票")
+      return
+    }
+
+    setSubmittingVoteId(vote.id)
+    const result = await submitVote({
+      vote_id: vote.id,
+      user_id: userId,
+      user_name: userName || "住戶",
+      option_selected: option,
+    })
+    setSubmittingVoteId(null)
+
+    if (!result.success) {
+      alert(result.error || "投票失敗")
+      return
+    }
+
+    alert("投票成功")
+    setVotedVoteIds((prev) => new Set([...prev, vote.id]))
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center py-12 space-y-8 bg-[var(--theme-bg-card)] rounded-2xl border border-[var(--theme-border)]">
-      
+    <div className="space-y-6 bg-[var(--theme-bg-card)] rounded-2xl border border-[var(--theme-border)] p-6">
       <div className="text-center space-y-3 px-4">
         <div className="inline-flex p-4 rounded-full bg-[var(--theme-accent)]/10 mb-2">
-           <span className="material-icons text-4xl text-[var(--theme-accent)]">how_to_vote</span>
+          <span className="material-icons text-4xl text-[var(--theme-accent)]">how_to_vote</span>
         </div>
         <div className="flex items-center justify-center gap-2">
           <h2 className="text-2xl font-bold text-[var(--theme-text-primary)]">社區投票活動</h2>
@@ -34,46 +77,67 @@ export function VoteList({ userId, userName }: VoteListProps) {
               "送出後返回本頁確認是否還有其他活動。",
             ]}
             logic={[
-              "本頁主要作為入口，實際填答在外部表單完成。",
-              "是否可重複填答由該表單設定決定。",
+              "本頁會顯示目前進行中的有效投票。",
+              "外部連結與內部投票會依活動類型顯示不同按鈕。",
             ]}
             align="center"
           />
         </div>
         <p className="text-[var(--theme-text-secondary)] max-w-md mx-auto">
-          為了確保投票的公正與便利，我們使用 Google 表單進行投票。請點擊下方按鈕前往。
+          系統會自動顯示尚未截止的投票活動，請於期限前完成投票。
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="text-[var(--theme-text-primary)] text-sm">投票入口</span>
-        <HelpHint
-          title="住戶端投票入口"
-          description="點此按鈕會另開新視窗進入投票表單。若無法開啟，請確認瀏覽器是否阻擋彈出視窗。"
-          workflow={[
-            "點擊按鈕後在新分頁開啟表單。",
-            "若未開啟，檢查瀏覽器彈出視窗限制。",
-            "確認連結正確後再開始填答。",
-          ]}
-          logic={[
-            "入口連結為固定外部網址，需保持最新有效。",
-          ]}
-          align="center"
-        />
-      </div>
-      <a
-        href={PUBLIC_VOTE_LINK}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="relative group flex items-center gap-4 px-8 py-5 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-2xl font-bold text-xl hover:opacity-90 hover:scale-105 transition-all shadow-xl hover:shadow-[var(--theme-accent)]/30"
-      >
-        <span>前往投票</span>
-        <span className="material-icons group-hover:translate-x-1 transition-transform">arrow_forward</span>
-      </a>
+      {loading ? (
+        <div className="text-center text-[var(--theme-text-secondary)] py-10">載入投票中...</div>
+      ) : sortedVotes.length === 0 ? (
+        <div className="text-center text-[var(--theme-text-secondary)] py-10">目前沒有進行中的投票</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {sortedVotes.map((vote) => {
+            const alreadyVoted = votedVoteIds.has(vote.id)
 
-      <div className="text-xs text-[var(--theme-text-muted)] text-center px-4">
-        <p>點擊後將開啟新視窗 (Google Form)</p>
-      </div>
+            return (
+              <Card key={vote.id} className="border-[var(--theme-border)]">
+                <CardHeader className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-lg text-[var(--theme-text-primary)]">{vote.title}</CardTitle>
+                    <Badge variant="outline">{vote.mode === "external" ? "外部連結" : "系統內投票"}</Badge>
+                  </div>
+                  <div className="text-sm text-[var(--theme-text-secondary)]">
+                    截止時間：{vote.ends_at ? new Date(vote.ends_at).toLocaleString() : "未設定"}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-[var(--theme-text-secondary)] whitespace-pre-wrap">{vote.description || "無說明"}</p>
+
+                  {alreadyVoted ? (
+                    <div className="text-sm text-emerald-600 font-semibold">您已完成此投票</div>
+                  ) : vote.mode === "external" ? (
+                    <a href={vote.external_url} target="_blank" rel="noreferrer">
+                      <Button className="w-full">前往外部投票</Button>
+                    </a>
+                  ) : (
+                    <div className="space-y-2">
+                      {vote.options.map((option) => (
+                        <Button
+                          key={option}
+                          variant="outline"
+                          className="w-full justify-start"
+                          disabled={submittingVoteId === vote.id}
+                          onClick={() => onSubmitInternalVote(vote, option)}
+                        >
+                          {option}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 text-xs text-[var(--theme-text-muted)]">
         <span>投票提醒</span>
@@ -86,7 +150,7 @@ export function VoteList({ userId, userName }: VoteListProps) {
             "送出前再次檢查選項是否正確。",
           ]}
           logic={[
-            "重複填答限制與身分驗證規則由外部表單控制。",
+            "系統內投票每位住戶每個活動只能投一次。",
           ]}
           align="center"
         />

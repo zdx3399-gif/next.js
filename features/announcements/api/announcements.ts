@@ -93,26 +93,89 @@ export async function fetchAllAnnouncements() {
 
 export async function createAnnouncement(data: Partial<Announcement>, userId?: string) {
   const supabase = getSupabaseClient()
+  if (!data?.title || !data?.content) {
+    return { data: null, error: { message: "缺少必要欄位：標題或內容" } }
+  }
+
+  // Admin 角色在此專案是預覽模式，getSupabaseClient() 會回傳 null。
+  // 這種情況改由後端 /api/announce 一次完成「寫入 + 推播」。
   if (!supabase) {
-    return { data: null, error: { message: "請先登入" } }
+    try {
+      console.log("[Announce] Supabase client unavailable, fallback to /api/announce");
+      const response = await fetch("/api/announce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: data.title,
+          content: data.content,
+          image_url: data.image_url,
+          author: data.author_name,
+          pushOnly: false,
+          test: false,
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({} as any))
+      if (!response.ok) {
+        return { data: null, error: { message: payload?.error || "公告發布失敗" } }
+      }
+
+      return { data: payload, error: null }
+    } catch (error: any) {
+      return { data: null, error: { message: error?.message || "公告發布失敗" } }
+    }
   }
 
   const { id, author_name, ...rest } = data as any
   const insertData = {
     ...rest,
     created_by: userId || null,
+    status: "published", // 新增公告強制設為已發布
   }
 
-  console.log("[v0] Creating announcement with data:", insertData)
+  console.log("[Announce] 📤 新增公告，強制設為已發布狀態");
+  console.log("[Announce] 📊 公告內容:", { title: data.title, content: data.content?.substring(0, 50) + "...", author: data.author_name });
 
+  // 先寫入資料庫
   const { data: result, error } = await supabase.from("announcements").insert([insertData]).select().single()
 
   if (error) {
-    console.error("[v0] Error creating announcement:", error)
+    console.error("[Announce] ❌ 資料庫寫入失敗:", error);
     return { data: null, error }
   }
 
-  console.log("[v0] Announcement created successfully:", result)
+  console.log("[Announce] ✅ 公告寫入成功");
+
+  // 然後立即推播給所有人
+  try {
+    console.log("[Announce] 📤 準備推播給所有已綁定住戶...");
+    const response = await fetch("/api/announce", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: data.title,
+        content: data.content,
+        image_url: data.image_url,
+        author: data.author_name,
+        pushOnly: true, // 只推播，不重複寫入資料庫
+        test: false,
+      }),
+    })
+
+    const payload = await response.json()
+    console.log("[Announce] 📥 推播結果:", payload);
+
+    if (!response.ok) {
+      console.warn("[Announce] ⚠️  推播失敗:", payload?.error);
+      // 但不影響公告建立的成功狀態
+    } else {
+      console.log("[Announce] ✅ 推播給", payload?.pushed || 0, "人");
+    }
+  } catch (error: any) {
+    console.error("[Announce] 💥 推播請求失敗:", error);
+    // 但不影響公告建立的成功狀態
+  }
+
   return { data: result, error: null }
 }
 
@@ -121,6 +184,13 @@ export async function updateAnnouncement(id: string, data: Partial<Announcement>
   if (!supabase) {
     return { data: null, error: { message: "請先登入" } }
   }
+
+  // 讀取舊狀態，判斷是否 draft -> published
+  const { data: currentAnnouncement } = await supabase
+    .from("announcements")
+    .select("id, status")
+    .eq("id", id)
+    .maybeSingle()
 
   const { author_name, ...dbData } = data as any
   delete dbData.id // 確保不會更新 id
@@ -132,6 +202,37 @@ export async function updateAnnouncement(id: string, data: Partial<Announcement>
   if (error) {
     console.error("[v0] Error updating announcement:", error)
     return { data: null, error }
+  }
+
+  // 只有在草稿轉已發布時觸發 LINE 推播
+  const becamePublished = currentAnnouncement?.status !== "published" && result?.status === "published"
+  console.log("[Announce] 狀態檢查 - 舊狀態:", currentAnnouncement?.status, "新狀態:", result?.status, "是否發布:", becamePublished);
+
+  if (becamePublished) {
+    try {
+      console.log("[Announce] 📤 檢測到從草稿→已發布，準備呼叫 /api/announce");
+      const response = await fetch("/api/announce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: result.title,
+          content: result.content,
+          image_url: result.image_url,
+          author: result.author_name,
+          pushOnly: true,
+          test: false,
+        }),
+      })
+
+      const payload = await response.json();
+      if (!response.ok) {
+        console.error("[Announce] ❌ 推播失敗:", payload);
+      } else {
+        console.log("[Announce] ✅ 草稿轉發布成功推播，推播給", payload?.pushed || 0, "人");
+      }
+    } catch (pushError) {
+      console.error("[Announce] 💥 推播請求失敗:", pushError);
+    }
   }
 
   console.log("[v0] Announcement updated successfully:", result)
@@ -158,16 +259,24 @@ export async function deleteAnnouncement(id: string) {
 }
 
 export async function uploadAnnouncementImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      resolve(reader.result as string)
-    }
-    reader.onerror = () => {
-      reject(new Error("圖片讀取失敗"))
-    }
-    reader.readAsDataURL(file)
+  const form = new FormData()
+  form.append("file", file)
+
+  const res = await fetch("/api/upload-image", {
+    method: "POST",
+    body: form,
   })
+
+  let payload: any = {}
+  try { payload = await res.json() } catch {}
+
+  if (!res.ok) {
+    throw new Error(payload?.error || "圖片上傳失敗")
+  }
+  if (!payload?.url) {
+    throw new Error("圖片上傳失敗：未收到圖片網址")
+  }
+  return payload.url
 }
 
 export async function markAnnouncementAsRead(announcementId: string, userId: string) {

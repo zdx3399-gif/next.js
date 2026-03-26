@@ -192,66 +192,113 @@ export async function registerUser(
   relationship: string,
 ) {
   try {
-    console.log(`[v0] Registering user:`, email)
-    console.log("[v0] Input data:", { email, name, phone, unitNumber, role, relationship })
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
+    if (!normalizedEmail || !password) {
+      return {
+        success: false,
+        error: "Email 和密碼為必填",
+      }
+    }
 
-    // 安全地拼接 API URL（移除結尾斜線，確保不產生雙斜線）
-    const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "")
-    const apiUrl = `${baseUrl}/api/auth/register`
-    console.log("[v0] Calling API:", apiUrl)
+    console.log(`[v0] Registering user:`, normalizedEmail)
+    console.log("[v0] Input data:", { email: normalizedEmail, name, phone, unitNumber, role, relationship, tenantId })
 
-    // 調用新的 /api/auth/register API
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ 
-        email, 
-        password, 
-        name, 
-        phone,
-        role,
-        relationship,
-        unit: unitNumber
-      }),
+    const config = validateTenantConfig(tenantId)
+    const supabase = createClient(config.url, config.anonKey)
+
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
     })
 
-    // 檢查 HTTP 狀態碼
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("[v0] Register API returned error status:", response.status, errorText)
+    if (authError || !authData.user) {
       return {
         success: false,
-        error: `API 錯誤 (${response.status}): ${errorText}`,
+        error: authError?.message || "註冊失敗",
       }
     }
 
-    // 嘗試解析 JSON
-    let result
-    try {
-      result = await response.json()
-    } catch (parseError) {
-      console.error("[v0] Failed to parse register JSON response:", parseError)
-      return {
-        success: false,
-        error: "API 回應格式錯誤",
+    let unitId: string | null = null
+    if (unitNumber) {
+      const parsed = parseUnitInput(unitNumber)
+      const { data: existingUnit } = await supabase
+        .from("units")
+        .select("id")
+        .eq("unit_code", parsed.unit_code)
+        .maybeSingle()
+
+      if (existingUnit) {
+        unitId = existingUnit.id
+      } else {
+        const { data: newUnit, error: createUnitError } = await supabase
+          .from("units")
+          .insert([{ unit_code: parsed.unit_code, unit_number: parsed.unit_number }])
+          .select("id")
+          .single()
+
+        if (createUnitError) {
+          console.warn("[v0] Create unit failed:", createUnitError.message)
+        } else {
+          unitId = newUnit?.id || null
+        }
       }
     }
 
-    if (!result || !result.success) {
-      console.error("[v0] Register API failed:", result?.message)
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .insert([
+        {
+          id: authData.user.id,
+          email: normalizedEmail,
+          password,
+          name: name || null,
+          phone: phone || null,
+          role: role || "resident",
+          status: "active",
+          tenant_id: tenantId,
+          unit_id: unitId,
+        },
+      ])
+      .select("*")
+      .single()
+
+    if (profileError || !profile) {
       return {
         success: false,
-        error: result?.message || "註冊失敗，請稍後再試",
+        error: profileError?.message || "建立用戶資訊失敗",
       }
     }
 
-    console.log("[v0] User registered successfully:", result.user.email)
+    if (unitId) {
+      const { error: householdError } = await supabase
+        .from("household_members")
+        .insert([
+          {
+            name: name || null,
+            role: role || "resident",
+            relationship: relationship || "owner",
+            unit_id: unitId,
+            profile_id: profile.id,
+          },
+        ])
+      if (householdError) {
+        console.warn("[v0] 建立 household_member 失敗:", householdError.message)
+      }
+    }
+
+    console.log("[v0] User registered successfully:", profile.email)
 
     return {
       success: true,
-      user: result.user,
+      user: {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        phone: profile.phone,
+        role: profile.role,
+        status: profile.status,
+        unit_id: profile.unit_id,
+      },
     }
   } catch (err: any) {
     console.error("[v0] Register exception:", err)

@@ -6,6 +6,7 @@ export interface ProfileData {
   room?: string // 加入 room 欄位用於表單顯示
   phone: string
   email: string
+  line_avatar_url?: string
   password?: string
 }
 
@@ -23,6 +24,7 @@ export interface User {
   car_spots?: number
   moto_spots?: number
   monthly_fee?: number
+  line_avatar_url?: string
 }
 
 export async function updateProfile(userId: string, data: ProfileData): Promise<User> {
@@ -33,6 +35,10 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     name: data.name,
     phone: data.phone,
     email: data.email,
+  }
+
+  if (data.line_avatar_url !== undefined) {
+    updateData.line_avatar_url = data.line_avatar_url
   }
 
   if (data.unit_id) {
@@ -72,6 +78,7 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     car_spots: profile.units?.car_spots,
     moto_spots: profile.units?.moto_spots,
     monthly_fee: profile.units?.monthly_fee,
+    line_avatar_url: profile.line_avatar_url || undefined,
   }
 }
 
@@ -104,7 +111,50 @@ export async function getProfile(userId: string): Promise<User | null> {
     car_spots: data.units?.car_spots,
     moto_spots: data.units?.moto_spots,
     monthly_fee: data.units?.monthly_fee,
+    line_avatar_url: data.line_avatar_url || undefined,
   }
+}
+
+export async function uploadProfileAvatar(file: File): Promise<string> {
+  const form = new FormData()
+  form.append("file", file)
+  form.append("folder", "profile-avatars")
+
+  const res = await fetch("/api/upload-image", {
+    method: "POST",
+    body: form,
+  })
+
+  let payload: any = {}
+  try {
+    payload = await res.json()
+  } catch {}
+
+  if (!res.ok) {
+    throw new Error(payload?.error || "頭像上傳失敗")
+  }
+  if (!payload?.url) {
+    throw new Error("頭像上傳失敗：未收到圖片網址")
+  }
+  return payload.url
+}
+
+export async function getBoundLineAvatarUrl(userId: string): Promise<string> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return ""
+
+  const { data, error } = await supabase
+    .from("line_users")
+    .select("avatar_url")
+    .eq("profile_id", userId)
+    .maybeSingle()
+
+  if (error) {
+    console.warn("[Profile] 無法取得 LINE 頭貼:", error.message)
+    return ""
+  }
+
+  return data?.avatar_url || ""
 }
 
 export async function getUnits() {

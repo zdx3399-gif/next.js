@@ -24,6 +24,10 @@ export interface VisitorReservation {
   reservation_time: string
 }
 
+export interface UpdateVisitorReservation extends VisitorReservation {
+  id: string
+}
+
 export async function fetchVisitors(room?: string | null, isAdmin?: boolean, userUnitId?: string): Promise<Visitor[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
@@ -130,6 +134,48 @@ export async function checkOutVisitor(visitorId: string): Promise<void> {
     const error = await res.json()
     console.error("Error checking out visitor:", error)
     throw new Error(error.error || "Failed to check out visitor")
+  }
+}
+
+export async function updateVisitorReservation(
+  reservation: UpdateVisitorReservation,
+  actorId?: string,
+  actorRole?: string,
+): Promise<void> {
+  const res = await fetch("/api/visitor", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      visitor_id: reservation.id,
+      name: reservation.name,
+      phone: reservation.phone,
+      purpose: reservation.purpose,
+      reservation_time: reservation.reservation_time,
+      actor_id: actorId,
+      actor_role: actorRole,
+    }),
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}))
+    throw new Error(error?.error || "修改預約失敗")
+  }
+}
+
+export async function deleteVisitorReservation(visitorId: string, actorId?: string, actorRole?: string): Promise<void> {
+  const query = new URLSearchParams({
+    visitor_id: visitorId,
+    actor_id: actorId || "",
+    actor_role: actorRole || "",
+  })
+
+  const res = await fetch(`/api/visitor?${query.toString()}`, {
+    method: "DELETE",
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}))
+    throw new Error(error?.error || "刪除預約失敗")
   }
 }
 

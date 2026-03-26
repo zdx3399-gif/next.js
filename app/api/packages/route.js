@@ -122,6 +122,60 @@ async function findLineUserByUnit(supabase, unitId) {
   return { lineUserId, lineDisplayName };
 }
 
+function normalizeRoom(room) {
+  if (!room) return "";
+  return room
+    .toString()
+    .trim()
+    .toUpperCase()
+    .replace(/[棟樓室層\s]/g, "")
+    .replace(/F/gi, "")
+    .replace(/-/g, "");
+}
+
+async function resolveUnitByRoom(supabase, recipientRoom) {
+  const normalized = normalizeRoom(recipientRoom);
+
+  let foundUnit = null;
+
+  const { data: exact1 } = await supabase
+    .from("units")
+    .select("id, unit_code")
+    .or(`unit_code.eq.${recipientRoom},unit_number.eq.${recipientRoom}`)
+    .limit(1);
+
+  if (exact1 && exact1.length > 0) {
+    foundUnit = exact1[0];
+  }
+
+  if (!foundUnit) {
+    const { data: allUnits } = await supabase.from("units").select("id, unit_code, unit_number");
+    if (allUnits && allUnits.length > 0) {
+      for (const u of allUnits) {
+        const normCode = normalizeRoom(u.unit_code);
+        const normNum = normalizeRoom(u.unit_number);
+        if (normCode === normalized || normNum === normalized) {
+          foundUnit = u;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!foundUnit) {
+    const { data: likeUnits } = await supabase
+      .from("units")
+      .select("id, unit_code")
+      .ilike("unit_code", `%${recipientRoom}%`)
+      .limit(1);
+    if (likeUnits && likeUnits.length > 0) {
+      foundUnit = likeUnits[0];
+    }
+  }
+
+  return foundUnit;
+}
+
 // 1. ADDING A NEW PACKAGE (POST)
 export async function POST(req) {
   try {
@@ -138,61 +192,7 @@ export async function POST(req) {
 
     if (test === true) return Response.json({ message: "Test success" });
 
-    // Find the Unit ID with ENHANCED normalization + fallback strategies
-    // 強化房號正規化：移除所有空格、"棟"、"樓"、"F"、"室" 等中文字，轉大寫
-    const normalizeRoom = (s) => {
-      if (!s) return ""
-      return s
-        .toString()
-        .trim()
-        .toUpperCase()
-        .replace(/[棟樓室層\s]/g, "") // 移除中文字和空格
-        .replace(/F/gi, "") // 移除 F
-        .replace(/-/g, "") // 暫時移除連字號以便比對
-    }
-
-    const normalized = normalizeRoom(recipient_room)
-    let foundUnit = null
-
-    // 策略 1: 直接精確比對（原始格式）
-    const { data: exact1 } = await supabase
-      .from("units")
-      .select("id, unit_code")
-      .or(`unit_code.eq.${recipient_room},unit_number.eq.${recipient_room}`)
-      .limit(1)
-    if (exact1 && exact1.length > 0) {
-      foundUnit = exact1[0]
-      console.log(`[packages] Found unit by exact match: ${exact1[0].unit_code}`)
-    }
-
-    // 策略 2: 查找所有 units，用正規化比對
-    if (!foundUnit) {
-      const { data: allUnits } = await supabase.from("units").select("id, unit_code, unit_number")
-      if (allUnits && allUnits.length > 0) {
-        for (const u of allUnits) {
-          const normCode = normalizeRoom(u.unit_code)
-          const normNum = normalizeRoom(u.unit_number)
-          if (normCode === normalized || normNum === normalized) {
-            foundUnit = u
-            console.log(`[packages] Found unit by normalized match: ${u.unit_code} (input: ${recipient_room})`)
-            break
-          }
-        }
-      }
-    }
-
-    // 策略 3: 模糊比對（包含關係）
-    if (!foundUnit) {
-      const { data: likeUnits } = await supabase
-        .from("units")
-        .select("id, unit_code")
-        .ilike("unit_code", `%${recipient_room}%`)
-        .limit(1)
-      if (likeUnits && likeUnits.length > 0) {
-        foundUnit = likeUnits[0]
-        console.log(`[packages] Found unit by fuzzy match: ${likeUnits[0].unit_code}`)
-      }
-    }
+    const foundUnit = await resolveUnitByRoom(supabase, recipient_room)
 
     if (!foundUnit) {
       return Response.json({ error: "Room not found in database" }, { status: 404 })
@@ -323,6 +323,93 @@ export async function POST(req) {
     return Response.json({ success: true, id: insertedPackage?.id });
   } catch (err) {
     console.error("[packages] POST error:", err);
+    return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 });
+  }
+}
+
+// 3. EDIT PACKAGE (PUT)
+export async function PUT(req) {
+  try {
+    const supabase = getSupabase();
+    const body = await req.json();
+
+    const { id, courier, recipient_name, recipient_room, tracking_number, arrived_at } = body;
+
+    if (!id || !courier || !recipient_name || !recipient_room || !arrived_at) {
+      return Response.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from("packages")
+      .select("id, status")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (existingError || !existing) {
+      return Response.json({ error: "Package not found" }, { status: 404 });
+    }
+
+    if (existing.status === "picked_up") {
+      return Response.json({ error: "已領取包裹不可編輯" }, { status: 400 });
+    }
+
+    const foundUnit = await resolveUnitByRoom(supabase, recipient_room);
+    if (!foundUnit) {
+      return Response.json({ error: "Room not found in database" }, { status: 404 });
+    }
+
+    const { error } = await supabase
+      .from("packages")
+      .update({
+        courier,
+        recipient_name,
+        recipient_room,
+        tracking_number: tracking_number || null,
+        arrived_at,
+        unit_id: foundUnit.id,
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    return Response.json({ success: true });
+  } catch (err) {
+    console.error("[packages] PUT error:", err);
+    return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 });
+  }
+}
+
+// 4. DELETE PACKAGE (DELETE)
+export async function DELETE(req) {
+  try {
+    const supabase = getSupabase();
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return Response.json({ error: "Package ID required" }, { status: 400 });
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from("packages")
+      .select("id, status")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (existingError || !existing) {
+      return Response.json({ error: "Package not found" }, { status: 404 });
+    }
+
+    if (existing.status === "picked_up") {
+      return Response.json({ error: "已領取包裹不可刪除" }, { status: 400 });
+    }
+
+    const { error } = await supabase.from("packages").delete().eq("id", id);
+    if (error) throw error;
+
+    return Response.json({ success: true });
+  } catch (err) {
+    console.error("[packages] DELETE error:", err);
     return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 });
   }
 }

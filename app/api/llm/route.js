@@ -1,6 +1,9 @@
 import { chat } from '@/lib/ai-chat';
 import { createClient } from '@supabase/supabase-js';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY;
@@ -24,16 +27,10 @@ export async function POST(req) {
         .from('chat_log')
         .select('id, raw_question')
         .eq('event_id', eventId)
-        .single();
+        .maybeSingle();
       
       if (existingLog) {
         console.log('[防重複] eventId 已存在，跳過寫入:', eventId);
-        // 回傳已存在的記錄，避免重複處理
-        const { data: existingData } = await supabase
-          .from('chat_log')
-          .select('*')
-          .eq('id', existingLog.id)
-          .single();
         return new Response(JSON.stringify({ 
           answer: '(快取回應)',
           chatLogId: existingLog.id,

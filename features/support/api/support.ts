@@ -54,40 +54,100 @@ export async function fetchUserChatHistory(userId: string): Promise<ChatMessage[
   return data || []
 }
 
-// AI 回應邏輯（本地處理）
-export function getAIResponse(message: string): string {
-  const msg = message.toLowerCase()
+// AI 回應邏輯 - 呼叫後端 RAG API
+export async function getAIResponse(message: string): Promise<{ answer: string; images?: string[]; chatId?: number | null } | string> {
+  try {
+    const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || '';
+    
+    const response = await fetch(`${API_URL}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message }),
+    });
 
-  if (msg.includes("公告")) {
-    return "您可以在「公告」頁面查看最新公告。公告會以輪播方式顯示在首頁。"
-  }
-  if (msg.includes("投票")) {
-    return "您可以在「投票」頁面查看所有投票並參與投票。每個投票都會顯示即時統計結果。"
-  }
-  if (msg.includes("維修") || msg.includes("報修")) {
-    return "您可以在「設備/維護」頁面提交維修申請，包括設備名稱、問題描述和照片。提交後可以在「我的維修申請」中查看處理狀態。"
-  }
-  if (msg.includes("包裹") || msg.includes("快遞")) {
-    return "您可以在「我的包裹」頁面查看包裹領取狀況，包括快遞公司、追蹤號碼和到達時間。"
-  }
-  if (msg.includes("管理費") || msg.includes("繳費")) {
-    return "您可以在「管理費/收支」頁面查看繳費狀況。如有問題請聯繫管委會。"
-  }
-  if (msg.includes("個人") || msg.includes("資料") || msg.includes("密碼")) {
-    return "您可以在「個人資料」頁面修改姓名、房號、電話、Email 和密碼。"
-  }
-  if (msg.includes("設施") || msg.includes("預約")) {
-    return "您可以在「設施預約」頁面預約健身房、會議室等公共設施。"
-  }
-  if (msg.includes("訪客")) {
-    return "您可以在「訪客」頁面預約訪客來訪，並查看訪客紀錄。"
-  }
-  if (msg.includes("會議") || msg.includes("活動")) {
-    return "您可以在「會議記錄」頁面查看社區會議紀錄。"
-  }
-  if (msg.includes("緊急") || msg.includes("報警") || msg.includes("救護")) {
-    return "緊急事件請使用首頁或「緊急事件」頁面的緊急按鈕。包括：救護車119、報警110、AED、可疑人員通報。"
-  }
+    if (!response.ok) {
+      throw new Error('API 請求失敗');
+    }
 
-  return "抱歉，我還在學習中。您可以詢問關於公告、維修、繳費、包裹、設施預約、訪客、會議活動等問題，或使用「常用功能」快速導航。"
+    const data = await response.json();
+    
+    // 回傳完整物件，包含 answer、images 和 chatId
+    return {
+      answer: data.answer || '抱歉，我無法回答這個問題。',
+      images: data.images || [],
+      chatId: data.chatId || null
+    };
+  } catch (error) {
+    console.error('AI API 錯誤:', error);
+    return '抱歉，AI 服務暫時無法使用，請稍後再試。';
+  }
+}
+
+// AI 串流回應（含思考狀態更新）
+export async function getAIResponseStream(
+  message: string,
+  onStatus: (status: string) => void
+): Promise<{ answer: string; images?: string[]; chatId?: number | null } | string> {
+  try {
+    const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || '';
+
+    const response = await fetch(`${API_URL}/api/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message }),
+    });
+
+    if (!response.ok) {
+      throw new Error('API 請求失敗');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('無法讀取串流');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // 解析 SSE 格式的行
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // 保留未完成的最後一行
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data: ')) continue;
+
+        try {
+          const payload = JSON.parse(trimmed.slice(6));
+
+          if (payload.type === 'status') {
+            onStatus(payload.status);
+          } else if (payload.type === 'result') {
+            return {
+              answer: payload.answer || '抱歉，我無法回答這個問題。',
+              images: payload.images || [],
+              chatId: payload.chatId || null,
+            };
+          } else if (payload.type === 'error') {
+            throw new Error(payload.error);
+          }
+        } catch (parseErr) {
+          // 忽略解析失敗的行
+        }
+      }
+    }
+
+    return '抱歉，回應中斷，請稍後再試。';
+  } catch (error) {
+    console.error('AI Stream API 錯誤:', error);
+    return '抱歉，AI 服務暫時無法使用，請稍後再試。';
+  }
 }

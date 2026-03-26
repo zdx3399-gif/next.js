@@ -18,6 +18,7 @@ export type Section =
   | "community"
   | "knowledge-base"
   | "handover-knowledge"
+  | "ai-auto-fix"
   | "moderation"
   | "audit-logs"
   | "decryption"
@@ -40,6 +41,7 @@ export const CUSTOMIZABLE_SECTIONS: Section[] = [
   "community",
   "knowledge-base",
   "handover-knowledge",
+  "ai-auto-fix",
   "moderation",
   "audit-logs",
   "decryption",
@@ -85,6 +87,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "community",
     "knowledge-base",
     "handover-knowledge",
+    "ai-auto-fix",
     "moderation",
     "audit-logs",
     "decryption",
@@ -107,6 +110,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "community",      // 可看但作者資訊遮蔽
     "knowledge-base",
     "handover-knowledge",
+    "ai-auto-fix",
     "moderation",     // 可看但用戶資料遮蔽
     "decryption",     // 解密申請覆核（第二層）
     "audit-logs",
@@ -135,6 +139,7 @@ export const ADMIN_PREVIEW_ONLY_SECTIONS: Section[] = [
   "facilities",
   "knowledge-base",
   "handover-knowledge",
+  "ai-auto-fix",
   "packages",
   "visitors",
   "decryption",
@@ -336,7 +341,15 @@ export function getAllowedSections(role: UserRole, isResidentMode = false): Sect
 
   const override = getRolePermissionOverride(role, isResidentMode)
   if (override) {
-    return ["dashboard", ...override]
+    const sections: Section[] = ["dashboard", ...override]
+    if (role === "admin" && !sections.includes("ai-auto-fix")) {
+      sections.push("ai-auto-fix")
+    }
+    return sections
+  }
+
+  if (role === "admin" && !base.includes("ai-auto-fix")) {
+    return [...base, "ai-auto-fix"]
   }
 
   return base

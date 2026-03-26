@@ -27,6 +27,7 @@ import { getSupabaseClient } from "@/lib/supabase"
 import type { User } from "@/features/profile/api/profile"
 import { syncRolePermissionsFromSupabase } from "@/lib/role-permission-service"
 import { ActionSpotlightPanel } from "@/features/dashboard/ui/ActionSpotlightPanel"
+import { AiAutoFixPanel } from "@/features/ai-auto-fix/ui/AiAutoFixPanel"
 
 type Section =
   | "dashboard"
@@ -44,6 +45,7 @@ type Section =
   | "community"
   | "knowledge-base"
   | "handover-knowledge"
+  | "ai-auto-fix"
   | "audit-logs"
   | "decryption"
 
@@ -206,16 +208,35 @@ export default function AdminPage() {
     { id: "community", icon: "forum", label: "社區討論管理" },
     { id: "knowledge-base", icon: "school", label: "知識庫管理" },
     { id: "handover-knowledge", icon: "folder_shared", label: "交接知識庫" },
+    { id: "ai-auto-fix", icon: "auto_fix_high", label: "AI 自動修正" },
     { id: "decryption", icon: "lock_open", label: "解密申請" },
     { id: "audit-logs", icon: "history", label: "稽核紀錄" },
   ]
 
-  const navItems = currentUser
-    ? allNavItems.filter((item) => canAccessSection(currentUser.role as UserRole, item.id as any, false))
-    : allNavItems
+  const normalizedRole = String(currentUser?.role || "").trim().toLowerCase()
+  const effectiveRole: UserRole =
+    normalizedRole === "resident" ||
+    normalizedRole === "guard" ||
+    normalizedRole === "committee" ||
+    normalizedRole === "admin"
+      ? (normalizedRole as UserRole)
+      : "resident"
 
-  const hasAccess = currentUser ? canAccessSection(currentUser.role as UserRole, currentSection, false) : false
-  const isPreviewMode = currentUser ? isAdminPreviewMode(currentUser.role as UserRole, currentSection as any) : false
+  const navItems = currentUser
+    ? allNavItems.filter((item) => {
+        if (item.id === "ai-auto-fix") {
+          return effectiveRole === "admin" || effectiveRole === "committee"
+        }
+        return canAccessSection(effectiveRole, item.id as any, false)
+      })
+    : []
+
+  const hasAccess = currentUser
+    ? currentSection === "ai-auto-fix"
+      ? effectiveRole === "admin" || effectiveRole === "committee"
+      : canAccessSection(effectiveRole, currentSection, false)
+    : false
+  const isPreviewMode = currentUser ? isAdminPreviewMode(effectiveRole, currentSection as any) : false
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[var(--theme-gradient-from)] to-[var(--theme-gradient-to)]">
@@ -438,6 +459,14 @@ export default function AdminPage() {
                 交接知識庫
               </h2>
               <HandoverKnowledgeAdmin currentUser={currentUser} isPreviewMode={isPreviewMode} />
+            </div>
+          ) : currentSection === "ai-auto-fix" ? (
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
+                <span className="material-icons">auto_fix_high</span>
+                AI 自動修正
+              </h2>
+              <AiAutoFixPanel readOnly={effectiveRole !== "admin"} />
             </div>
           ) : currentSection === "audit-logs" ? (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">

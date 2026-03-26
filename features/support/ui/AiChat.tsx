@@ -18,7 +18,7 @@ interface AiChatProps {
 }
 
 export function AiChat({ currentUser }: AiChatProps) {
-  const { input, setInput, messages, isOpen, activeTab, setActiveTab, sendMessage, open, close } = useAiChat()
+  const { input, setInput, messages, isLoading, thinkingStatus, isOpen, activeTab, setActiveTab, sendMessage, open, close } = useAiChat()
 
   const [buttonPosition, setButtonPosition] = useState({ x: 0, y: 0 })
   const [windowPosition, setWindowPosition] = useState({ x: 0, y: 0 })
@@ -63,6 +63,8 @@ export function AiChat({ currentUser }: AiChatProps) {
         isOpen={isOpen}
         onClose={close}
         messages={messages}
+        isLoading={isLoading}
+        thinkingStatus={thinkingStatus}
         input={input}
         setInput={setInput}
         sendMessage={sendMessage}

@@ -1,8 +1,5 @@
--- Seed 100 rows for testing AI answer correction / suggestion flow on public.chat_events
--- Usage:
---   1. Run this file in Supabase SQL editor or psql
---   2. It will delete only rows whose source_pk starts with 'ai_fix_demo_'
---   3. Then it inserts exactly 100 demo rows
+-- Seed 100 rows for testing AI auto-fix suggestions on public.chat_events
+-- Safe to rerun: only deletes rows whose source_pk starts with 'ai_fix_demo_'
 
 begin;
 
@@ -97,12 +94,11 @@ select
   payload.fail_count,
   payload.feedback_events
 from (
-  -- 60 problematic chat_history rows for clustering + correction suggestion
   select
     'chat_history'::text as source,
     format('ai_fix_demo_bad_%03s', b.seq) as source_pk,
-    now() - make_interval(hours => (b.seq % 48), mins => (b.seq % 17)) as created_at,
-    format('demo_user_bad_%02s', ((b.seq - 1) % 12) + 1) as user_id,
+    now() - make_interval(hours => (b.seq % 72), mins => (b.seq % 41)) as created_at,
+    format('demo_user_bad_%02s', ((b.seq - 1) % 16) + 1) as user_id,
     null::text as event_id,
     case b.topic_id
       when 1 then '我要報修'
@@ -126,30 +122,45 @@ from (
       else '房租多少'
     end as normalized_question,
     case b.topic_id
-      when 1 then case b.seq % 3
-        when 0 then '直接聯絡管理員就好。'
-        when 1 then '報修不用填資料。'
-        else '報修流程不需要照片。'
+      when 1 then case b.seq % 6
+        when 0 then '報修不用填資料。'
+        when 1 then '直接聯絡管理員即可。'
+        when 2 then '報修流程不需要照片。'
+        when 3 then '系統目前沒有正式報修流程。'
+        when 4 then '晚點再試就好，現在先不用提交。'
+        else '報修完成後無法查詢進度。'
       end
-      when 2 then case b.seq % 3
+      when 2 then case b.seq % 6
         when 0 then '查不到包裹資料。'
         when 1 then '系統沒有包裹資訊，請晚點再看。'
-        else '無法確認包裹狀態。'
+        when 2 then '包裹到貨時管理室會再通知。'
+        when 3 then '目前無法確認包裹狀態。'
+        when 4 then '包裹資訊不會顯示追蹤號碼。'
+        else '只有管理員能查包裹。'
       end
-      when 3 then case b.seq % 3
+      when 3 then case b.seq % 6
         when 0 then '停車位免費。'
-        when 1 then '停車費跟管理費一樣，不用另外算。'
-        else '停車位固定 500 元，所有人都一樣。'
+        when 1 then '停車費就是管理費的一部分。'
+        when 2 then '停車費固定每月 500 元。'
+        when 3 then '所有車位計費方式都一樣。'
+        when 4 then '訪客停車和住戶停車都不另外收費。'
+        else '停車位採抽籤，所以沒有費用。'
       end
-      when 4 then case b.seq % 3
-        when 0 then '社區沒規定。'
-        when 1 then '可以，完全沒有限制。'
-        else '不可以，任何情況都禁止。'
+      when 4 then case b.seq % 6
+        when 0 then '可以，完全沒有限制。'
+        when 1 then '不可以，所有寵物都禁止。'
+        when 2 then '只要不吵就不用登記。'
+        when 3 then '社區沒有寵物管理規則。'
+        when 4 then '寵物政策不需要看住戶規約。'
+        else '養寵物不需要疫苗或牽繩規定。'
       end
-      else case b.seq % 3
-        when 0 then '每戶都一樣，租金 6000 元。'
-        when 1 then '租金就是 6000，不用另外計算。'
-        else '房租固定每月 6000 元。'
+      else case b.seq % 6
+        when 0 then '房租固定每月 6000 元。'
+        when 1 then '每一戶租金都一樣，不用另外計算。'
+        when 2 then '房租只看管理費，不看坪數。'
+        when 3 then '房租和車位費一定綁在一起。'
+        when 4 then '房租沒有公告條款可查。'
+        else '租金不用考慮坪數和附加項目。'
       end
     end as answer,
     case b.topic_id
@@ -157,21 +168,21 @@ from (
       when 2 then '包裹'
       when 3 then '停車'
       when 4 then '寵物'
-      else '租屋'
+      else '租金'
     end as intent,
-    case when b.seq % 2 = 0 then 0.31 else 0.56 end::numeric as intent_confidence,
+    case when b.seq % 2 = 0 then 0.34 else 0.58 end::numeric as intent_confidence,
     true as answered,
     false as needs_clarification,
     null::text as clarification_parent_id,
     case when b.seq % 2 = 0 then 'fallback' else 'vector' end as search_method,
-    case when b.seq % 2 = 0 then 0.18 else 0.42 end::double precision as similarity,
+    case when b.seq % 2 = 0 then 0.21 else 0.47 end::double precision as similarity,
     case when b.seq % 3 = 0 then 1 else 2 end as match_count,
-    450 + (b.seq % 900) as response_ms,
+    480 + (b.seq % 850) as response_ms,
     case b.topic_id
-      when 1 then jsonb_build_array(jsonb_build_object('id', 104, 'content', '報修流程', 'similarity', 0.61))
-      when 2 then jsonb_build_array(jsonb_build_object('id', 103, 'content', '包裹領取流程', 'similarity', 0.58))
-      when 3 then jsonb_build_array(jsonb_build_object('id', 106, 'content', '停車位費用規則', 'similarity', 0.63))
-      when 4 then jsonb_build_array(jsonb_build_object('id', 105, 'content', '寵物管理規範', 'similarity', 0.67))
+      when 1 then jsonb_build_array(jsonb_build_object('id', 104, 'content', '報修流程', 'similarity', 0.62))
+      when 2 then jsonb_build_array(jsonb_build_object('id', 103, 'content', '包裹領取流程', 'similarity', 0.61))
+      when 3 then jsonb_build_array(jsonb_build_object('id', 106, 'content', '停車位計價規則', 'similarity', 0.59))
+      when 4 then jsonb_build_array(jsonb_build_object('id', 105, 'content', '寵物管理規範', 'similarity', 0.63))
       else jsonb_build_array(jsonb_build_object('id', 101, 'content', '租金按坪數計算條款', 'similarity', 0.64))
     end as sources,
     '[]'::jsonb as images,
@@ -196,30 +207,45 @@ from (
     end as rating,
     false as is_helpful,
     case b.topic_id
-      when 1 then case b.seq % 3
-        when 0 then '這題應引導到報修頁，不是口頭處理。'
-        when 1 then '建議說明報修需要哪些欄位。'
-        else '報修回答不正確，缺少追蹤進度的說明。'
+      when 1 then case b.seq % 6
+        when 0 then '建議說明報修需要哪些欄位。'
+        when 1 then '報修回答不正確，缺少追蹤進度的說明。'
+        when 2 then '這題應引導到報修頁，不是口頭處理。'
+        when 3 then '報修流程回答錯了，應該要填單與上傳照片。'
+        when 4 then '內容太簡略，沒有講到設備名稱和問題描述。'
+        else '請補充送出後可以在哪裡查看處理狀態。'
       end
-      when 2 then case b.seq % 3
+      when 2 then case b.seq % 6
         when 0 then '包裹資訊有流程可查，請修正回答。'
-        when 1 then '建議提供包裹頁可看的欄位。'
-        else '這題應回覆包裹領取流程，不是直接說無資料。'
+        when 1 then '這題應回覆包裹領取流程，不是直接說無資料。'
+        when 2 then '建議提供包裹頁可看的欄位。'
+        when 3 then '請加上快遞公司、追蹤號碼和領取時間。'
+        when 4 then '內容太少，沒有講到去哪一頁查詢。'
+        else '包裹查詢回答錯了，應提示到包裹頁看追蹤資訊。'
       end
-      when 3 then case b.seq % 3
-        when 0 then '不能把停車費和管理費混在一起，請修正。'
-        when 1 then '停車費說明不完整，請加上類型條件。'
-        else '停車費用回答錯誤，停車位不是免費。'
+      when 3 then case b.seq % 6
+        when 0 then '停車費用回答錯誤，停車位不是免費。'
+        when 1 then '不能把停車費和管理費混在一起，請修正。'
+        when 2 then '請補充停車方案與計費差異。'
+        when 3 then '停車費說明不完整，請加上類型條件。'
+        when 4 then '建議說明停車位費用與管理費分開計算。'
+        else '這題停車計價方式回答不正確。'
       end
-      when 4 then case b.seq % 3
+      when 4 then case b.seq % 6
         when 0 then '不能直接說完全可以或完全不行，請改成依規約判斷。'
         when 1 then '請補充寵物登記與管理相關條件。'
-        else '寵物政策有條件限制，請修正回答內容。'
+        when 2 then '寵物政策有條件限制，請修正回答內容。'
+        when 3 then '建議說明寵物是否需依住戶決議調整。'
+        when 4 then '這題需提到牽繩、疫苗和清理排泄物要求。'
+        else '缺少違規飼養後續處理方式。'
       end
-      else case b.seq % 3
-        when 0 then '房租要看坪數與車位費，請更正。'
-        when 1 then '租金資訊不正確，應該是依坪數計算，不是固定金額。'
-        else '請補充房租計算公式與影響條件。'
+      else case b.seq % 6
+        when 0 then '租金資訊不正確，應該是依坪數計算，不是固定金額。'
+        when 1 then '房租要看坪數與車位費，請更正。'
+        when 2 then '請補充房租計算公式與影響條件。'
+        when 3 then '社區房租不是每戶都一樣，請改成坪數計算規則。'
+        when 4 then '房租計算方式說錯了，應該依公告條款處理。'
+        else '內容過於模糊，沒有說明租金與附加項目的關係。'
       end
     end as feedback,
     0 as success_count,
@@ -230,11 +256,10 @@ from (
 
   union all
 
-  -- 25 high-quality historical chat_history rows that the correction feature can learn from
   select
     'chat_history'::text as source,
     format('ai_fix_demo_good_%03s', g.seq) as source_pk,
-    now() - interval '14 days' - make_interval(days => (g.seq % 5), mins => g.seq % 37) as created_at,
+    now() - interval '14 days' - make_interval(days => (g.seq % 6), mins => (g.seq % 37)) as created_at,
     format('demo_user_good_%02s', ((g.seq - 61) % 10) + 1) as user_id,
     null::text as event_id,
     case g.topic_id
@@ -259,18 +284,18 @@ from (
       else '房租多少'
     end as normalized_question,
     case g.topic_id
-      when 1 then '請在報修頁填寫設備、問題描述與照片，送出後可在「我的維修申請」追蹤進度。'
-      when 2 then '可在包裹頁查看快遞公司、追蹤號碼與領取狀態，若未登錄請聯繫管理室。'
-      when 3 then '停車位費用依車位類型與租用方案計算，與管理費分開計費。'
-      when 4 then '是否可養寵物依社區規約與住戶大會決議，需先確認最新公告。'
-      else '房租依坪數計算，並依樓層與車位費調整；需以住戶手冊與最新公告為準。'
+      when 1 then '請在報修頁填寫設備名稱、問題描述並上傳照片，送出後可在「我的維修申請」查看進度。'
+      when 2 then '可到「訪客／包裹」頁查看快遞公司、追蹤號碼、領取時間與領取狀態。'
+      when 3 then '停車位費用依車位類型與租用方案計算，與管理費分開收費，實際金額請以社區公告為準。'
+      when 4 then '是否可養寵物需依社區規約與住戶決議，且須完成登記、施打疫苗、使用牽繩並清理排泄物。'
+      else '房租不是固定金額，通常會依坪數、附加項目與車位費調整，請以租約或公告條款為準。'
     end as answer,
     case g.topic_id
       when 1 then '維修'
       when 2 then '包裹'
       when 3 then '停車'
       when 4 then '寵物'
-      else '租屋'
+      else '租金'
     end as intent,
     0.93::numeric as intent_confidence,
     true as answered,
@@ -279,13 +304,13 @@ from (
     'vector'::text as search_method,
     0.88::double precision as similarity,
     8 as match_count,
-    520 + (g.seq % 400) as response_ms,
+    540 + (g.seq % 240) as response_ms,
     case g.topic_id
       when 1 then jsonb_build_array(jsonb_build_object('id', 104, 'content', '報修流程', 'similarity', 0.89))
-      when 2 then jsonb_build_array(jsonb_build_object('id', 103, 'content', '包裹領取流程', 'similarity', 0.91))
-      when 3 then jsonb_build_array(jsonb_build_object('id', 106, 'content', '停車位費用規則', 'similarity', 0.87))
-      when 4 then jsonb_build_array(jsonb_build_object('id', 105, 'content', '寵物管理規範', 'similarity', 0.86))
-      else jsonb_build_array(jsonb_build_object('id', 101, 'content', '租金按坪數計算條款', 'similarity', 0.88))
+      when 2 then jsonb_build_array(jsonb_build_object('id', 103, 'content', '包裹領取流程', 'similarity', 0.90))
+      when 3 then jsonb_build_array(jsonb_build_object('id', 106, 'content', '停車位計價規則', 'similarity', 0.88))
+      when 4 then jsonb_build_array(jsonb_build_object('id', 105, 'content', '寵物管理規範', 'similarity', 0.91))
+      else jsonb_build_array(jsonb_build_object('id', 101, 'content', '租金按坪數計算條款', 'similarity', 0.89))
     end as sources,
     '[]'::jsonb as images,
     '{"groq": true, "cohere": true}'::jsonb as api_used,
@@ -297,11 +322,11 @@ from (
     case when g.seq % 2 = 0 then 5 else 4 end as rating,
     true as is_helpful,
     case g.topic_id
-      when 1 then '資訊完整，感謝。'
-      when 2 then '這個包裹回答有用，謝謝。'
-      when 3 then '停車位計費方式很清楚，感謝。'
-      when 4 then '寵物規範說明很完整，知道要看公告了。'
-      else '這個答案可以直接用。'
+      when 1 then '答案完整，報修欄位與進度都有說清楚。'
+      when 2 then '有講到包裹頁、追蹤號碼和領取狀態，很清楚。'
+      when 3 then '有把停車費與管理費分開說明，資訊正確。'
+      when 4 then '有補充寵物規約與管理條件，回答完整。'
+      else '租金不是固定金額這點有講清楚，符合預期。'
     end as feedback,
     1 as success_count,
     0 as unclear_count,
@@ -311,11 +336,10 @@ from (
 
   union all
 
-  -- 15 chat_log rows to mimic recent incoming events from another source
   select
     'chat_log'::text as source,
     format('ai_fix_demo_log_%03s', l.seq) as source_pk,
-    now() - make_interval(hours => (l.seq % 12), mins => (l.seq % 29)) as created_at,
+    now() - make_interval(hours => (l.seq % 16), mins => (l.seq % 29)) as created_at,
     format('demo_line_user_%02s', ((l.seq - 86) % 8) + 1) as user_id,
     format('evt_ai_fix_%03s', l.seq) as event_id,
     case l.topic_id
@@ -333,10 +357,10 @@ from (
       else '房租多少？'
     end as raw_question,
     case l.topic_id
-      when 1 then '我要維修'
+      when 1 then '我要報修'
       when 2 then '我的包裹在哪裡'
-      when 3 then '停停車管費怎麼算'
-      when 4 then '社區可以寵物嗎'
+      when 3 then '停車位費用怎麼算'
+      when 4 then '社區可以養寵物嗎'
       else '房租多少'
     end as normalized_question,
     null::text as answer,
@@ -345,7 +369,7 @@ from (
       when 2 then '包裹'
       when 3 then '停車'
       when 4 then '寵物'
-      else '租屋'
+      else '租金'
     end as intent,
     case
       when l.topic_id = 3 then 0.57::numeric

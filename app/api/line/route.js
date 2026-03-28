@@ -189,8 +189,9 @@ export async function POST(req) {
           let chatLogId = null;
           if (eventId) {
             const { data: existingLog } = await supabase
-              .from('chat_log')
+              .from('chat_events')
               .select('id')
+              .eq('source', 'chat_log')
               .eq('event_id', eventId)
               .maybeSingle();
             
@@ -208,8 +209,11 @@ export async function POST(req) {
             
             // 寫入 chat_log (需要追問的記錄)
             const logData = {
+              source: 'chat_log',
+              source_pk: `log_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
               raw_question: userText,
               normalized_question: result.normalized_question || userText,
+              question: result.normalized_question || userText,
               intent: result.intent || null,
               intent_confidence: typeof result.intent_confidence === 'number' ? result.intent_confidence : null,
               answered: false,
@@ -218,16 +222,13 @@ export async function POST(req) {
               event_id: eventId || null,
               created_at: new Date().toISOString(),
             };
-            
             const { data: insertData, error: insertError } = await supabase
-              .from('chat_log')
+              .from('chat_events')
               .insert([logData])
               .select();
-            
             if (!insertError && insertData?.[0]) {
               chatLogId = insertData[0].id;
               console.log('[追問] chatLogId 已記錄:', chatLogId);
-              
               // 記錄澄清選項到 clarification_options 表
               const clarificationRecords = result.clarificationOptions.map((opt, index) => ({
                 chat_log_id: chatLogId,
@@ -235,7 +236,6 @@ export async function POST(req) {
                 option_value: opt.value,
                 display_order: index
               }));
-              
               await supabase
                 .from('clarification_options')
                 .insert(clarificationRecords);
@@ -260,8 +260,9 @@ export async function POST(req) {
           if (userText.startsWith('clarify:')) {
             // 查找最近一次 needs_clarification = true 的記錄
             const { data: parentLog } = await supabase
-              .from('chat_log')
+              .from('chat_events')
               .select('id')
+              .eq('source', 'chat_log')
               .eq('user_id', userId)
               .eq('needs_clarification', true)
               .order('created_at', { ascending: false })
@@ -297,9 +298,16 @@ export async function POST(req) {
           };
 
           
+          const eventLogData = {
+            source: 'chat_log',
+            source_pk: `log_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            question: result.normalized_question || userText,
+            ...logData,
+          };
+
           const { data: insertData, error: insertError } = await supabase
-            .from('chat_log')
-            .insert([logData])
+            .from('chat_events')
+            .insert([eventLogData])
             .select();
           
           console.log('[DEBUG] Insert result:', insertData);
@@ -398,46 +406,40 @@ export async function POST(req) {
           
           try {
             // 記錄回饋到 chat_feedback
-            const { data: insertedFeedback, error: feedbackError } = await supabase
-              .from('chat_feedback')
-              .insert([{
-                chat_log_id: chatLogIdInt,
-                user_id: userId,
-                feedback_type: feedbackType,
-                created_at: new Date().toISOString()
-              }])
-              .select();
-            
-            console.log('[DEBUG Postback] Insert result:', insertedFeedback);
-            console.log('[DEBUG Postback] Insert error:', feedbackError);
-            
-            if (feedbackError) {
-              console.error('[Feedback Error]', feedbackError);
+            // 讀取 chat_events 目前 feedback_events
+            const { data: chatLog, error: chatLogError } = await supabase
+              .from('chat_events')
+              .select('id, feedback, success_count, unclear_count, fail_count, feedback_events')
+              .eq('id', chatLogId)
+              .eq('source', 'chat_log')
+              .single();
+            if (chatLogError) {
+              console.error('[Chat Log Query Error]', chatLogError);
             }
-            
-            // 更新 chat_log
             const feedbackField = feedbackType === 'helpful' ? 'success_count' :
                                  feedbackType === 'unclear' ? 'unclear_count' : 'fail_count';
-            
-            const { data: chatLog } = await supabase
-              .from('chat_log')
-              .select('id, feedback, success_count, unclear_count, fail_count')
-              .eq('id', chatLogId)
-              .single();
-            
+            const feedbackEvents = Array.isArray(chatLog?.feedback_events) ? chatLog.feedback_events : [];
+            const feedbackRecord = {
+              id: `fb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              user_id: userId || null,
+              feedback_type: feedbackType,
+              clarification_choice: null,
+              comment: null,
+              created_at: new Date().toISOString(),
+            };
             const updateData = {
               feedback: feedbackType,
-              [feedbackField]: (chatLog?.[feedbackField] || 0) + 1
+              [feedbackField]: (chatLog?.[feedbackField] || 0) + 1,
+              feedback_events: [...feedbackEvents, feedbackRecord],
             };
-            
             if (feedbackType === 'not_helpful') {
               updateData.answered = false;
             }
-            
             await supabase
-              .from('chat_log')
+              .from('chat_events')
               .update(updateData)
-              .eq('id', chatLogId);
+              .eq('id', chatLogId)
+              .eq('source', 'chat_log');
             
             // 回覆訊息
             let responseText = '';

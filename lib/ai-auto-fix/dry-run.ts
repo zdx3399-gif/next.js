@@ -29,6 +29,7 @@ type Cluster = {
   lastSeenAt: string
   aiTopAnswers: Array<{ text: string; count: number }>
   feedbackTopItems: Array<{ text: string; count: number }>
+  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }>
   feedbackTotal: number
 }
 
@@ -62,6 +63,7 @@ type Item = {
   reason: string
   crowdFeedbackSummary: string
   feedbackTopItems: Array<{ text: string; count: number }>
+  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }>
   feedbackTotal: number
   evidence: {
     avgRating: number
@@ -139,6 +141,61 @@ function topEntries(map: Map<string, number>, limit = 3): Array<{ text: string; 
     .slice(0, limit)
 }
 
+function classifyFeedback(feedback: string): { key: string; label: string } {
+  const text = String(feedback || "").trim().toLowerCase()
+  if (!text) return { key: "other", label: "其他意見" }
+
+  const rules: Array<{ key: string; label: string; patterns: RegExp[] }> = [
+    {
+      key: "wrong_answer",
+      label: "回答錯誤",
+      patterns: [/不正確/, /回答錯/, /說錯/, /錯誤/, /修正/, /更正/, /不是/, /不能只說/, /不能把/],
+    },
+    {
+      key: "missing_process",
+      label: "缺少流程指引",
+      patterns: [/流程/, /步驟/, /引導/, /頁面/, /頁可看/, /查詢/, /追蹤/, /領取/, /怎麼查/],
+    },
+    {
+      key: "missing_fields",
+      label: "缺少必要欄位",
+      patterns: [/欄位/, /填單/, /填寫/, /照片/, /上傳/, /地點/, /問題描述/],
+    },
+    {
+      key: "pricing_rule",
+      label: "計價規則錯誤",
+      patterns: [/坪數/, /固定金額/, /6000/, /免費/, /計算/, /車位費/, /管理費分開/, /類型條件/],
+    },
+    {
+      key: "policy_condition",
+      label: "缺少條件限制",
+      patterns: [/依規約/, /住戶決議/, /公告/, /條件限制/, /登記/, /疫苗/, /完全可以/, /完全不行/],
+    },
+    {
+      key: "too_vague",
+      label: "內容過於模糊",
+      patterns: [/太少/, /不完整/, /太簡略/, /模糊/, /看不懂/, /更清楚/, /語氣像在猜測/],
+    },
+  ]
+
+  for (const rule of rules) {
+    if (rule.patterns.some((pattern) => pattern.test(text))) {
+      return { key: rule.key, label: rule.label }
+    }
+  }
+
+  return { key: "other", label: "其他意見" }
+}
+
+function topCategoryEntries(
+  map: Map<string, { key: string; label: string; count: number; examples: string[] }>,
+  limit = 3,
+): Array<{ key: string; label: string; count: number; examples: string[] }> {
+  return [...map.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit)
+}
+
 function buildClusters(rows: ChatHistoryRow[]): Cluster[] {
   const clusters = new Map<string, {
     clusterKey: string
@@ -151,6 +208,7 @@ function buildClusters(rows: ChatHistoryRow[]): Cluster[] {
     lastSeenAt: string
     aiAnswerCount: Map<string, number>
     feedbackCount: Map<string, number>
+    feedbackCategoryCount: Map<string, { key: string; label: string; count: number; examples: string[] }>
     feedbackTotal: number
   }>()
 
@@ -171,6 +229,7 @@ function buildClusters(rows: ChatHistoryRow[]): Cluster[] {
         lastSeenAt: row.created_at,
         aiAnswerCount: new Map<string, number>(),
         feedbackCount: new Map<string, number>(),
+        feedbackCategoryCount: new Map<string, { key: string; label: string; count: number; examples: string[] }>(),
         feedbackTotal: 0,
       })
     }
@@ -189,6 +248,22 @@ function buildClusters(rows: ChatHistoryRow[]): Cluster[] {
     if (feedback) {
       c.feedbackTotal += 1
       c.feedbackCount.set(feedback, (c.feedbackCount.get(feedback) || 0) + 1)
+
+      const category = classifyFeedback(feedback)
+      const existing = c.feedbackCategoryCount.get(category.key)
+      if (existing) {
+        existing.count += 1
+        if (existing.examples.length < 3 && !existing.examples.includes(feedback)) {
+          existing.examples.push(feedback)
+        }
+      } else {
+        c.feedbackCategoryCount.set(category.key, {
+          key: category.key,
+          label: category.label,
+          count: 1,
+          examples: [feedback],
+        })
+      }
     }
 
     if (row.created_at < c.firstSeenAt) c.firstSeenAt = row.created_at
@@ -206,6 +281,7 @@ function buildClusters(rows: ChatHistoryRow[]): Cluster[] {
     lastSeenAt: c.lastSeenAt,
     aiTopAnswers: topEntries(c.aiAnswerCount, 3),
     feedbackTopItems: topEntries(c.feedbackCount, 5),
+    feedbackCategoryTopItems: topCategoryEntries(c.feedbackCategoryCount, 5),
     feedbackTotal: c.feedbackTotal,
   }))
 }
@@ -361,12 +437,83 @@ function buildRerunPrompt(question: string, feedbackTopItems: Array<{ text: stri
   ].join("\n")
 }
 
+function buildFeedbackCategoryContextV2(
+  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }> = [],
+): string {
+  return feedbackCategoryTopItems
+    .slice(0, 3)
+    .map((f, idx) => {
+      const example = f.examples?.[0] ? `，例如：「${f.examples[0]}」` : ""
+      return `${idx + 1}. ${f.label}（${f.count}次）${example}`
+    })
+    .join("\n")
+}
+
+function buildCrowdFeedbackReasonV2(cluster: Cluster, proposedAnswer: string | null): string {
+  const topCategory = (cluster.feedbackCategoryTopItems || [])[0]
+  if (topCategory?.label) {
+    return `群眾回饋主要集中在「${topCategory.label}」類，共 ${topCategory.count} 筆，因此建議改寫為：${proposedAnswer || "目前尚未產生穩定建議答案"}`
+  }
+
+  return buildCrowdFeedbackReason(cluster, proposedAnswer)
+}
+
+function buildRerunPromptV2(
+  question: string,
+  feedbackTopItems: Array<{ text: string; count: number }> = [],
+  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }> = [],
+): string {
+  const q = String(question || "").trim()
+  const feedbackContext = buildFeedbackCategoryContextV2(feedbackCategoryTopItems) || buildFeedbackContext(feedbackTopItems)
+  if (!feedbackContext) return q
+
+  return [
+    `原始問題：${q}`,
+    "使用者主要回饋：",
+    feedbackContext,
+    "請根據上述回饋修正回答，輸出一段精簡且可直接給住戶的繁體中文答案。",
+  ].join("\n")
+}
+
 async function fetchAiAnswer(question: string, feedbackTopItems: Array<{ text: string; count: number }>, config: DryRunConfig): Promise<string> {
   if (!config.aiChatEndpoint) {
     throw new Error("AI_CHAT_ENDPOINT 未設定")
   }
 
   const prompt = buildRerunPrompt(question, feedbackTopItems)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), config.aiChatTimeoutMs)
+
+  try {
+    const res = await fetch(config.aiChatEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: prompt }),
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      throw new Error(`AI API HTTP ${res.status}`)
+    }
+
+    const json = await res.json()
+    return String(json?.answer || "").trim()
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function fetchAiAnswerV2(
+  question: string,
+  feedbackTopItems: Array<{ text: string; count: number }>,
+  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }>,
+  config: DryRunConfig,
+): Promise<string> {
+  if (!config.aiChatEndpoint) {
+    throw new Error("AI_CHAT_ENDPOINT 未設定")
+  }
+
+  const prompt = buildRerunPromptV2(question, feedbackTopItems, feedbackCategoryTopItems)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), config.aiChatTimeoutMs)
 
@@ -461,7 +608,12 @@ async function enrichAllItemsWithAi(items: Item[], config: DryRunConfig) {
     summary.ran += 1
 
     try {
-      const answer = await fetchAiAnswer(item.questionText || item.clusterKey, item.feedbackTopItems || [], config)
+      const answer = await fetchAiAnswerV2(
+        item.questionText || item.clusterKey,
+        item.feedbackTopItems || [],
+        item.feedbackCategoryTopItems || [],
+        config,
+      )
       item.aiRerunAnswer = answer || null
       item.aiRerunStatus = answer ? "ok" : "empty"
       item.aiRerunError = null
@@ -519,57 +671,26 @@ function createSupabaseClient(tenantId: "tenant_a" | "tenant_b") {
 async function loadRecentRows(supabase: any, config: DryRunConfig): Promise<ChatHistoryRow[]> {
   const from = new Date(Date.now() - config.windowDays * 24 * 60 * 60 * 1000).toISOString()
 
-  // Preferred source: unified table after migration.
+  // Unified source table for all chat events.
   const { data: unifiedRows, error: unifiedError } = await supabase
     .from("chat_events")
     .select("source, source_pk, created_at, question, answer, feedback, needs_review, issue_type, user_id")
     .gte("created_at", from)
 
-  if (!unifiedError && Array.isArray(unifiedRows) && unifiedRows.length > 0) {
-    return unifiedRows.map((row: any) => ({
-      id: String(row.source_pk || ""),
+  if (unifiedError) {
+    console.warn("[ai-auto-fix] loadRecentRows unified query failed:", unifiedError)
+    return []
+  }
+
+  return (unifiedRows || []).map((row: any) => {
+    return {
+      id: String(row.source_pk || row.id || ""),
       created_at: row.created_at,
       question: row.question || "",
       answer: row.answer || null,
       feedback: row.feedback || null,
       needs_review: Boolean(row.needs_review),
       issue_type: row.issue_type || null,
-      reporter_id: row.user_id || null,
-    }))
-  }
-
-  const { data, error } = await supabase
-    .from("chat_history")
-    .select("id, created_at, question, answer, feedback, needs_review, issue_type, reporter_id")
-    .gte("created_at", from)
-
-  if (!error && Array.isArray(data) && data.length > 0) {
-    return (data || []) as ChatHistoryRow[]
-  }
-
-  // Fallback: many production flows write records to chat_log instead of chat_history.
-  const { data: logRows, error: logError } = await supabase
-    .from("chat_log")
-    .select("id, created_at, raw_question, normalized_question, feedback, fail_count, unclear_count, success_count, user_id, answered")
-    .gte("created_at", from)
-
-  if (logError) {
-    console.warn("[ai-auto-fix] loadRecentRows fallback chat_log failed:", logError)
-    return []
-  }
-
-  return (logRows || []).map((row: any) => {
-    const failCount = Number(row.fail_count || 0)
-    const needsReview = row.feedback === "not_helpful" || failCount > 0
-
-    return {
-      id: String(row.id),
-      created_at: row.created_at,
-      question: row.raw_question || row.normalized_question || "",
-      answer: null,
-      feedback: row.feedback || null,
-      needs_review: needsReview,
-      issue_type: row.answered === false ? "no_match" : needsReview ? "low_rating" : "fallback",
       reporter_id: row.user_id || null,
     }
   })
@@ -579,20 +700,13 @@ async function loadAnswerRows(supabase: any): Promise<AnswerRow[]> {
   const { data: unifiedRows, error: unifiedError } = await supabase
     .from("chat_events")
     .select("question, answer, rating, is_helpful")
+    .eq("source", "chat_history")
 
-  if (!unifiedError && Array.isArray(unifiedRows) && unifiedRows.length > 0) {
-    return (unifiedRows || []) as AnswerRow[]
-  }
-
-  const { data, error } = await supabase
-    .from("chat_history")
-    .select("question, answer, rating, is_helpful")
-
-  if (error) {
-    console.warn("[ai-auto-fix] loadAnswerRows failed:", error)
+  if (unifiedError) {
+    console.warn("[ai-auto-fix] loadAnswerRows unified query failed:", unifiedError)
     return []
   }
-  return (data || []) as AnswerRow[]
+  return (unifiedRows || []) as AnswerRow[]
 }
 
 export async function runAutoFixDryRun(tenantId: "tenant_a" | "tenant_b"): Promise<DryRunResult> {
@@ -630,8 +744,9 @@ export async function runAutoFixDryRun(tenantId: "tenant_a" | "tenant_b"): Promi
         confidence: Number(rec.confidence.toFixed(4)),
         recommendedAction: rec.recommendedAction,
         reason: rec.reason,
-        crowdFeedbackSummary: buildCrowdFeedbackReason(cluster, rec.proposedAnswer),
+        crowdFeedbackSummary: buildCrowdFeedbackReasonV2(cluster, rec.proposedAnswer),
         feedbackTopItems: cluster.feedbackTopItems || [],
+        feedbackCategoryTopItems: cluster.feedbackCategoryTopItems || [],
         feedbackTotal: cluster.feedbackTotal || 0,
         evidence: rec.evidence,
       }

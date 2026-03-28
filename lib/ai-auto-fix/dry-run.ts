@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 
-type ChatHistoryRow = {
+type ChatEventRow = {
   id: string
   created_at: string
   question: string | null
@@ -18,6 +18,18 @@ type AnswerRow = {
   is_helpful: boolean | null
 }
 
+export type FeedbackItem = {
+  text: string
+  count: number
+}
+
+export type FeedbackCategoryItem = {
+  key: string
+  label: string
+  count: number
+  examples: string[]
+}
+
 type Cluster = {
   clusterKey: string
   questionText: string
@@ -27,9 +39,9 @@ type Cluster = {
   distinctReporters: number
   firstSeenAt: string
   lastSeenAt: string
-  aiTopAnswers: Array<{ text: string; count: number }>
-  feedbackTopItems: Array<{ text: string; count: number }>
-  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }>
+  aiTopAnswers: FeedbackItem[]
+  feedbackTopItems: FeedbackItem[]
+  feedbackCategoryTopItems: FeedbackCategoryItem[]
   feedbackTotal: number
 }
 
@@ -46,7 +58,21 @@ type DryRunConfig = {
   aiRerunConcurrency: number
 }
 
-type Item = {
+type Evidence = {
+  avgRating: number
+  helpfulCount: number
+  sampleCount: number
+}
+
+type Recommendation = {
+  recommendedAction: "manual_review" | "auto_apply"
+  confidence: number
+  reason: string
+  proposedAnswer: string | null
+  evidence: Evidence | null
+}
+
+export type AutoFixItem = {
   clusterKey: string
   questionText: string
   issueType: string
@@ -56,20 +82,16 @@ type Item = {
   firstSeenAt: string
   lastSeenAt: string
   aiOriginalAnswer: string | null
-  aiTopAnswers: Array<{ text: string; count: number }>
+  aiTopAnswers: FeedbackItem[]
   proposedAnswer: string | null
   confidence: number
   recommendedAction: "manual_review" | "auto_apply"
   reason: string
   crowdFeedbackSummary: string
-  feedbackTopItems: Array<{ text: string; count: number }>
-  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }>
+  feedbackTopItems: FeedbackItem[]
+  feedbackCategoryTopItems: FeedbackCategoryItem[]
   feedbackTotal: number
-  evidence: {
-    avgRating: number
-    helpfulCount: number
-    sampleCount: number
-  } | null
+  evidence: Evidence | null
   aiRerunAnswer?: string | null
   aiRerunStatus?: string
   aiRerunError?: string | null
@@ -77,7 +99,7 @@ type Item = {
   aiRerunMode?: string
 }
 
-type DryRunResult = {
+export type DryRunResult = {
   summary: {
     totalRows: number
     totalClusters: number
@@ -100,10 +122,91 @@ type DryRunResult = {
       disabled?: boolean
     }
   }
-  items: Item[]
+  items: AutoFixItem[]
+}
+
+export type SingleRerunInput = {
+  clusterKey: string
+  questionText: string
+  issueType: string
+  feedbackTopItems?: FeedbackItem[]
+  feedbackCategoryTopItems?: FeedbackCategoryItem[]
+}
+
+export type SingleRerunResult = {
+  aiRerunAnswer: string | null
+  aiRerunStatus: string
+  aiRerunError: string | null
+  aiRerunSource: "live" | "cache" | "disabled"
+}
+
+type CategoryRule = {
+  key: string
+  label: string
+  patterns: RegExp[]
+}
+
+type AnswerStat = {
+  answer: string
+  avgRating: number
+  helpfulCount: number
+  sampleCount: number
 }
 
 const memoryCache = new Map<string, { answer: string | null; status: "ok" | "empty"; updatedAt: string }>()
+
+const CATEGORY_RULES: CategoryRule[] = [
+  {
+    key: "wrong_answer",
+    label: "回答錯誤",
+    patterns: [/回答錯/i, /答錯/i, /資訊不正確/i, /不是這樣/i, /應該是/i, /說錯/i, /內容有誤/i],
+  },
+  {
+    key: "missing_process",
+    label: "缺少流程引導",
+    patterns: [/流程/i, /步驟/i, /怎麼操作/i, /怎麼查/i, /去哪裡看/i, /如何申請/i],
+  },
+  {
+    key: "missing_fields",
+    label: "缺少必要欄位",
+    patterns: [/欄位/i, /要填什麼/i, /填單/i, /照片/i, /上傳/i, /設備名稱/i, /問題描述/i],
+  },
+  {
+    key: "pricing_rule",
+    label: "計價規則錯誤",
+    patterns: [/費用/i, /計算/i, /坪數/i, /租金/i, /房租/i, /停車費/i, /管理費/i, /固定金額/i],
+  },
+  {
+    key: "policy_condition",
+    label: "缺少條件限制",
+    patterns: [/規約/i, /條件/i, /限制/i, /需登記/i, /需申請/i, /依公告/i, /依住戶決議/i],
+  },
+  {
+    key: "missing_location",
+    label: "缺少頁面位置",
+    patterns: [/在哪裡看/i, /哪一頁/i, /哪個頁面/i, /管理室/i, /包裹頁/i, /報修頁/i, /首頁/i],
+  },
+  {
+    key: "missing_time",
+    label: "缺少時間資訊",
+    patterns: [/時間/i, /何時/i, /多久/i, /到期日/i, /領取時間/i, /施工時間/i],
+  },
+  {
+    key: "missing_exception",
+    label: "缺少例外說明",
+    patterns: [/例外/i, /特殊情況/i, /如果沒有/i, /若無/i, /週末/i, /假日/i, /訪客/i],
+  },
+  {
+    key: "mixed_concepts",
+    label: "概念混淆",
+    patterns: [/混在一起/i, /不要混為一談/i, /搞混/i, /和.*不同/i, /分開計算/i, /不是同一件事/i],
+  },
+  {
+    key: "too_vague",
+    label: "內容太模糊",
+    patterns: [/太少/i, /太模糊/i, /看不懂/i, /說明不足/i, /不夠清楚/i, /太簡略/i],
+  },
+]
 
 function boolEnv(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback
@@ -123,7 +226,12 @@ function getConfig(): DryRunConfig {
     autoApplyConfidenceThreshold: numEnv(process.env.AI_AUTO_FIX_AUTO_APPLY_CONFIDENCE, 0.9),
     aiChatEndpoint: process.env.AI_CHAT_ENDPOINT || "",
     aiChatTimeoutMs: numEnv(process.env.AI_CHAT_TIMEOUT_MS, 12000),
-    lowRiskIssueTypes: new Set((process.env.AI_AUTO_FIX_LOW_RISK_TYPES || "low_similarity,low_rating,fallback").split(",").map((x) => x.trim()).filter(Boolean)),
+    lowRiskIssueTypes: new Set(
+      (process.env.AI_AUTO_FIX_LOW_RISK_TYPES || "low_similarity,low_rating,fallback")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean),
+    ),
     enableAiRerun: boolEnv(process.env.AI_AUTO_FIX_ENABLE_RERUN, false),
     aiRerunMaxItems: numEnv(process.env.AI_AUTO_FIX_RERUN_MAX_ITEMS, 5),
     aiRerunConcurrency: Math.max(1, numEnv(process.env.AI_AUTO_FIX_RERUN_CONCURRENCY, 2)),
@@ -134,93 +242,62 @@ function normalizeQuestion(question: unknown): string {
   return String(question || "").trim().toLowerCase()
 }
 
-function topEntries(map: Map<string, number>, limit = 3): Array<{ text: string; count: number }> {
+function topEntries(map: Map<string, number>, limit = 5): FeedbackItem[] {
   return [...map.entries()]
     .map(([text, count]) => ({ text, count }))
-    .sort((a, b) => b.count - a.count)
+    .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
     .slice(0, limit)
 }
 
 function classifyFeedback(feedback: string): { key: string; label: string } {
-  const text = String(feedback || "").trim().toLowerCase()
-  if (!text) return { key: "other", label: "其他意見" }
+  const text = String(feedback || "").trim()
+  if (!text) return { key: "other", label: "其他" }
 
-  const rules: Array<{ key: string; label: string; patterns: RegExp[] }> = [
-    {
-      key: "wrong_answer",
-      label: "回答錯誤",
-      patterns: [/不正確/, /回答錯/, /說錯/, /錯誤/, /修正/, /更正/, /不是/, /不能只說/, /不能把/],
-    },
-    {
-      key: "missing_process",
-      label: "缺少流程指引",
-      patterns: [/流程/, /步驟/, /引導/, /頁面/, /頁可看/, /查詢/, /追蹤/, /領取/, /怎麼查/],
-    },
-    {
-      key: "missing_fields",
-      label: "缺少必要欄位",
-      patterns: [/欄位/, /填單/, /填寫/, /照片/, /上傳/, /地點/, /問題描述/],
-    },
-    {
-      key: "pricing_rule",
-      label: "計價規則錯誤",
-      patterns: [/坪數/, /固定金額/, /6000/, /免費/, /計算/, /車位費/, /管理費分開/, /類型條件/],
-    },
-    {
-      key: "policy_condition",
-      label: "缺少條件限制",
-      patterns: [/依規約/, /住戶決議/, /公告/, /條件限制/, /登記/, /疫苗/, /完全可以/, /完全不行/],
-    },
-    {
-      key: "too_vague",
-      label: "內容過於模糊",
-      patterns: [/太少/, /不完整/, /太簡略/, /模糊/, /看不懂/, /更清楚/, /語氣像在猜測/],
-    },
-  ]
-
-  for (const rule of rules) {
+  for (const rule of CATEGORY_RULES) {
     if (rule.patterns.some((pattern) => pattern.test(text))) {
       return { key: rule.key, label: rule.label }
     }
   }
 
-  return { key: "other", label: "其他意見" }
+  return { key: "other", label: "其他" }
 }
 
-function topCategoryEntries(
-  map: Map<string, { key: string; label: string; count: number; examples: string[] }>,
-  limit = 3,
-): Array<{ key: string; label: string; count: number; examples: string[] }> {
+function topCategoryEntries(map: Map<string, FeedbackCategoryItem>, limit = 4): FeedbackCategoryItem[] {
   return [...map.values()]
-    .sort((a, b) => b.count - a.count)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
     .slice(0, limit)
 }
 
-function buildClusters(rows: ChatHistoryRow[]): Cluster[] {
-  const clusters = new Map<string, {
-    clusterKey: string
-    questionText: string
-    issueType: string
-    repeatCount: number
-    reviewCount: number
-    distinctReporters: Set<string>
-    firstSeenAt: string
-    lastSeenAt: string
-    aiAnswerCount: Map<string, number>
-    feedbackCount: Map<string, number>
-    feedbackCategoryCount: Map<string, { key: string; label: string; count: number; examples: string[] }>
-    feedbackTotal: number
-  }>()
+function buildClusters(rows: ChatEventRow[]): Cluster[] {
+  const clusters = new Map<
+    string,
+    {
+      clusterKey: string
+      questionText: string
+      issueType: string
+      repeatCount: number
+      reviewCount: number
+      distinctReporters: Set<string>
+      firstSeenAt: string
+      lastSeenAt: string
+      aiAnswerCount: Map<string, number>
+      feedbackCount: Map<string, number>
+      feedbackCategoryCount: Map<string, FeedbackCategoryItem>
+      feedbackTotal: number
+    }
+  >()
 
   for (const row of rows) {
-    const qKey = normalizeQuestion(row.question)
-    const issueType = row.issue_type || "unknown"
-    const key = `${qKey}::${issueType}`
+    const questionKey = normalizeQuestion(row.question)
+    if (!questionKey) continue
 
-    if (!clusters.has(key)) {
-      clusters.set(key, {
-        clusterKey: qKey,
-        questionText: String(row.question || "").trim() || qKey,
+    const issueType = row.issue_type || "unknown"
+    const clusterId = `${questionKey}::${issueType}`
+
+    if (!clusters.has(clusterId)) {
+      clusters.set(clusterId, {
+        clusterKey: questionKey,
+        questionText: String(row.question || "").trim() || questionKey,
         issueType,
         repeatCount: 0,
         reviewCount: 0,
@@ -229,35 +306,35 @@ function buildClusters(rows: ChatHistoryRow[]): Cluster[] {
         lastSeenAt: row.created_at,
         aiAnswerCount: new Map<string, number>(),
         feedbackCount: new Map<string, number>(),
-        feedbackCategoryCount: new Map<string, { key: string; label: string; count: number; examples: string[] }>(),
+        feedbackCategoryCount: new Map<string, FeedbackCategoryItem>(),
         feedbackTotal: 0,
       })
     }
 
-    const c = clusters.get(key)!
-    c.repeatCount += 1
-    if (row.needs_review) c.reviewCount += 1
-    if (row.reporter_id) c.distinctReporters.add(row.reporter_id)
+    const cluster = clusters.get(clusterId)!
+    cluster.repeatCount += 1
+    if (row.needs_review) cluster.reviewCount += 1
+    if (row.reporter_id) cluster.distinctReporters.add(row.reporter_id)
 
     const answer = String(row.answer || "").trim()
     if (answer) {
-      c.aiAnswerCount.set(answer, (c.aiAnswerCount.get(answer) || 0) + 1)
+      cluster.aiAnswerCount.set(answer, (cluster.aiAnswerCount.get(answer) || 0) + 1)
     }
 
     const feedback = String(row.feedback || "").trim()
     if (feedback) {
-      c.feedbackTotal += 1
-      c.feedbackCount.set(feedback, (c.feedbackCount.get(feedback) || 0) + 1)
+      cluster.feedbackTotal += 1
+      cluster.feedbackCount.set(feedback, (cluster.feedbackCount.get(feedback) || 0) + 1)
 
       const category = classifyFeedback(feedback)
-      const existing = c.feedbackCategoryCount.get(category.key)
-      if (existing) {
-        existing.count += 1
-        if (existing.examples.length < 3 && !existing.examples.includes(feedback)) {
-          existing.examples.push(feedback)
+      const current = cluster.feedbackCategoryCount.get(category.key)
+      if (current) {
+        current.count += 1
+        if (!current.examples.includes(feedback) && current.examples.length < 4) {
+          current.examples.push(feedback)
         }
       } else {
-        c.feedbackCategoryCount.set(category.key, {
+        cluster.feedbackCategoryCount.set(category.key, {
           key: category.key,
           label: category.label,
           count: 1,
@@ -266,64 +343,46 @@ function buildClusters(rows: ChatHistoryRow[]): Cluster[] {
       }
     }
 
-    if (row.created_at < c.firstSeenAt) c.firstSeenAt = row.created_at
-    if (row.created_at > c.lastSeenAt) c.lastSeenAt = row.created_at
+    if (row.created_at < cluster.firstSeenAt) cluster.firstSeenAt = row.created_at
+    if (row.created_at > cluster.lastSeenAt) cluster.lastSeenAt = row.created_at
   }
 
-  return [...clusters.values()].map((c) => ({
-    clusterKey: c.clusterKey,
-    questionText: c.questionText,
-    issueType: c.issueType,
-    repeatCount: c.repeatCount,
-    reviewCount: c.reviewCount,
-    distinctReporters: c.distinctReporters.size,
-    firstSeenAt: c.firstSeenAt,
-    lastSeenAt: c.lastSeenAt,
-    aiTopAnswers: topEntries(c.aiAnswerCount, 3),
-    feedbackTopItems: topEntries(c.feedbackCount, 5),
-    feedbackCategoryTopItems: topCategoryEntries(c.feedbackCategoryCount, 5),
-    feedbackTotal: c.feedbackTotal,
+  return [...clusters.values()].map((cluster) => ({
+    clusterKey: cluster.clusterKey,
+    questionText: cluster.questionText,
+    issueType: cluster.issueType,
+    repeatCount: cluster.repeatCount,
+    reviewCount: cluster.reviewCount,
+    distinctReporters: cluster.distinctReporters.size,
+    firstSeenAt: cluster.firstSeenAt,
+    lastSeenAt: cluster.lastSeenAt,
+    aiTopAnswers: topEntries(cluster.aiAnswerCount, 3),
+    feedbackTopItems: topEntries(cluster.feedbackCount, 5),
+    feedbackCategoryTopItems: topCategoryEntries(cluster.feedbackCategoryCount, 4),
+    feedbackTotal: cluster.feedbackTotal,
   }))
 }
 
-function scoreConfidence(input: { avgRating: number; helpfulCount: number; sampleCount: number }): number {
-  const ratingPart = Math.min(input.avgRating || 0, 5) / 10
-  const helpfulPart = Math.min(input.helpfulCount || 0, 5) * 0.05
-  const samplePart = Math.min(input.sampleCount || 0, 10) * 0.02
+function scoreConfidence(evidence: Evidence): number {
+  const ratingPart = Math.min(evidence.avgRating, 5) / 10
+  const helpfulPart = Math.min(evidence.helpfulCount, 5) * 0.05
+  const samplePart = Math.min(evidence.sampleCount, 10) * 0.02
   return Math.min(1, 0.45 + ratingPart + helpfulPart + samplePart)
 }
 
-function pickBestAnswer(answerStats: Array<{ answer: string; avgRating: number; helpfulCount: number; sampleCount: number }>) {
-  if (!Array.isArray(answerStats) || answerStats.length === 0) return null
-
-  const sorted = [...answerStats].sort((a, b) => {
-    if (b.avgRating !== a.avgRating) return b.avgRating - a.avgRating
-    if (b.helpfulCount !== a.helpfulCount) return b.helpfulCount - a.helpfulCount
-    return b.sampleCount - a.sampleCount
-  })
-
-  const top = sorted[0]
-  return {
-    proposedAnswer: top.answer,
-    confidence: scoreConfidence(top),
-    evidence: {
-      avgRating: top.avgRating,
-      helpfulCount: top.helpfulCount,
-      sampleCount: top.sampleCount,
-    },
-  }
-}
-
-function buildAnswerStatsByQuestion(rows: AnswerRow[]) {
-  const byQKey = new Map<string, Map<string, { answer: string; ratingSum: number; ratingCount: number; helpfulCount: number; sampleCount: number }>>()
+function buildAnswerStatsByQuestion(rows: AnswerRow[]): Map<string, AnswerStat[]> {
+  const byQuestion = new Map<
+    string,
+    Map<string, { answer: string; ratingSum: number; ratingCount: number; helpfulCount: number; sampleCount: number }>
+  >()
 
   for (const row of rows) {
-    const qKey = normalizeQuestion(row.question)
+    const questionKey = normalizeQuestion(row.question)
     const answer = String(row.answer || "").trim()
-    if (!qKey || !answer) continue
+    if (!questionKey || !answer) continue
 
-    if (!byQKey.has(qKey)) byQKey.set(qKey, new Map())
-    const answerMap = byQKey.get(qKey)!
+    if (!byQuestion.has(questionKey)) byQuestion.set(questionKey, new Map())
+    const answerMap = byQuestion.get(questionKey)!
 
     if (!answerMap.has(answer)) {
       answerMap.set(answer, {
@@ -335,51 +394,63 @@ function buildAnswerStatsByQuestion(rows: AnswerRow[]) {
       })
     }
 
-    const item = answerMap.get(answer)!
-    item.sampleCount += 1
+    const current = answerMap.get(answer)!
+    current.sampleCount += 1
 
     if (row.rating !== null && row.rating !== undefined) {
-      item.ratingSum += Number(row.rating)
-      item.ratingCount += 1
+      current.ratingSum += Number(row.rating)
+      current.ratingCount += 1
     }
 
     if (row.is_helpful === true) {
-      item.helpfulCount += 1
+      current.helpfulCount += 1
     }
   }
 
-  const result = new Map<string, Array<{ answer: string; avgRating: number; helpfulCount: number; sampleCount: number }>>()
-  for (const [qKey, answerMap] of byQKey.entries()) {
-    const stats = [...answerMap.values()].map((s) => ({
-      answer: s.answer,
-      avgRating: s.ratingCount > 0 ? s.ratingSum / s.ratingCount : 0,
-      helpfulCount: s.helpfulCount,
-      sampleCount: s.sampleCount,
-    }))
-    result.set(qKey, stats)
+  const result = new Map<string, AnswerStat[]>()
+  for (const [questionKey, answerMap] of byQuestion.entries()) {
+    result.set(
+      questionKey,
+      [...answerMap.values()].map((item) => ({
+        answer: item.answer,
+        avgRating: item.ratingCount > 0 ? item.ratingSum / item.ratingCount : 0,
+        helpfulCount: item.helpfulCount,
+        sampleCount: item.sampleCount,
+      })),
+    )
   }
 
   return result
 }
 
-function buildCrowdFeedbackReason(cluster: Cluster, proposedAnswer: string | null): string {
-  const top = (cluster.feedbackTopItems || [])[0]
-  if (top?.text) {
-    return `多數 feedback 顯示「${top.text}」，表示原回答有誤，建議改為：${proposedAnswer || "（目前沒有可用建議答案）"}`
+function pickBestAnswer(answerStats: AnswerStat[]): { proposedAnswer: string; confidence: number; evidence: Evidence } | null {
+  if (!Array.isArray(answerStats) || answerStats.length === 0) return null
+
+  const top = [...answerStats].sort((a, b) => {
+    if (b.avgRating !== a.avgRating) return b.avgRating - a.avgRating
+    if (b.helpfulCount !== a.helpfulCount) return b.helpfulCount - a.helpfulCount
+    return b.sampleCount - a.sampleCount
+  })[0]
+
+  const evidence: Evidence = {
+    avgRating: top.avgRating,
+    helpfulCount: top.helpfulCount,
+    sampleCount: top.sampleCount,
   }
-  return `回報資料顯示此題多次被標記為問題，建議改為：${proposedAnswer || "（目前沒有可用建議答案）"}`
+
+  return {
+    proposedAnswer: top.answer,
+    confidence: scoreConfidence(evidence),
+    evidence,
+  }
 }
 
-function buildRecommendation(
-  cluster: Cluster,
-  best: { proposedAnswer: string; confidence: number; evidence: { avgRating: number; helpfulCount: number; sampleCount: number } } | null,
-  config: DryRunConfig,
-) {
+function buildRecommendation(cluster: Cluster, best: { proposedAnswer: string; confidence: number; evidence: Evidence } | null, config: DryRunConfig): Recommendation {
   if (!best) {
     return {
-      recommendedAction: "manual_review" as const,
+      recommendedAction: "manual_review",
       confidence: 0,
-      reason: "找不到穩定且可參考的歷史答案",
+      reason: "No stable historical answer available",
       proposedAnswer: null,
       evidence: null,
     }
@@ -390,9 +461,9 @@ function buildRecommendation(
 
   if (config.forceManualReview) {
     return {
-      recommendedAction: "manual_review" as const,
+      recommendedAction: "manual_review",
       confidence: best.confidence,
-      reason: "目前系統設定為人工審核模式",
+      reason: "Manual review mode is enabled by configuration",
       proposedAnswer: best.proposedAnswer,
       evidence: best.evidence,
     }
@@ -400,168 +471,129 @@ function buildRecommendation(
 
   if (isLowRisk && enoughConfidence) {
     return {
-      recommendedAction: "auto_apply" as const,
+      recommendedAction: "auto_apply",
       confidence: best.confidence,
-      reason: "低風險問題且候選答案信心高",
+      reason: "Low-risk issue with high confidence candidate",
       proposedAnswer: best.proposedAnswer,
       evidence: best.evidence,
     }
   }
 
   return {
-    recommendedAction: "manual_review" as const,
+    recommendedAction: "manual_review",
     confidence: best.confidence,
-    reason: isLowRisk ? "信心分數未達自動修正門檻" : "問題類型不在低風險清單中",
+    reason: isLowRisk ? "Confidence below auto-apply threshold" : "Issue type is not in low-risk list",
     proposedAnswer: best.proposedAnswer,
     evidence: best.evidence,
   }
 }
 
-function buildFeedbackContext(feedbackTopItems: Array<{ text: string; count: number }> = []): string {
-  return feedbackTopItems
-    .slice(0, 3)
-    .map((f, idx) => `${idx + 1}. ${f.text}（${f.count}次）`)
-    .join("\n")
+function buildFeedbackContext(feedbackTopItems: FeedbackItem[] = []): string {
+  return feedbackTopItems.slice(0, 4).map((item, index) => `${index + 1}. ${item.text}（${item.count} 次）`).join("\n")
 }
 
-function buildRerunPrompt(question: string, feedbackTopItems: Array<{ text: string; count: number }> = []): string {
-  const q = String(question || "").trim()
-  const feedbackContext = buildFeedbackContext(feedbackTopItems)
-  if (!feedbackContext) return q
-
-  return [
-    `原始問題：${q}`,
-    "使用者主要回饋：",
-    feedbackContext,
-    "請根據上述回饋修正回答，輸出一段精簡且可直接給住戶的繁體中文答案。",
-  ].join("\n")
-}
-
-function buildFeedbackCategoryContextV2(
-  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }> = [],
-): string {
+function buildFeedbackCategoryContext(feedbackCategoryTopItems: FeedbackCategoryItem[] = []): string {
   return feedbackCategoryTopItems
-    .slice(0, 3)
-    .map((f, idx) => {
-      const example = f.examples?.[0] ? `，例如：「${f.examples[0]}」` : ""
-      return `${idx + 1}. ${f.label}（${f.count}次）${example}`
+    .slice(0, 4)
+    .map((item, index) => {
+      const example = item.examples?.[0] ? `，代表回饋：${item.examples[0]}` : ""
+      return `${index + 1}. ${item.label}（${item.count} 次）${example}`
     })
     .join("\n")
+}
+
+function buildCrowdFeedbackReason(cluster: Cluster, proposedAnswer: string | null): string {
+  const top = cluster.feedbackTopItems[0]
+  if (top?.text) {
+    return `多數 feedback 顯示「${top.text}」，因此建議改寫為：${proposedAnswer || "目前尚未產生穩定建議答案"}`
+  }
+  return `目前回饋主要反映此題需要調整，建議答案為：${proposedAnswer || "目前尚未產生穩定建議答案"}`
 }
 
 function buildCrowdFeedbackReasonV2(cluster: Cluster, proposedAnswer: string | null): string {
-  const topCategory = (cluster.feedbackCategoryTopItems || [])[0]
+  const topCategory = cluster.feedbackCategoryTopItems[0]
   if (topCategory?.label) {
     return `群眾回饋主要集中在「${topCategory.label}」類，共 ${topCategory.count} 筆，因此建議改寫為：${proposedAnswer || "目前尚未產生穩定建議答案"}`
   }
-
   return buildCrowdFeedbackReason(cluster, proposedAnswer)
 }
 
-function buildRerunPromptV2(
-  question: string,
-  feedbackTopItems: Array<{ text: string; count: number }> = [],
-  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }> = [],
-): string {
-  const q = String(question || "").trim()
-  const feedbackContext = buildFeedbackCategoryContextV2(feedbackCategoryTopItems) || buildFeedbackContext(feedbackTopItems)
-  if (!feedbackContext) return q
+function buildRerunPrompt(question: string, feedbackTopItems: FeedbackItem[] = [], feedbackCategoryTopItems: FeedbackCategoryItem[] = []): string {
+  const normalizedQuestion = String(question || "").trim()
+  const feedbackContext = buildFeedbackCategoryContext(feedbackCategoryTopItems) || buildFeedbackContext(feedbackTopItems)
+  if (!feedbackContext) return normalizedQuestion
 
   return [
-    `原始問題：${q}`,
+    `原始問題：${normalizedQuestion}`,
     "使用者主要回饋：",
     feedbackContext,
     "請根據上述回饋修正回答，輸出一段精簡且可直接給住戶的繁體中文答案。",
   ].join("\n")
 }
 
-async function fetchAiAnswer(question: string, feedbackTopItems: Array<{ text: string; count: number }>, config: DryRunConfig): Promise<string> {
+async function fetchAiAnswer(question: string, feedbackTopItems: FeedbackItem[], feedbackCategoryTopItems: FeedbackCategoryItem[], config: DryRunConfig): Promise<string> {
   if (!config.aiChatEndpoint) {
     throw new Error("AI_CHAT_ENDPOINT 未設定")
   }
 
-  const prompt = buildRerunPrompt(question, feedbackTopItems)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), config.aiChatTimeoutMs)
 
   try {
-    const res = await fetch(config.aiChatEndpoint, {
+    const response = await fetch(config.aiChatEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: prompt }),
+      body: JSON.stringify({ message: buildRerunPrompt(question, feedbackTopItems, feedbackCategoryTopItems) }),
       signal: controller.signal,
     })
 
-    if (!res.ok) {
-      throw new Error(`AI API HTTP ${res.status}`)
+    if (!response.ok) {
+      throw new Error(`AI API HTTP ${response.status}`)
     }
 
-    const json = await res.json()
-    return String(json?.answer || "").trim()
+    const payload = await response.json()
+    return String(payload?.answer || "").trim()
   } finally {
     clearTimeout(timeout)
   }
 }
 
-async function fetchAiAnswerV2(
-  question: string,
-  feedbackTopItems: Array<{ text: string; count: number }>,
-  feedbackCategoryTopItems: Array<{ key: string; label: string; count: number; examples: string[] }>,
-  config: DryRunConfig,
-): Promise<string> {
-  if (!config.aiChatEndpoint) {
-    throw new Error("AI_CHAT_ENDPOINT 未設定")
-  }
-
-  const prompt = buildRerunPromptV2(question, feedbackTopItems, feedbackCategoryTopItems)
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), config.aiChatTimeoutMs)
-
-  try {
-    const res = await fetch(config.aiChatEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: prompt }),
-      signal: controller.signal,
-    })
-
-    if (!res.ok) {
-      throw new Error(`AI API HTTP ${res.status}`)
-    }
-
-    const json = await res.json()
-    return String(json?.answer || "").trim()
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
-function buildCacheKey(item: Item): string {
-  const feedbackSignature = (item.feedbackTopItems || [])
-    .slice(0, 3)
-    .map((f) => `${f.text}:${f.count}`)
+function buildCacheKey(input: {
+  clusterKey: string
+  issueType: string
+  feedbackTopItems?: FeedbackItem[]
+  feedbackCategoryTopItems?: FeedbackCategoryItem[]
+}): string {
+  const feedbackSignature = (input.feedbackTopItems || [])
+    .slice(0, 4)
+    .map((item) => `${item.text}:${item.count}`)
     .join("|")
-  return `${item.clusterKey || ""}::${item.issueType || ""}::${feedbackSignature}`
+
+  const categorySignature = (input.feedbackCategoryTopItems || [])
+    .slice(0, 4)
+    .map((item) => `${item.key}:${item.count}`)
+    .join("|")
+
+  return `${input.clusterKey || ""}::${input.issueType || ""}::${feedbackSignature}::${categorySignature}`
 }
 
 async function runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
   const results: T[] = []
-  let idx = 0
+  let nextIndex = 0
 
   async function worker() {
-    while (idx < tasks.length) {
-      const current = idx
-      idx += 1
-      results[current] = await tasks[current]()
+    while (nextIndex < tasks.length) {
+      const currentIndex = nextIndex
+      nextIndex += 1
+      results[currentIndex] = await tasks[currentIndex]()
     }
   }
 
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker())
-  await Promise.all(workers)
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()))
   return results
 }
 
-async function enrichAllItemsWithAi(items: Item[], config: DryRunConfig) {
+async function enrichAllItemsWithAi(items: AutoFixItem[], config: DryRunConfig) {
   const summary = {
     requested: items.length,
     cached: 0,
@@ -582,9 +614,8 @@ async function enrichAllItemsWithAi(items: Item[], config: DryRunConfig) {
     return { ...summary, disabled: true }
   }
 
-  const runItems = items.slice(0, Math.max(0, config.aiRerunMaxItems))
-
-  const tasks = runItems.map((item) => async () => {
+  const targets = items.slice(0, Math.max(0, config.aiRerunMaxItems))
+  const tasks = targets.map((item) => async () => {
     const key = buildCacheKey(item)
     const cached = memoryCache.get(key)
 
@@ -595,9 +626,8 @@ async function enrichAllItemsWithAi(items: Item[], config: DryRunConfig) {
     item.aiRerunMode = "feedback_aware"
 
     if (cached && (cached.status === "ok" || cached.status === "empty")) {
-      item.aiRerunStatus = cached.status
       item.aiRerunAnswer = cached.answer || null
-      item.aiRerunError = null
+      item.aiRerunStatus = cached.status
       item.aiRerunSource = "cache"
       summary.cached += 1
       if (cached.status === "ok") summary.ok += 1
@@ -608,26 +638,20 @@ async function enrichAllItemsWithAi(items: Item[], config: DryRunConfig) {
     summary.ran += 1
 
     try {
-      const answer = await fetchAiAnswerV2(
-        item.questionText || item.clusterKey,
-        item.feedbackTopItems || [],
-        item.feedbackCategoryTopItems || [],
-        config,
-      )
+      const answer = await fetchAiAnswer(item.questionText || item.clusterKey, item.feedbackTopItems || [], item.feedbackCategoryTopItems || [], config)
       item.aiRerunAnswer = answer || null
       item.aiRerunStatus = answer ? "ok" : "empty"
       item.aiRerunError = null
       item.aiRerunSource = "live"
-      item.aiRerunMode = "feedback_aware"
 
       memoryCache.set(key, {
         answer: item.aiRerunAnswer,
-        status: item.aiRerunStatus === "ok" ? "ok" : "empty",
+        status: answer ? "ok" : "empty",
         updatedAt: new Date().toISOString(),
       })
 
-      if (item.aiRerunStatus === "ok") summary.ok += 1
-      if (item.aiRerunStatus === "empty") summary.empty += 1
+      if (answer) summary.ok += 1
+      else summary.empty += 1
     } catch (error) {
       item.aiRerunStatus = "error"
       item.aiRerunError = error instanceof Error ? error.message : "AI rerun failed"
@@ -638,8 +662,8 @@ async function enrichAllItemsWithAi(items: Item[], config: DryRunConfig) {
 
   await runWithConcurrency(tasks, config.aiRerunConcurrency)
 
-  if (items.length > runItems.length) {
-    items.slice(runItems.length).forEach((item) => {
+  if (items.length > targets.length) {
+    items.slice(targets.length).forEach((item) => {
       item.aiRerunAnswer = null
       item.aiRerunStatus = "skipped"
       item.aiRerunError = null
@@ -668,66 +692,116 @@ function createSupabaseClient(tenantId: "tenant_a" | "tenant_b") {
   return createClient(url, anonKey)
 }
 
-async function loadRecentRows(supabase: any, config: DryRunConfig): Promise<ChatHistoryRow[]> {
+async function loadRecentRows(supabase: ReturnType<typeof createClient>, config: DryRunConfig): Promise<ChatEventRow[]> {
   const from = new Date(Date.now() - config.windowDays * 24 * 60 * 60 * 1000).toISOString()
 
-  // Unified source table for all chat events.
-  const { data: unifiedRows, error: unifiedError } = await supabase
+  const { data, error } = await supabase
     .from("chat_events")
-    .select("source, source_pk, created_at, question, answer, feedback, needs_review, issue_type, user_id")
+    .select("source_pk, created_at, question, answer, feedback, needs_review, issue_type, user_id")
     .gte("created_at", from)
 
-  if (unifiedError) {
-    console.warn("[ai-auto-fix] loadRecentRows unified query failed:", unifiedError)
+  if (error) {
+    console.warn("[ai-auto-fix] loadRecentRows failed:", error)
     return []
   }
 
-  return (unifiedRows || []).map((row: any) => {
-    return {
-      id: String(row.source_pk || row.id || ""),
-      created_at: row.created_at,
-      question: row.question || "",
-      answer: row.answer || null,
-      feedback: row.feedback || null,
-      needs_review: Boolean(row.needs_review),
-      issue_type: row.issue_type || null,
-      reporter_id: row.user_id || null,
-    }
-  })
+  return (data || []).map((row: any) => ({
+    id: String(row.source_pk || row.id || ""),
+    created_at: row.created_at,
+    question: row.question || "",
+    answer: row.answer || null,
+    feedback: row.feedback || null,
+    needs_review: Boolean(row.needs_review),
+    issue_type: row.issue_type || null,
+    reporter_id: row.user_id || null,
+  }))
 }
 
-async function loadAnswerRows(supabase: any): Promise<AnswerRow[]> {
-  const { data: unifiedRows, error: unifiedError } = await supabase
+async function loadAnswerRows(supabase: ReturnType<typeof createClient>): Promise<AnswerRow[]> {
+  const { data, error } = await supabase
     .from("chat_events")
     .select("question, answer, rating, is_helpful")
     .eq("source", "chat_history")
 
-  if (unifiedError) {
-    console.warn("[ai-auto-fix] loadAnswerRows unified query failed:", unifiedError)
+  if (error) {
+    console.warn("[ai-auto-fix] loadAnswerRows failed:", error)
     return []
   }
-  return (unifiedRows || []) as AnswerRow[]
+
+  return (data || []) as AnswerRow[]
+}
+
+export async function rerunAutoFixItem(_tenantId: "tenant_a" | "tenant_b", input: SingleRerunInput): Promise<SingleRerunResult> {
+  const config = getConfig()
+
+  if (!config.aiChatEndpoint) {
+    return {
+      aiRerunAnswer: null,
+      aiRerunStatus: "error",
+      aiRerunError: "AI_CHAT_ENDPOINT 未設定",
+      aiRerunSource: "disabled",
+    }
+  }
+
+  const key = buildCacheKey(input)
+  const cached = memoryCache.get(key)
+
+  if (cached && (cached.status === "ok" || cached.status === "empty")) {
+    return {
+      aiRerunAnswer: cached.answer || null,
+      aiRerunStatus: cached.status,
+      aiRerunError: null,
+      aiRerunSource: "cache",
+    }
+  }
+
+  try {
+    const answer = await fetchAiAnswer(input.questionText || input.clusterKey, input.feedbackTopItems || [], input.feedbackCategoryTopItems || [], {
+      ...config,
+      enableAiRerun: true,
+    })
+
+    const status = answer ? "ok" : "empty"
+    memoryCache.set(key, {
+      answer: answer || null,
+      status,
+      updatedAt: new Date().toISOString(),
+    })
+
+    return {
+      aiRerunAnswer: answer || null,
+      aiRerunStatus: status,
+      aiRerunError: null,
+      aiRerunSource: "live",
+    }
+  } catch (error) {
+    return {
+      aiRerunAnswer: null,
+      aiRerunStatus: "error",
+      aiRerunError: error instanceof Error ? error.message : "AI rerun failed",
+      aiRerunSource: "live",
+    }
+  }
 }
 
 export async function runAutoFixDryRun(tenantId: "tenant_a" | "tenant_b"): Promise<DryRunResult> {
   const config = getConfig()
   const supabase = createSupabaseClient(tenantId)
 
-  const [recentRows, answerRows] = await Promise.all([
-    loadRecentRows(supabase, config),
-    loadAnswerRows(supabase),
-  ])
+  const [recentRows, answerRows] = await Promise.all([loadRecentRows(supabase, config), loadAnswerRows(supabase)])
 
   const clusters = buildClusters(recentRows)
-  const answerStatsByQ = buildAnswerStatsByQuestion(answerRows)
+  const answerStatsByQuestion = buildAnswerStatsByQuestion(answerRows)
 
-  const hit = clusters.filter((c) => c.reviewCount >= config.repeatThreshold || c.repeatCount >= config.repeatThreshold)
+  const triggeredClusters = clusters.filter(
+    (cluster) => cluster.reviewCount >= config.repeatThreshold || cluster.repeatCount >= config.repeatThreshold,
+  )
 
-  const items: Item[] = hit
+  const items: AutoFixItem[] = triggeredClusters
     .map((cluster) => {
-      const answerStats = answerStatsByQ.get(cluster.clusterKey) || []
+      const answerStats = answerStatsByQuestion.get(cluster.clusterKey) || []
       const best = pickBestAnswer(answerStats)
-      const rec = buildRecommendation(cluster, best, config)
+      const recommendation = buildRecommendation(cluster, best, config)
 
       return {
         clusterKey: cluster.clusterKey,
@@ -740,15 +814,15 @@ export async function runAutoFixDryRun(tenantId: "tenant_a" | "tenant_b"): Promi
         lastSeenAt: cluster.lastSeenAt,
         aiOriginalAnswer: cluster.aiTopAnswers[0]?.text || null,
         aiTopAnswers: cluster.aiTopAnswers,
-        proposedAnswer: rec.proposedAnswer,
-        confidence: Number(rec.confidence.toFixed(4)),
-        recommendedAction: rec.recommendedAction,
-        reason: rec.reason,
-        crowdFeedbackSummary: buildCrowdFeedbackReasonV2(cluster, rec.proposedAnswer),
-        feedbackTopItems: cluster.feedbackTopItems || [],
-        feedbackCategoryTopItems: cluster.feedbackCategoryTopItems || [],
-        feedbackTotal: cluster.feedbackTotal || 0,
-        evidence: rec.evidence,
+        proposedAnswer: recommendation.proposedAnswer,
+        confidence: Number(recommendation.confidence.toFixed(4)),
+        recommendedAction: recommendation.recommendedAction,
+        reason: recommendation.reason,
+        crowdFeedbackSummary: buildCrowdFeedbackReasonV2(cluster, recommendation.proposedAnswer),
+        feedbackTopItems: cluster.feedbackTopItems,
+        feedbackCategoryTopItems: cluster.feedbackCategoryTopItems,
+        feedbackTotal: cluster.feedbackTotal,
+        evidence: recommendation.evidence,
       }
     })
     .sort((a, b) => b.confidence - a.confidence || b.reviewCount - a.reviewCount)
@@ -760,8 +834,8 @@ export async function runAutoFixDryRun(tenantId: "tenant_a" | "tenant_b"): Promi
       totalRows: recentRows.length,
       totalClusters: clusters.length,
       triggeredClusters: items.length,
-      autoApplyCount: items.filter((x) => x.recommendedAction === "auto_apply").length,
-      manualReviewCount: items.filter((x) => x.recommendedAction === "manual_review").length,
+      autoApplyCount: items.filter((item) => item.recommendedAction === "auto_apply").length,
+      manualReviewCount: items.filter((item) => item.recommendedAction === "manual_review").length,
       threshold: {
         repeatThreshold: config.repeatThreshold,
         autoApplyConfidenceThreshold: config.autoApplyConfidenceThreshold,

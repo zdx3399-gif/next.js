@@ -34,7 +34,8 @@ ALTER TABLE public.emergencies ADD COLUMN IF NOT EXISTS iot_notification_sent_at
 ALTER TABLE public.emergencies ADD COLUMN IF NOT EXISTS iot_notification_status text DEFAULT 'pending'::text CHECK (iot_notification_status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text, 'acknowledged'::text]));
 ALTER TABLE public.emergencies ADD COLUMN IF NOT EXISTS iot_event_ref_id text;
 ALTER TABLE public.emergencies ADD COLUMN IF NOT EXISTS iot_device_id text;
-ALTER TABLE public.emergencies ADD COLUMN IF NOT EXISTS severity_level text DEFAULT 'high'::text CHECK (severity_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text]));
+  ALTER TABLE public.emergencies ADD COLUMN IF NOT EXISTS iot_triggered boolean DEFAULT false;
+  ALTER TABLE public.emergencies ADD COLUMN IF NOT EXISTS severity_level text DEFAULT 'high'::text CHECK (severity_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text]));
 
 -- 修改 emergency_events 表，添加 IoT 追蹤
 ALTER TABLE public.emergency_events ADD COLUMN IF NOT EXISTS event_title text;

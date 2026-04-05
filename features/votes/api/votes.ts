@@ -5,6 +5,8 @@ export interface Vote {
   options: string[]
   mode: "internal" | "external"
   external_url?: string
+  result_file_url?: string
+  result_file_name?: string
   created_by?: string
   author?: string
   status: "active" | "closed"
@@ -131,6 +133,104 @@ export async function closeVote(voteId: string): Promise<{ success: boolean; err
     return { success: true }
   } catch (error: any) {
     return { success: false, error: error?.message || "關閉投票失敗" }
+  }
+}
+
+export async function updateVoteEndTime(params: {
+  vote_id: string
+  ends_at: string
+}): Promise<{ success: boolean; vote?: Vote; error?: string }> {
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_vote",
+        ...params,
+      }),
+    })
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return { success: false, error: data.error || "修改截止時間失敗" }
+    }
+
+    return { success: true, vote: data.vote }
+  } catch (error: any) {
+    return { success: false, error: error?.message || "修改截止時間失敗" }
+  }
+}
+
+export async function deleteVoteById(voteId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "delete_vote",
+        vote_id: voteId,
+      }),
+    })
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return { success: false, error: data.error || "刪除投票失敗" }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error?.message || "刪除投票失敗" }
+  }
+}
+
+export async function uploadVoteResultFile(
+  file: File,
+  folder = "votes/results"
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("folder", folder)
+
+    const res = await fetch("/api/upload-file", {
+      method: "POST",
+      body: formData,
+    })
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return { success: false, error: data.error || "上傳檔案失敗" }
+    }
+
+    return { success: true, url: data.url }
+  } catch (error: any) {
+    return { success: false, error: error?.message || "上傳檔案失敗" }
+  }
+}
+
+export async function attachExternalResultFile(params: {
+  vote_id: string
+  result_file_url: string
+  result_file_name?: string
+}): Promise<{ success: boolean; vote?: Vote; error?: string }> {
+  try {
+    const res = await fetch("/api/votes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "attach_external_result",
+        ...params,
+      }),
+    })
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      return { success: false, error: data.error || "更新外部結果檔失敗" }
+    }
+
+    return { success: true, vote: data.vote }
+  } catch (error: any) {
+    return { success: false, error: error?.message || "更新外部結果檔失敗" }
   }
 }
 

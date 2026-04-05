@@ -348,31 +348,6 @@ export default function AdminPage() {
                 role={currentUser?.role}
                 onNavigate={navigateByActionLink}
               />
-
-              {/* Emergency panel (temporarily disabled)
-              <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-4 sm:p-6">
-                <h2 className="flex items-center gap-2 text-lg sm:text-xl font-bold text-[var(--theme-danger)] mb-4">
-                  <span className="material-icons">emergency</span>
-                  緊急事件
-                </h2>
-                <div className="grid grid-cols-4 gap-2 sm:gap-3">
-                  {[
-                    { icon: "local_hospital", title: "救護車 119", type: "救護車119", note: "醫療緊急狀況" },
-                    { icon: "report_problem", title: "報警 110", type: "報警110", note: "治安緊急狀況" },
-                    { icon: "favorite", title: "AED", type: "AED", note: "需要AED急救設備" },
-                    { icon: "warning", title: "陌生人員闘入", type: "可疑人員", note: "陌生人員闘入警告" },
-                  ].map((emergency) => (
-                    <button
-                      key={emergency.type}
-                      className="bg-[var(--theme-bg-card)] border-2 border-[var(--theme-danger)] rounded-xl p-2 text-center cursor-pointer font-bold text-xs sm:text-sm text-[var(--theme-danger)] hover:bg-[rgba(244,67,54,0.2)] transition-all"
-                    >
-                      <div className="material-icons text-2xl mb-1">{emergency.icon}</div>
-                      <h3 className="font-bold text-xs">{emergency.title}</h3>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              */}
             </div>
           ) : currentSection === "visitors" ? (
             <>
@@ -416,7 +391,11 @@ export default function AdminPage() {
           ) : currentSection === "emergencies" ? (
             <>
               <AdminPreviewBanner show={isPreviewMode} />
-              <EmergencyManagementAdmin currentUserName={currentUser?.name} isPreviewMode={isPreviewMode} />
+              <EmergencyManagementAdmin
+                currentUserId={currentUser?.id}
+                currentUserName={currentUser?.name}
+                isPreviewMode={isPreviewMode}
+              />
             </>
           ) : currentSection === "facilities" ? (
             <>

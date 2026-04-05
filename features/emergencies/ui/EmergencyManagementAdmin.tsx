@@ -5,9 +5,11 @@ import { useState } from "react"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { RefreshCw, Search } from "lucide-react"
 
 interface EmergencyManagementAdminProps {
+  currentUserId?: string
   currentUserName?: string
   isPreviewMode?: boolean
 }
@@ -25,20 +27,79 @@ const PREVIEW_EMERGENCIES = [
   { id: "preview-2", type: "測試資料", time: new Date(Date.now() - 3600000).toISOString(), by: "測試資料", reported_by_name: "測試資料", note: "測試資料" },
 ]
 
-export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = false }: EmergencyManagementAdminProps) {
-  const { emergencies: realEmergencies, loading, confirmAndTrigger, deleteEmergency, reload } = useEmergencies(true)
+export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPreviewMode = false }: EmergencyManagementAdminProps) {
+  const { emergencies: realEmergencies, confirmAndTrigger, editEmergency, deleteEmergency, reload } = useEmergencies(true)
 
   // 預覽模式使用模擬資料
   const emergencies = isPreviewMode ? PREVIEW_EMERGENCIES : realEmergencies
 
   const [searchTerm, setSearchTerm] = useState("")
+  const [formMode, setFormMode] = useState<"create" | "edit" | null>(null)
+  const [draftId, setDraftId] = useState<string>("")
+  const [draftType, setDraftType] = useState<string>("")
+  const [draftNote, setDraftNote] = useState<string>("")
+  const [submitting, setSubmitting] = useState(false)
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--theme-accent)]"></div>
-      </div>
-    )
+  const openCreateForm = (type: string, note: string) => {
+    setFormMode("create")
+    setDraftId("")
+    setDraftType(type)
+    setDraftNote(note)
+  }
+
+  const openEditForm = (row: any) => {
+    if (!row?.id) return
+    setFormMode("edit")
+    setDraftId(row.id)
+    setDraftType(row.type || "")
+    setDraftNote(row.note || "")
+  }
+
+  const resetForm = () => {
+    setFormMode(null)
+    setDraftId("")
+    setDraftType("")
+    setDraftNote("")
+  }
+
+  const submitCreateForm = async () => {
+    if (!draftType.trim()) {
+      alert("事件類別不可為空")
+      return
+    }
+    if (!draftNote.trim()) {
+      alert("備註不可為空，請輸入現場狀況")
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      await Promise.resolve(confirmAndTrigger(draftType.trim(), draftNote.trim(), currentUserId, currentUserName || "管理員"))
+      resetForm()
+      reload()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const submitEditForm = async () => {
+    if (!draftId) return
+    if (!draftType.trim()) {
+      alert("事件類別不可為空")
+      return
+    }
+    if (!draftNote.trim()) {
+      alert("備註不可為空，請輸入現場狀況")
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      await editEmergency(draftId, { type: draftType.trim(), note: draftNote.trim() })
+      resetForm()
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const filteredEmergencies = emergencies.filter((emergency) => {
@@ -67,7 +128,7 @@ export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = fals
           {emergencyTypes.map((emergency) => (
             <div
               key={emergency.type}
-              onClick={() => confirmAndTrigger(emergency.type, emergency.note, currentUserName || "管理員")}
+              onClick={() => openCreateForm(emergency.type, emergency.note)}
               className="p-3 bg-[var(--theme-accent-light)] border border-[var(--theme-danger)]/30 rounded-lg cursor-pointer hover:bg-[rgba(244,67,54,0.1)] transition-all text-center text-[var(--theme-text-primary)]"
             >
               <div className="material-icons text-2xl mb-1">{emergency.icon}</div>
@@ -75,6 +136,41 @@ export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = fals
             </div>
           ))}
         </div>
+
+        {formMode && (
+          <div className="mt-4 p-4 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-secondary)] space-y-3">
+            <h3 className="text-[var(--theme-text-primary)] font-semibold">
+              {formMode === "create" ? "建立緊急事件" : "編輯緊急事件"}
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm text-[var(--theme-text-secondary)]">事件類別</label>
+                <Input value={draftType} onChange={(e) => setDraftType(e.target.value)} placeholder="例如：救護車119" />
+              </div>
+              <div>
+                <label className="text-sm text-[var(--theme-text-secondary)]">發起人</label>
+                <Input value={currentUserName || "管理員"} disabled />
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-[var(--theme-text-secondary)]">現場備註（必填）</label>
+              <Textarea
+                value={draftNote}
+                onChange={(e) => setDraftNote(e.target.value)}
+                placeholder="請描述現場狀況，例如：2樓A棟有人昏倒，已通知119"
+                rows={4}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={resetForm} disabled={submitting}>取消</Button>
+              {formMode === "create" ? (
+                <Button onClick={submitCreateForm} disabled={submitting}>送出事件</Button>
+              ) : (
+                <Button onClick={submitEditForm} disabled={submitting}>儲存編輯</Button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 緊急事件紀錄表格 */}
@@ -141,6 +237,13 @@ export function EmergencyManagementAdmin({ currentUserName, isPreviewMode = fals
                       {row.note}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)]">
+                      <button
+                        onClick={() => openEditForm(row)}
+                        className="p-2 mr-2 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-accent-light)] transition-all"
+                        title="編輯"
+                      >
+                        <span className="material-icons text-lg">edit</span>
+                      </button>
                       <button
                         onClick={() => row.id && deleteEmergency(row.id)}
                         className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"

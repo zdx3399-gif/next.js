@@ -21,7 +21,7 @@ export function VoteList({ userId, userName }: VoteListProps) {
 
   const loadVotes = async () => {
     setLoading(true)
-    const result = await fetchVotes({ scope: "active", userId })
+    const result = await fetchVotes({ scope: "all", userId, withResults: true })
     setVotes(result.votes)
     setVotedVoteIds(result.votedVoteIds)
     setLoading(false)
@@ -31,10 +31,19 @@ export function VoteList({ userId, userName }: VoteListProps) {
     loadVotes()
   }, [userId])
 
-  const sortedVotes = useMemo(
-    () => [...votes].sort((a, b) => new Date(a.ends_at || 0).getTime() - new Date(b.ends_at || 0).getTime()),
-    [votes]
-  )
+  const sortedVotes = useMemo(() => {
+    const now = Date.now()
+    return [...votes].sort((a, b) => {
+      const aEnded = a.status === "closed" || (a.ends_at ? new Date(a.ends_at).getTime() <= now : false)
+      const bEnded = b.status === "closed" || (b.ends_at ? new Date(b.ends_at).getTime() <= now : false)
+
+      if (aEnded !== bEnded) {
+        return aEnded ? 1 : -1
+      }
+
+      return new Date(a.ends_at || 0).getTime() - new Date(b.ends_at || 0).getTime()
+    })
+  }, [votes])
 
   const onSubmitInternalVote = async (vote: Vote, option: string) => {
     if (!userId) {
@@ -96,6 +105,18 @@ export function VoteList({ userId, userName }: VoteListProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {sortedVotes.map((vote) => {
             const alreadyVoted = votedVoteIds.has(vote.id)
+            const isEnded = vote.status === "closed" || (vote.ends_at ? new Date(vote.ends_at).getTime() <= Date.now() : false)
+            const totalVotes = vote.total_votes || 0
+            const internalResults =
+              vote.mode === "internal"
+                ? vote.options
+                    .map((option) => ({
+                      option,
+                      count: vote.results?.[option] || 0,
+                      percent: totalVotes > 0 ? Math.round(((vote.results?.[option] || 0) / totalVotes) * 100) : 0,
+                    }))
+                    .sort((a, b) => b.count - a.count)
+                : []
 
             return (
               <Card key={vote.id} className="border-[var(--theme-border)]">
@@ -107,11 +128,41 @@ export function VoteList({ userId, userName }: VoteListProps) {
                   <div className="text-sm text-[var(--theme-text-secondary)]">
                     截止時間：{vote.ends_at ? new Date(vote.ends_at).toLocaleString() : "未設定"}
                   </div>
+                  <div className="text-xs text-[var(--theme-text-secondary)]">
+                    狀態：{isEnded ? "已截止" : "進行中"}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="text-sm text-[var(--theme-text-secondary)] whitespace-pre-wrap">{vote.description || "無說明"}</p>
 
-                  {alreadyVoted ? (
+                  {isEnded ? (
+                    vote.mode === "external" ? (
+                      vote.result_file_url ? (
+                        <a href={vote.result_file_url} target="_blank" rel="noreferrer">
+                          <Button className="w-full" variant="outline">
+                            查看投票結果
+                          </Button>
+                        </a>
+                      ) : (
+                        <div className="text-sm text-[var(--theme-text-secondary)]">已截止，結果檔尚未公布</div>
+                      )
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="text-sm text-[var(--theme-text-secondary)]">總票數：{totalVotes}</div>
+                        <div className="space-y-1">
+                          {internalResults.length === 0 ? (
+                            <div className="text-sm text-[var(--theme-text-secondary)]">無統計資料</div>
+                          ) : (
+                            internalResults.map((item) => (
+                              <div key={item.option} className="text-sm text-[var(--theme-text-secondary)]">
+                                {item.option}：{item.count} 票（{item.percent}%）
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )
+                  ) : alreadyVoted ? (
                     <div className="text-sm text-emerald-600 font-semibold">您已完成此投票</div>
                   ) : vote.mode === "external" ? (
                     <a href={vote.external_url} target="_blank" rel="noreferrer">

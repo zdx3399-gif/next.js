@@ -331,7 +331,7 @@ export function AiChatWindow({
         )}
         {activeTab === "emergency" && (
           <div className="grid grid-cols-1 gap-2 mt-3 text-xs">
-            <EmergencyButtons userName={currentUser?.name} onTrigger={onClose} variant="dashboard" />
+            <EmergencyButtons userId={currentUser?.id} userName={currentUser?.name} onTrigger={onClose} variant="dashboard" />
           </div>
         )}
       </div>

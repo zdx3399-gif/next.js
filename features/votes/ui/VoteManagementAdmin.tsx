@@ -4,12 +4,21 @@ import type React from "react"
 
 import { useEffect, useMemo, useState } from "react"
 import type { User } from "@/features/profile/api/profile"
-import { closeVote, createVote, fetchVotes, type Vote } from "@/features/votes/api/votes"
+import {
+  attachExternalResultFile,
+  closeVote,
+  createVote,
+  deleteVoteById,
+  fetchVotes,
+  type Vote,
+  updateVoteEndTime,
+  uploadVoteResultFile,
+} from "@/features/votes/api/votes"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { RefreshCw, Search } from "lucide-react"
+import { CalendarClock, Loader2, RefreshCw, Search, Trash2, Upload } from "lucide-react"
 
 const GOOGLE_FORM_EDIT_LINK = "https://drive.google.com/drive/folders/1ORmuy3ZpoY-dhTlt-plOHyWKbC91K6of"
 const GOOGLE_FORM_CREATE_LINK = "https://docs.google.com/forms/create"
@@ -46,6 +55,8 @@ const PREVIEW_VOTES: Vote[] = [
     author: "測試資料",
     total_votes: 0,
     results: {},
+    result_file_url: "https://example.com/vote-results/preview.xlsx",
+    result_file_name: "公共空間改善問卷結果.xlsx",
   },
 ]
 
@@ -65,6 +76,10 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
   const [voteHistory, setVoteHistory] = useState<Vote[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [closingVoteId, setClosingVoteId] = useState<string | null>(null)
+  const [editingVoteId, setEditingVoteId] = useState<string | null>(null)
+  const [deletingVoteId, setDeletingVoteId] = useState<string | null>(null)
+  const [uploadingResultVoteId, setUploadingResultVoteId] = useState<string | null>(null)
+  const [selectedResultFiles, setSelectedResultFiles] = useState<Record<string, File | null>>({})
 
   const loadHistory = async () => {
     if (isPreviewMode) {
@@ -155,6 +170,99 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
     }
 
     alert("投票已手動關閉")
+    loadHistory()
+  }
+
+  const handlePickResultFile = (voteId: string, file: File | null) => {
+    setSelectedResultFiles((prev) => ({
+      ...prev,
+      [voteId]: file,
+    }))
+  }
+
+  const handleUploadResultFile = async (vote: Vote) => {
+    const file = selectedResultFiles[vote.id]
+    if (!file) {
+      alert("請先選擇要上傳的結果檔案")
+      return
+    }
+
+    setUploadingResultVoteId(vote.id)
+
+    const upload = await uploadVoteResultFile(file)
+    if (!upload.success || !upload.url) {
+      setUploadingResultVoteId(null)
+      alert(upload.error || "檔案上傳失敗")
+      return
+    }
+
+    const attach = await attachExternalResultFile({
+      vote_id: vote.id,
+      result_file_url: upload.url,
+      result_file_name: file.name,
+    })
+
+    setUploadingResultVoteId(null)
+
+    if (!attach.success) {
+      alert(attach.error || "更新結果檔失敗")
+      return
+    }
+
+    alert("外部投票結果檔已上傳")
+    setSelectedResultFiles((prev) => ({ ...prev, [vote.id]: null }))
+    loadHistory()
+  }
+
+  const toDateTimeLocalValue = (iso?: string | null) => {
+    if (!iso) return ""
+    const date = new Date(iso)
+    if (Number.isNaN(date.getTime())) return ""
+    const offset = date.getTimezoneOffset()
+    const local = new Date(date.getTime() - offset * 60 * 1000)
+    return local.toISOString().slice(0, 16)
+  }
+
+  const handleEditEndTime = async (vote: Vote) => {
+    const current = toDateTimeLocalValue(vote.ends_at)
+    const input = window.prompt("請輸入新的截止時間（格式：YYYY-MM-DDTHH:mm）", current)
+    if (!input) return
+
+    const nextDate = new Date(input)
+    if (Number.isNaN(nextDate.getTime())) {
+      alert("時間格式不正確")
+      return
+    }
+
+    setEditingVoteId(vote.id)
+    const result = await updateVoteEndTime({
+      vote_id: vote.id,
+      ends_at: nextDate.toISOString(),
+    })
+    setEditingVoteId(null)
+
+    if (!result.success) {
+      alert(result.error || "修改截止時間失敗")
+      return
+    }
+
+    alert("截止時間已更新")
+    loadHistory()
+  }
+
+  const handleDeleteVote = async (vote: Vote) => {
+    if (!confirm(`確定要刪除「${vote.title}」嗎？此操作無法復原。`)) return
+
+    setDeletingVoteId(vote.id)
+    const result = await deleteVoteById(vote.id)
+    setDeletingVoteId(null)
+
+    if (!result.success) {
+      alert(result.error || "刪除投票失敗")
+      return
+    }
+
+    alert("投票已刪除")
     loadHistory()
   }
 
@@ -393,12 +501,17 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
                     filteredVoteHistory.map((vote) => {
                       const isExpired = vote.ends_at ? new Date(vote.ends_at).getTime() <= Date.now() : false
                       const isClosed = vote.status === "closed"
-                      const resultSummary =
+                      const totalVotes = vote.total_votes || 0
+                      const sortedInternalResults =
                         vote.mode === "internal"
                           ? vote.options
-                              .map((option) => `${option}: ${vote.results?.[option] || 0}`)
-                              .join(" / ") || "無統計資料"
-                          : "外部連結結果由表單平台查看"
+                              .map((option) => ({
+                                option,
+                                count: vote.results?.[option] || 0,
+                                percent: totalVotes > 0 ? Math.round(((vote.results?.[option] || 0) / totalVotes) * 100) : 0,
+                              }))
+                              .sort((a, b) => b.count - a.count)
+                          : []
 
                       return (
                         <tr
@@ -420,26 +533,165 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
                           <td className="px-4 py-3 text-[var(--theme-text-secondary)]">{vote.author || "管委會"}</td>
                           <td className="px-4 py-3 text-right space-y-1">
                             {vote.mode === "external" && vote.external_url ? (
-                              <a
-                                href={vote.external_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-blue-600 hover:underline block"
-                              >
-                                開啟外部表單
-                              </a>
+                              <>
+                                <a
+                                  href={vote.external_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-blue-600 hover:underline block"
+                                >
+                                  開啟外部表單
+                                </a>
+                                {vote.result_file_url ? (
+                                  <a
+                                    href={vote.result_file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-emerald-600 hover:underline block text-xs"
+                                  >
+                                    下載結果檔：{vote.result_file_name || "已上傳檔案"}
+                                  </a>
+                                ) : (
+                                  <span className="text-xs text-[var(--theme-text-secondary)] block">尚未上傳結果檔</span>
+                                )}
+
+                                <div className="pt-1 flex flex-col items-end gap-2">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <input
+                                      id={`result-file-${vote.id}`}
+                                      type="file"
+                                      accept=".pdf,.csv,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.jpg,.jpeg,.png,.gif,.webp"
+                                      onChange={(e) => handlePickResultFile(vote.id, e.target.files?.[0] || null)}
+                                      className="hidden"
+                                      disabled={isPreviewMode || uploadingResultVoteId === vote.id}
+                                    />
+                                    <label htmlFor={`result-file-${vote.id}`}>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="secondary"
+                                        asChild
+                                        disabled={isPreviewMode || uploadingResultVoteId === vote.id}
+                                      >
+                                        <span>選擇結果檔</span>
+                                      </Button>
+                                    </label>
+
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleUploadResultFile(vote)}
+                                      disabled={isPreviewMode || uploadingResultVoteId === vote.id}
+                                    >
+                                      {uploadingResultVoteId === vote.id ? (
+                                        <>
+                                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                          上傳中
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Upload className="w-3 h-3 mr-1" />
+                                          上傳結果檔
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                  {selectedResultFiles[vote.id] && (
+                                    <span className="text-xs text-[var(--theme-text-secondary)] max-w-[280px] truncate block">
+                                      已選擇：{selectedResultFiles[vote.id]?.name}
+                                    </span>
+                                  )}
+
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleEditEndTime(vote)}
+                                      disabled={editingVoteId === vote.id || isPreviewMode}
+                                    >
+                                      <CalendarClock className="w-3 h-3 mr-1" />
+                                      {editingVoteId === vote.id ? "修改中..." : "改截止時間"}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={() => handleCloseVote(vote)}
+                                      disabled={closingVoteId === vote.id || isPreviewMode}
+                                    >
+                                      {closingVoteId === vote.id ? "關閉中..." : "手動關閉投票"}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={() => handleDeleteVote(vote)}
+                                      disabled={deletingVoteId === vote.id || isPreviewMode}
+                                    >
+                                      <Trash2 className="w-3 h-3 mr-1" />
+                                      {deletingVoteId === vote.id ? "刪除中..." : "刪除"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </>
                             ) : (
-                              <span className="text-[var(--theme-text-secondary)] block">總票數：{vote.total_votes || 0}</span>
+                              <>
+                                <span className="text-[var(--theme-text-secondary)] block">總票數：{totalVotes}</span>
+                                <div className="text-xs text-[var(--theme-text-secondary)] space-y-1">
+                                  {sortedInternalResults.length === 0 ? (
+                                    <span className="block">無統計資料</span>
+                                  ) : (
+                                    sortedInternalResults.map((item) => (
+                                      <span key={item.option} className="block">
+                                        {item.option}：{item.count} 票（{item.percent}%）
+                                      </span>
+                                    ))
+                                  )}
+                                </div>
+                              </>
                             )}
-                            <span className="text-xs text-[var(--theme-text-secondary)] block">{resultSummary}</span>
-                            {!isClosed && (
-                              <button
-                                onClick={() => handleCloseVote(vote)}
-                                disabled={closingVoteId === vote.id || isPreviewMode}
-                                className="text-xs text-red-500 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {closingVoteId === vote.id ? "關閉中..." : "手動關閉投票"}
-                              </button>
+                            {!isClosed && vote.mode !== "external" && (
+                              <div className="pt-1 flex justify-end">
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleEditEndTime(vote)}
+                                    disabled={editingVoteId === vote.id || isPreviewMode}
+                                  >
+                                    <CalendarClock className="w-3 h-3 mr-1" />
+                                    {editingVoteId === vote.id ? "修改中..." : "改截止時間"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleCloseVote(vote)}
+                                    disabled={closingVoteId === vote.id || isPreviewMode}
+                                  >
+                                    {closingVoteId === vote.id ? "關閉中..." : "手動關閉投票"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleDeleteVote(vote)}
+                                    disabled={deletingVoteId === vote.id || isPreviewMode}
+                                  >
+                                    <Trash2 className="w-3 h-3 mr-1" />
+                                    {deletingVoteId === vote.id ? "刪除中..." : "刪除"}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                            {isClosed && (
+                              <div className="pt-1 flex justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleDeleteVote(vote)}
+                                  disabled={deletingVoteId === vote.id || isPreviewMode}
+                                >
+                                  <Trash2 className="w-3 h-3 mr-1" />
+                                  {deletingVoteId === vote.id ? "刪除中..." : "刪除"}
+                                </Button>
+                              </div>
                             )}
                           </td>
                         </tr>

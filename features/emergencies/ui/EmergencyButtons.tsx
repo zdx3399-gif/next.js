@@ -4,6 +4,7 @@ import { useEmergencies } from "../hooks/useEmergencies"
 import { HelpHint } from "@/components/ui/help-hint"
 
 interface EmergencyButtonsProps {
+  userId?: string
   userName?: string
   onTrigger?: () => void
   variant?: "dashboard" | "sidebar" | "full"
@@ -16,11 +17,11 @@ const emergencyTypes = [
   { type: "可疑人員", note: "陌生人員闖入警告", emoji: "⚠️", icon: "warning" },
 ]
 
-export function EmergencyButtons({ userName, onTrigger, variant = "full" }: EmergencyButtonsProps) {
+export function EmergencyButtons({ userId, userName, onTrigger, variant = "full" }: EmergencyButtonsProps) {
   const { confirmAndTrigger } = useEmergencies(false)
 
   const handleClick = (type: string, note: string) => {
-    confirmAndTrigger(type, note, userName || "未知")
+    confirmAndTrigger(type, note, userId, userName || "未知")
     onTrigger?.()
   }
 

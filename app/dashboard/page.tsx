@@ -382,7 +382,7 @@ export default function DashboardPage() {
                   <span className="material-icons">emergency</span>
                   <span className="text-[var(--theme-danger)] font-bold">緊急事件</span>
                 </h3>
-                <EmergencyButtons userName={currentUser?.name} onTrigger={() => {}} variant="sidebar" />
+                <EmergencyButtons userId={currentUser?.id} userName={currentUser?.name} onTrigger={() => {}} variant="sidebar" />
               </div>
               */}
             </section>
@@ -410,7 +410,7 @@ export default function DashboardPage() {
           {currentSection === "visitors" && <VisitorList userRoom={currentUser?.room} currentUser={currentUser} />}
           {currentSection === "meetings" && <MeetingList />}
           {/* {currentSection === "emergencies" && (
-            <EmergencyButtons userName={getNameString(currentUser?.name)} variant="full" />
+            <EmergencyButtons userId={currentUser?.id} userName={getNameString(currentUser?.name)} variant="full" />
           )} */}
           {currentSection === "facilities" && (
             <FacilityList

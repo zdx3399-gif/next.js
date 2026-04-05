@@ -79,6 +79,24 @@ function normalizeOptions(raw) {
   return [];
 }
 
+function parseVoteOptionsObject(raw) {
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return raw;
+  }
+  return null;
+}
+
 function isUuid(value) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
@@ -112,24 +130,15 @@ function getSystemBaseUrl() {
 function mapVoteRow(row) {
   const rawOptions = row?.options;
   const options = normalizeOptions(rawOptions);
-  let parsedObject = null;
-  if (typeof rawOptions === "string") {
-    try {
-      const parsed = JSON.parse(rawOptions);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        parsedObject = parsed;
-      }
-    } catch {}
-  }
+  const parsedObject = parseVoteOptionsObject(rawOptions);
 
   const fallbackUrlFromDescription = typeof row?.description === "string" ? row.description.match(/https?:\/\/[^\s]+/)?.[0] : "";
-  const externalUrl =
-    (rawOptions && typeof rawOptions === "object" && !Array.isArray(rawOptions) && rawOptions.external_url) ||
-    parsedObject?.external_url ||
-    "";
+  const externalUrl = parsedObject?.external_url || "";
   const finalExternalUrl = externalUrl || row?.vote_url || row?.form_url || fallbackUrlFromDescription || "";
+  const resultFileUrl = parsedObject?.result_file_url || "";
+  const resultFileName = parsedObject?.result_file_name || "";
 
-  const mode = finalExternalUrl ? "external" : "internal";
+  const mode = finalExternalUrl || parsedObject?.type === "external" ? "external" : "internal";
 
   return {
     id: row.id,
@@ -142,6 +151,8 @@ function mapVoteRow(row) {
     created_at: row.created_at,
     mode,
     external_url: finalExternalUrl || undefined,
+    result_file_url: resultFileUrl || undefined,
+    result_file_name: resultFileName || undefined,
     options: options.length > 0 ? options : ["同意", "反對", "棄權"],
   };
 }
@@ -414,6 +425,110 @@ async function handleCloseVote({ supabase, body }) {
   return Response.json({ success: true, vote: mapVoteRow(updated) });
 }
 
+async function handleUpdateVote({ supabase, body }) {
+  const { vote_id, ends_at } = body;
+
+  if (!vote_id || !ends_at) {
+    return Response.json({ error: "vote_id、ends_at 為必填" }, { status: 400 });
+  }
+
+  const { data: updated, error } = await supabase
+    .from("votes")
+    .update({ ends_at })
+    .eq("id", vote_id)
+    .select("*")
+    .single();
+
+  if (error) {
+    return Response.json({ error: "更新投票失敗", details: error.message }, { status: 500 });
+  }
+
+  return Response.json({ success: true, vote: mapVoteRow(updated) });
+}
+
+async function handleDeleteVote({ supabase, body }) {
+  const { vote_id } = body;
+
+  if (!vote_id) {
+    return Response.json({ error: "vote_id 為必填" }, { status: 400 });
+  }
+
+  // 先刪除投票紀錄，再刪投票主檔，避免外鍵限制失敗
+  const { error: recordsError } = await supabase
+    .from("vote_records")
+    .delete()
+    .eq("vote_id", vote_id);
+
+  if (recordsError) {
+    return Response.json({ error: "刪除投票紀錄失敗", details: recordsError.message }, { status: 500 });
+  }
+
+  const { error: voteError } = await supabase
+    .from("votes")
+    .delete()
+    .eq("id", vote_id);
+
+  if (voteError) {
+    return Response.json({ error: "刪除投票失敗", details: voteError.message }, { status: 500 });
+  }
+
+  return Response.json({ success: true });
+}
+
+async function handleAttachExternalResult({ supabase, body }) {
+  const { vote_id, result_file_url, result_file_name } = body;
+
+  if (!vote_id || !result_file_url) {
+    return Response.json({ error: "vote_id、result_file_url 為必填" }, { status: 400 });
+  }
+
+  const { data: currentVote, error: queryError } = await supabase
+    .from("votes")
+    .select("id, options")
+    .eq("id", vote_id)
+    .single();
+
+  if (queryError || !currentVote) {
+    return Response.json({ error: "找不到投票活動" }, { status: 404 });
+  }
+
+  const currentOptionsObject = parseVoteOptionsObject(currentVote.options);
+  const currentOptionsArray = normalizeOptions(currentVote.options);
+
+  const nextOptions = {
+    ...(currentOptionsObject || {}),
+    type: "external",
+    options: currentOptionsArray,
+    result_file_url,
+    result_file_name: result_file_name || "",
+    result_uploaded_at: new Date().toISOString(),
+  };
+
+  const { data: updated, error: updateError } = await supabase
+    .from("votes")
+    .update({ options: nextOptions })
+    .eq("id", vote_id)
+    .select("*")
+    .single();
+
+  if (updateError) {
+    const fallback = await supabase
+      .from("votes")
+      .update({ options: JSON.stringify(nextOptions) })
+      .eq("id", vote_id)
+      .select("*")
+      .single();
+
+    if (fallback.error) {
+      return Response.json({ error: "更新外部結果檔失敗", details: fallback.error.message }, { status: 500 });
+    }
+
+    return Response.json({ success: true, vote: mapVoteRow(fallback.data) });
+  }
+
+  return Response.json({ success: true, vote: mapVoteRow(updated) });
+}
+
 export async function POST(req) {
   try {
     const supabase = getSupabase();
@@ -428,6 +543,18 @@ export async function POST(req) {
 
     if (body.action === "close") {
       return handleCloseVote({ supabase, body });
+    }
+
+    if (body.action === "update_vote") {
+      return handleUpdateVote({ supabase, body });
+    }
+
+    if (body.action === "delete_vote") {
+      return handleDeleteVote({ supabase, body });
+    }
+
+    if (body.action === "attach_external_result") {
+      return handleAttachExternalResult({ supabase, body });
     }
 
     if (body.action === "create" || body.title) {

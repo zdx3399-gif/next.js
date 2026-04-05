@@ -48,7 +48,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
     "cohere-ai": "^7.20.0",
-    "date-fns": "^4.1.0",
+    "date-fns": "3.6.0",
     "dotenv": "17.2.3",
     "embla-carousel-react": "^8.5.1",
     "geist": "latest",

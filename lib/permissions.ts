@@ -21,6 +21,7 @@ export type Section =
   | "moderation"
   | "audit-logs"
   | "decryption"
+  | "arduino"
 
 export const USER_ROLES: UserRole[] = ["resident", "guard", "committee", "admin"]
 
@@ -68,7 +69,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
   ],
 
   // 警衛 (Guard): Backend - dashboard, packages, visitors only
-  guard: ["dashboard", "packages", "visitors"],
+  guard: ["dashboard", "packages", "visitors", "arduino"],
 
   // 管委會 (Management Committee): 完整後台權限，包含資料管理
   committee: [

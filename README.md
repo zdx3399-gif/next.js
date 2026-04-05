@@ -27,6 +27,10 @@
 NEXT_PUBLIC_TENANT_A_SUPABASE_URL=your_tenant_a_supabase_url
 NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY=your_tenant_a_anon_key
 
+# IOT 裝置（ESP32）Wi-Fi 位址
+# 範例：http://192.168.1.88
+IOT_DEVICE_BASE_URL=your_esp32_base_url
+
 # 社區 B 的 Supabase 設定
 NEXT_PUBLIC_TENANT_B_SUPABASE_URL=your_tenant_b_supabase_url
 NEXT_PUBLIC_TENANT_B_SUPABASE_ANON_KEY=your_tenant_b_anon_key

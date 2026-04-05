@@ -27,6 +27,7 @@ import { getSupabaseClient } from "@/lib/supabase"
 import type { User } from "@/features/profile/api/profile"
 import { syncRolePermissionsFromSupabase } from "@/lib/role-permission-service"
 import { ActionSpotlightPanel } from "@/features/dashboard/ui/ActionSpotlightPanel"
+import { ArduinoConsole } from "@/features/arduino/ui/ArduinoConsole"
 
 type Section =
   | "dashboard"
@@ -46,6 +47,7 @@ type Section =
   | "handover-knowledge"
   | "audit-logs"
   | "decryption"
+  | "arduino"
 
 export default function AdminPage() {
   const router = useRouter()
@@ -207,6 +209,7 @@ export default function AdminPage() {
     { id: "handover-knowledge", icon: "folder_shared", label: "交接知識庫" },
     { id: "decryption", icon: "lock_open", label: "解密申請" },
     { id: "audit-logs", icon: "history", label: "稽核紀錄" },
+    { id: "arduino", icon: "settings_remote", label: "Arduino 控制台" },
   ]
 
   const navItems = currentUser
@@ -351,6 +354,12 @@ export default function AdminPage() {
                 </div>
               </div>
               */}
+
+              {currentUser?.role === "guard" && (
+                <div className="mt-6">
+                  <ArduinoConsole />
+                </div>
+              )}
             </div>
           ) : currentSection === "visitors" ? (
             <>
@@ -491,6 +500,8 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
+          ) : currentSection === "arduino" ? (
+            <ArduinoConsole />
           ) : null}
         </div>
       </main>

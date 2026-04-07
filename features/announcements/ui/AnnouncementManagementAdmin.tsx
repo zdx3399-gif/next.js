@@ -23,6 +23,7 @@ interface AnnouncementFormModalProps {
   isEdit: boolean
   onImageFileChange: (file: File | null) => void
   imageFile: File | null
+  isSaving?: boolean
 }
 
 function AnnouncementFormModal({
@@ -34,6 +35,7 @@ function AnnouncementFormModal({
   isEdit,
   onImageFileChange,
   imageFile,
+  isSaving = false,
 }: AnnouncementFormModalProps) {
   if (!isOpen) return null
 
@@ -183,13 +185,22 @@ function AnnouncementFormModal({
           <div className="flex gap-3 pt-2">
             <button
               onClick={onSave}
-              className="flex-1 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-xl font-semibold hover:opacity-90 transition-opacity"
+              disabled={isSaving}
+              className="flex-1 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-xl font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {isEdit ? "儲存變更" : "新增公告"}
+              {isSaving ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                  推播中...
+                </>
+              ) : (
+                isEdit ? "儲存變更" : "新增公告"
+              )}
             </button>
             <button
               onClick={onClose}
-              className="flex-1 py-3 border border-[var(--theme-border)] text-[var(--theme-text-primary)] rounded-xl font-semibold hover:bg-[var(--theme-bg-secondary)] transition-colors"
+              disabled={isSaving}
+              className="flex-1 py-3 border border-[var(--theme-border)] text-[var(--theme-text-primary)] rounded-xl font-semibold hover:bg-[var(--theme-bg-secondary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               取消
             </button>
@@ -214,6 +225,7 @@ interface AnnouncementManagementAdminProps {
 export function AnnouncementManagementAdmin({ isPreviewMode = false }: AnnouncementManagementAdminProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
   const [formData, setFormData] = useState<Partial<Announcement>>({})
@@ -261,6 +273,7 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
     console.log("[UI] 📊 formData:", formData);
     console.log("[UI] 📝 editingAnnouncement:", !!editingAnnouncement);
 
+    setIsSaving(true)
     try {
       const finalData = { ...formData }
       console.log("[UI] ✅ finalData 初始化:", finalData);
@@ -274,6 +287,7 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
         } catch (uploadError) {
           console.error("Error uploading image:", uploadError)
           alert("圖片上傳失敗，請稍後再試")
+          setIsSaving(false)
           return
         }
       }
@@ -284,6 +298,7 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
         if (error) {
           console.error("[UI] ❌ updateAnnouncement 失敗:", error)
           alert(`更新失敗: ${error.message || "未知錯誤"}`)
+          setIsSaving(false)
           return
         }
         console.log("[UI] ✅ updateAnnouncement 成功");
@@ -308,13 +323,18 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
           console.log("[UI] 📥 /api/announce 回應:", res.status, JSON.stringify(payload));
           if (!res.ok) {
             alert(`新增失敗: ${payload?.error || "未知錯誤"}`)
+            setIsSaving(false)
             return
           }
-          console.log("[UI] ✅ 公告新增+推播成功，推播人數:", payload?.pushed);
-          alert(`公告已新增，已推播給 ${payload?.pushed || 0} 人`)
+          
+          // 顯示統計推播結果
+          const message = payload?.message || `已推播給 ${payload?.sent || 0} 人`
+          console.log("[UI] ✅ 公告新增+推播成功，統計:", { sent: payload?.sent, skipped: payload?.skipped })
+          alert(`公告已新增\n\n${message}`)
         } catch (fetchErr: any) {
           console.error("[UI] 💥 fetch /api/announce 失敗:", fetchErr);
           alert(`新增失敗: ${fetchErr?.message || "網路錯誤"}`)
+          setIsSaving(false)
           return
         }
       }
@@ -325,6 +345,8 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
     } catch (error) {
       console.error("[UI] 💥 handleSave 拋出未捕捉的異常:", error)
       alert("儲存失敗，請稍後再試")
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -594,6 +616,7 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
         isEdit={!!editingAnnouncement}
         onImageFileChange={setImageFile}
         imageFile={imageFile}
+        isSaving={isSaving}
       />
     </div>
   )

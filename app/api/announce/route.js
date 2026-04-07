@@ -30,27 +30,29 @@ function getLineClient() {
   return new Client({ channelAccessToken, channelSecret });
 }
 
-// 從資料庫撈出所有已綁定 LINE 的住戶 ID（同訪客/包裹的做法）
+// 從資料庫撈出所有已綁定 LINE 的住戶 ID + 統計未綁定人數
 async function getAllLineUserIds(supabase) {
   const lineUserIds = new Set();
+  let totalProfiles = 0;
+  let boundProfiles = 0;
 
   // 策略 1: profiles 表中有 line_user_id 的帳號
   try {
     console.log("[Announce] 🔍 查詢 profiles 表中的 line_user_id...");
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("*")
-      .not("line_user_id", "is", null);
+      .select("*");
 
     if (profilesError) {
       console.warn("[Announce] ❌ profiles 查詢失敗!");
       console.warn("[Announce]    Error message:", profilesError.message);
-      console.warn("[Announce]    Error code:", profilesError.code);
     } else {
-      console.log(`[Announce] ✅ profiles 找到 ${profiles?.length || 0} 筆有 line_user_id 的帳號`);
+      totalProfiles = profiles?.length || 0;
+      console.log(`[Announce] ✅ profiles 找到 ${totalProfiles} 筆帳號`);
       (profiles || []).forEach((p) => {
         if (p.line_user_id) {
           lineUserIds.add(p.line_user_id);
+          boundProfiles++;
           console.log(`[Announce]   ✓ ${p.name || p.email} → line_user_id: ${p.line_user_id}`);
         }
       });
@@ -59,39 +61,12 @@ async function getAllLineUserIds(supabase) {
     console.warn("[Announce] ❌ profiles lookup 拋出異常:", e?.message);
   }
 
-  // 策略 2: line_users 表（補充來源）
-  try {
-    console.log("[Announce] 🔍 查詢 line_users 表中的 line_user_id...");
-    const { data: lineUsers, error: lineUsersError } = await supabase
-      .from("line_users")
-      .select("*")
-      .not("line_user_id", "is", null);
-
-    if (lineUsersError) {
-      console.warn("[Announce] ❌ line_users 查詢失敗!");
-      console.warn("[Announce]    Error message:", lineUsersError.message);
-    } else {
-      console.log(`[Announce] ✅ line_users 找到 ${lineUsers?.length || 0} 筆`);
-      (lineUsers || []).forEach((u) => {
-        if (u.line_user_id) {
-          lineUserIds.add(u.line_user_id);
-          console.log(`[Announce]   ✓ ${u.display_name || "unknown"} → line_user_id: ${u.line_user_id}`);
-        }
-      });
-    }
-  } catch (e) {
-    console.warn("[Announce] ❌ line_users lookup 拋出異常:", e?.message);
-  }
-
+  // line_users 已整併至 profiles，無需額外查詢
   const result = [...lineUserIds];
-  console.log(`[Announce] 📊 查詢完成 - 去重後共 ${result.length} 個已綁定 LINE 的住戶 ID`);
-  if (result.length === 0) {
-    console.error("[Announce] ❌ 警告：查詢結果為空！可能的原因：");
-    console.error("[Announce]   1. profiles/line_users 表中沒有有效資料");
-    console.error("[Announce]   2. Service Role Key 沒有設置");
-    console.error("[Announce]   3. Supabase RLS 政策拒絕文讀");
-  }
-  return result;
+  const notBoundCount = totalProfiles - boundProfiles;
+  console.log(`[Announce] 📊 查詢完成 - 已綁定: ${result.length}，未綁定: ${notBoundCount}，總計: ${totalProfiles}`);
+  
+  return { ids: result, bound: result.length, notBound: notBoundCount, total: totalProfiles };
 }
 
 export async function POST(req) {
@@ -152,26 +127,36 @@ export async function POST(req) {
 
     // 從資料庫取得所有已綁定 LINE 的住戶（同訪客/包裹做法，不使用 broadcast）
     console.log("[Announce] ⏳ 執行 getAllLineUserIds() 查詢...");
-    let lineUserIds = await getAllLineUserIds(supabase);
-    console.log("[Announce] ✅ getAllLineUserIds() 完成，查到", lineUserIds.length, "個 ID");
+    const { ids: lineUserIds, bound: boundCount, notBound: notBoundCount, total: totalCount } = await getAllLineUserIds(supabase);
+    console.log("[Announce] ✅ getAllLineUserIds() 完成，已綁定:", boundCount, "未綁定:", notBoundCount);
 
-    // 備用方案：如果查不到，用已知的 3 個 ID 進行推播（測試用）
+    // 備用方案：如果查不到已綁定的，用測試清單（測試用）
+    let finalUserIds = lineUserIds;
+    let isUsingFallback = false;
+    
     if (lineUserIds.length === 0) {
-      console.warn("[Announce] ⚠️  查不到任何 ID，改用備用清單進行推播");
-      lineUserIds = [
+      console.warn("[Announce] ⚠️  查不到任何已綁定用戶，改用備用清單進行推播");
+      finalUserIds = [
         "U3708bab580db72e87ac14df8c159249a",  // 鄭得諼
         "U4f1fc1c05859b691ca3a51d2cfe8ff9d",  // 王大明
         "U5dbd8b5fb153630885b656bb5f8ae011"   // 倫
       ];
-      console.log("[Announce] 備用清單有", lineUserIds.length, "個 ID");
+      isUsingFallback = true;
+      console.log("[Announce] 備用清單有", finalUserIds.length, "個 ID");
     }
 
-    if (lineUserIds.length === 0) {
+    if (finalUserIds.length === 0) {
       console.error("[Announce] ❌ 完全查不到，無法推播");
-      return Response.json({ success: false, pushed: 0, total: 0, error: "No users to notify" });
+      return Response.json({ 
+        success: false, 
+        sent: 0, 
+        skipped: totalCount, 
+        total: totalCount,
+        message: "❌ 推播失敗\n無任何已綁定住戶"
+      });
     }
 
-    console.log(`📤 [Announce] 準備推播給 ${lineUserIds.length} 位住戶`);
+    console.log(`📤 [Announce] 準備推播給 ${finalUserIds.length} 位住戶`);
 
     const hasHttpsImage = typeof image_url === "string" && /^https:\/\//i.test(image_url);
 
@@ -213,13 +198,12 @@ export async function POST(req) {
     };
 
     // 使用 pushMessage 逐個推播給每個人（同訪客/包裹的成功做法）
-    console.log(`[Announce] 📤 開始逐個推播給 ${lineUserIds.length} 位住戶...`);
+    console.log(`[Announce] 📤 開始逐個推播給 ${finalUserIds.length} 位住戶...`);
 
     let totalSent = 0;
     let totalFailed = 0;
-    const failedUsers = [];
 
-    for (const lineUserId of lineUserIds) {
+    for (const lineUserId of finalUserIds) {
       try {
         console.log(`[Announce] 📨 推播給: ${lineUserId}`);
         await client.pushMessage(lineUserId, flexMessage);
@@ -227,25 +211,24 @@ export async function POST(req) {
         totalSent++;
       } catch (e) {
         console.error(`[Announce] ❌ 推播失敗: ${lineUserId}`);
-        console.error(`[Announce]    Error type: ${e?.constructor?.name}`);
-        console.error(`[Announce]    Error message: ${e?.message}`);
-        console.error(`[Announce]    Error statusCode: ${e?.statusCode}`);
+        console.error(`[Announce]    Error: ${e?.message}`);
         totalFailed++;
-        failedUsers.push({ lineUserId, error: e?.message });
       }
     }
 
-    console.log(`[Announce] 📊 推播完成 - 成功: ${totalSent}/${lineUserIds.length}, 失敗: ${totalFailed}/${lineUserIds.length}`);
-    if (failedUsers.length > 0) {
-      console.log(`[Announce] ❌ 失敗用戶列表:`, JSON.stringify(failedUsers, null, 2));
-    }
+    console.log(`[Announce] 📊 推播完成 - 成功: ${totalSent}/${finalUserIds.length}, 失敗: ${totalFailed}`);
+
+    // 組织回傳訊息
+    const responseMessage = isUsingFallback 
+      ? `⚠️ 推播測試模式\n已發送給 ${totalSent} 位用戶（備用清單）`
+      : `✅ 推播成功\n已發送給 ${totalSent} 位住戶${notBoundCount > 0 ? `\n（${notBoundCount} 人 LINE 未綁定，已跳過）` : ''}`;
 
     return Response.json({ 
       success: totalSent > 0, 
-      pushed: totalSent,
-      failed: totalFailed,
-      total: lineUserIds.length,
-      failed_users: failedUsers.length > 0 ? failedUsers : undefined,
+      sent: totalSent,
+      skipped: notBoundCount,
+      total: totalCount,
+      message: responseMessage,
       pushOnly: pushOnly === true 
     });
   } catch (err) {

@@ -17,6 +17,7 @@ interface MaintenanceRow {
   reported_by_name: string
   reported_by_id: string | null
   photo_url: string | null
+  completion_photo_url?: string | null
   status: string
   handler: string
   cost: number
@@ -30,9 +31,10 @@ interface MaintenanceFormModalProps {
   onChange: (field: keyof MaintenanceRow, value: any) => void
   onSave: () => void
   isEditing: boolean
+  isSaving: boolean
 }
 
-function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing }: MaintenanceFormModalProps) {
+function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing, isSaving }: MaintenanceFormModalProps) {
   if (!isOpen) return null
 
   return (
@@ -264,15 +266,17 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
         <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
           <button
             onClick={onClose}
+            disabled={isSaving}
             className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all"
           >
             取消
           </button>
           <button
             onClick={onSave}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isEditing ? "儲存變更" : "新增"}
+            {isSaving ? "儲存中..." : isEditing ? "儲存變更" : "新增"}
           </button>
         </div>
       </div>
@@ -294,6 +298,7 @@ interface MaintenanceManagementAdminProps {
 export function MaintenanceManagementAdmin({ isPreviewMode = false }: MaintenanceManagementAdminProps) {
   const [data, setData] = useState<MaintenanceRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
@@ -384,7 +389,8 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
         description: row.description || "",
         reported_by_name: row.reported_by_name || (row.reported_by_id ? profilesMap[row.reported_by_id] : "") || "",
         reported_by_id: row.reported_by_id || null,
-        photo_url: row.photo_url || row.image_url || null,
+        photo_url: row.photo_url || row.image_url || row.completion_photo_url || null,
+        completion_photo_url: row.completion_photo_url || null,
         status: row.status || "open",
         handler: row.handler || row.handler_name || (row.handler_id ? profilesMap[row.handler_id] || "" : ""),
         cost: row.cost || 0,
@@ -432,10 +438,13 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
   }
 
   const handleSave = async () => {
+    if (isSaving) return
+    setIsSaving(true)
     try {
       const supabase = getSupabaseClient()
       if (!supabase) {
         alert("資料庫連線失敗")
+        setIsSaving(false)
         return
       }
       const saveData = {
@@ -464,6 +473,8 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
     } catch (e: any) {
       console.error(e)
       alert("儲存失敗：" + e.message)
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -587,6 +598,7 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
               <th className="w-[9%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>設備</span><HelpHint title="設備欄" description="顯示故障設備類別。" workflow={["查看每筆案件的設備大類。","搭配搜尋可快速篩出同設備問題。"]} logic={["設備欄是案件分類起點，利於統計熱點故障。"]} /></div></th>
               <th className="w-[15%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>項目</span><HelpHint title="項目欄" description="顯示設備細項。" workflow={["查看設備下的故障部位或子項。","配合設備欄可更精準判斷問題位置。"]} logic={["同設備可有多個項目，能避免案件描述過於籠統。"]} /></div></th>
               <th className="w-[20%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>描述</span><HelpHint title="描述欄" description="顯示故障描述摘要。" workflow={["先看摘要掌握故障現象。","必要時進入編輯或結案資訊補充完整內容。"]} logic={["描述提供派工判斷依據，越完整越能減少往返確認。"]} /></div></th>
+              <th className="w-[9%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>照片</span><HelpHint title="照片欄" description="顯示住戶上傳照片或結案完工照片。" workflow={["有照片時會顯示縮圖。","點縮圖可開新分頁查看大圖。"]} logic={["優先顯示最新可用照片，方便管理端快速判斷現場狀況。"]} /></div></th>
               <th className="w-[11%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>報修人</span><HelpHint title="報修人欄" description="顯示案件提出者。" workflow={["確認由誰提出案件。","需要追蹤時可依此欄回報進度。"]} logic={["報修人是溝通對象，對應回覆與責任追蹤。"]} /></div></th>
               <th className="w-[9%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>狀態</span><HelpHint title="狀態欄" description="顯示案件進度狀態。" workflow={["查看每筆案件的狀態標籤（待處理/處理中/已完成）。","待處理案件請到操作欄點派工；處理中案件可點結案。","結案後狀態會變為已完成，代表流程收斂。"]} logic={["狀態是流程控制核心，決定操作欄會出現哪個按鈕。","待處理可派工、處理中可結案、已完成通常僅保留查閱與必要修正。"]} /></div></th>
               <th className="w-[11%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>處理人</span><HelpHint title="處理人欄" description="顯示負責人員。" workflow={["查看目前承辦人或廠商。","如有轉派，更新後會同步反映在此欄。"]} logic={["處理人欄對應責任歸屬與調度紀錄。"]} /></div></th>
@@ -609,6 +621,19 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] truncate" title={row.description || "-"}>
                       {row.description || "-"}
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
+                      {row.photo_url ? (
+                        <a href={row.photo_url} target="_blank" rel="noopener noreferrer" title="開啟原始照片">
+                          <img
+                            src={row.photo_url}
+                            alt="維修照片"
+                            className="w-14 h-14 object-cover rounded-md border border-[var(--theme-border)] hover:opacity-80 transition-opacity"
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-[var(--theme-text-muted)] text-sm">-</span>
+                      )}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] truncate" title={row.reported_by_name || "-"}>
                       {row.reported_by_name || "-"}
@@ -670,7 +695,7 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
               })
             ) : (
               <tr>
-                <td colSpan={9} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                <td colSpan={10} className="p-8 text-center text-[var(--theme-text-secondary)]">
                   {searchTerm ? "沒有符合條件的維修紀錄" : "目前沒有維修紀錄"}
                 </td>
               </tr>
@@ -686,6 +711,7 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
         onChange={handleFormChange}
         onSave={handleSave}
         isEditing={editingIndex !== null}
+        isSaving={isSaving}
       />
 
       <DispatchModal

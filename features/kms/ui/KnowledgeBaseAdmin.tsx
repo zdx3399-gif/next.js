@@ -102,6 +102,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
   const [pendingPosts, setPendingPosts] = useState<CommunityPost[]>([])
   const [pendingLoading, setPendingLoading] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
+  const [actionSubmitting, setActionSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
     title: "",
@@ -148,7 +149,9 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
 
   // 處理入庫
   const handleImport = async () => {
+    if (actionSubmitting) return
     if (!selectedPost || !currentUser) return
+    setActionSubmitting(true)
     try {
       await importPostToKMS(selectedPost.id, currentUser.id, {
         title: formData.title,
@@ -163,12 +166,16 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       refresh()
     } catch (err: any) {
       alert("入庫失敗: " + err.message)
+    } finally {
+      setActionSubmitting(false)
     }
   }
 
   // 處理拒絕入庫
   const handleReject = async () => {
+    if (actionSubmitting) return
     if (!selectedPost || !currentUser) return
+    setActionSubmitting(true)
     try {
       await rejectKMSSuggestion(selectedPost.id, currentUser.id, rejectReason)
       alert("已拒絕入庫建議")
@@ -178,6 +185,8 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       loadPendingPosts()
     } catch (err: any) {
       alert("操作失敗: " + err.message)
+    } finally {
+      setActionSubmitting(false)
     }
   }
 
@@ -201,6 +210,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
   })
 
   const handleCreate = async () => {
+    if (actionSubmitting) return
     if (isPreviewMode) {
       alert("預覽模式僅供檢視，不會寫入資料庫")
       return
@@ -209,6 +219,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       alert("請先登入")
       return
     }
+    setActionSubmitting(true)
     try {
       await createCard({
         source_type: "manual",
@@ -222,6 +233,8 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       resetForm()
     } catch (err: any) {
       alert("建立失敗: " + err.message)
+    } finally {
+      setActionSubmitting(false)
     }
   }
 
@@ -708,10 +721,10 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={actionSubmitting}>
                   取消
                 </Button>
-                <Button onClick={handleCreate}>建立</Button>
+                <Button onClick={handleCreate} disabled={actionSubmitting}>{actionSubmitting ? "處理中..." : "建立"}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -868,10 +881,10 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+            <Button variant="outline" onClick={() => setShowImportDialog(false)} disabled={actionSubmitting}>
               取消
             </Button>
-            <Button onClick={handleImport}>入庫</Button>
+            <Button onClick={handleImport} disabled={actionSubmitting}>{actionSubmitting ? "處理中..." : "入庫"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -895,11 +908,11 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)} disabled={actionSubmitting}>
               取消
             </Button>
-            <Button variant="destructive" onClick={handleReject}>
-              拒絕
+            <Button variant="destructive" onClick={handleReject} disabled={actionSubmitting}>
+              {actionSubmitting ? "處理中..." : "拒絕"}
             </Button>
           </DialogFooter>
         </DialogContent>

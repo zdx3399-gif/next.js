@@ -49,6 +49,7 @@ function ResidentFormModal({
   onSave,
   onChange,
   isEditing,
+  isSaving,
 }: {
   isOpen: boolean
   onClose: () => void
@@ -56,6 +57,7 @@ function ResidentFormModal({
   onSave: () => void
   onChange: (field: keyof Resident, value: string) => void
   isEditing: boolean
+  isSaving: boolean
 }) {
   if (!isOpen) return null
 
@@ -120,6 +122,30 @@ function ResidentFormModal({
             />
           </div>
 
+          {/* 緊急聯絡人姓名 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">緊急聯絡人姓名</label>
+            <input
+              type="text"
+              value={resident.emergency_contact_name || ""}
+              onChange={(e) => onChange("emergency_contact_name", e.target.value)}
+              placeholder="請輸入緊急聯絡人姓名"
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+
+          {/* 緊急聯絡人電話 */}
+          <div>
+            <label className="block text-[var(--theme-text-primary)] font-medium mb-2">緊急聯絡人電話</label>
+            <input
+              type="tel"
+              value={resident.emergency_contact_phone || ""}
+              onChange={(e) => onChange("emergency_contact_phone", e.target.value)}
+              placeholder="請輸入緊急聯絡人電話"
+              className="w-full p-3 rounded-xl theme-input outline-none"
+            />
+          </div>
+
           {/* 身分 */}
           <div>
             <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">身分<HelpHint title="管理端身分" description="決定後台可見功能範圍，請依職責分配。" workflow={["依實際職責選擇住戶/管委會/警衛。","儲存前再次確認是否符合最小權限原則。","角色變更後請通知當事人重新登入驗證。"]} logic={["身分會直接影響功能可見範圍與操作權限。","權限配置過高可能造成管理風險。"]} align="center" /></label>
@@ -153,15 +179,17 @@ function ResidentFormModal({
         <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
             取消
           </button>
           <button
             onClick={onSave}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isEditing ? "儲存變更" : "新增"}
+            {isSaving ? "儲存中..." : isEditing ? "儲存變更" : "新增"}
           </button>
         </div>
       </div>
@@ -171,9 +199,9 @@ function ResidentFormModal({
 
 // 預覽模式的模擬資料
 const PREVIEW_RESIDENTS: Resident[] = [
-  { id: "preview-1", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", relationship: "owner", role: "resident" as const },
-  { id: "preview-2", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", relationship: "household_member", role: "resident" as const },
-  { id: "preview-3", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", relationship: "tenant", role: "committee" as const },
+  { id: "preview-1", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", emergency_contact_name: "測試資料", emergency_contact_phone: "測試資料", relationship: "owner", role: "resident" as const },
+  { id: "preview-2", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", emergency_contact_name: "測試資料", emergency_contact_phone: "測試資料", relationship: "household_member", role: "resident" as const },
+  { id: "preview-3", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", emergency_contact_name: "測試資料", emergency_contact_phone: "測試資料", relationship: "tenant", role: "committee" as const },
 ]
 
 interface ResidentManagementAdminProps {
@@ -267,6 +295,7 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
   const [activeTab, setActiveTab] = useState<AdminTab>("residents")
   const [permissionPageMode, setPermissionPageMode] = useState<PermissionPageMode>("admin")
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [formData, setFormData] = useState<Partial<Resident>>({})
   const [searchTerm, setSearchTerm] = useState("")
@@ -325,6 +354,10 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
       resident.phone?.toLowerCase().includes(term) ||
       false ||
       resident.email?.toLowerCase().includes(term) ||
+      false ||
+      resident.emergency_contact_name?.toLowerCase().includes(term) ||
+      false ||
+      resident.emergency_contact_phone?.toLowerCase().includes(term) ||
       false
     )
   })
@@ -335,6 +368,8 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
       room: "",
       phone: "",
       email: "",
+      emergency_contact_name: "",
+      emergency_contact_phone: "",
       role: "resident",
       relationship: "household_member",
     })
@@ -359,30 +394,36 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
   }
 
   const handleFormSave = async () => {
-    if (editingIndex !== null) {
-      // Update existing row
-      const keys = Object.keys(formData) as Array<keyof Resident>
-      keys.forEach((key) => {
-        const value = formData[key]
-        if (value !== undefined) {
-          updateRow(editingIndex, key, value)
-        }
-      })
-      await handleSave(formData as Resident, editingIndex)
-    } else {
-      // Add new row
-      addNewRow()
-      const newIndex = 0 // New row is added at the beginning
-      const keys = Object.keys(formData) as Array<keyof Resident>
-      keys.forEach((key) => {
-        const value = formData[key]
-        if (value !== undefined) {
-          updateRow(newIndex, key, value)
-        }
-      })
-      await handleSave(formData as Resident, newIndex)
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      if (editingIndex !== null) {
+        // Update existing row
+        const keys = Object.keys(formData) as Array<keyof Resident>
+        keys.forEach((key) => {
+          const value = formData[key]
+          if (value !== undefined) {
+            updateRow(editingIndex, key, value)
+          }
+        })
+        await handleSave(formData as Resident, editingIndex)
+      } else {
+        // Add new row
+        addNewRow()
+        const newIndex = 0 // New row is added at the beginning
+        const keys = Object.keys(formData) as Array<keyof Resident>
+        keys.forEach((key) => {
+          const value = formData[key]
+          if (value !== undefined) {
+            updateRow(newIndex, key, value)
+          }
+        })
+        await handleSave(formData as Resident, newIndex)
+      }
+      handleCloseModal()
+    } finally {
+      setIsSaving(false)
     }
-    handleCloseModal()
   }
 
   const togglePermission = (role: UserRole, section: Section) => {
@@ -584,6 +625,8 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">房號<HelpHint title="管理端房號欄" description="顯示住戶所屬房號或位置。" workflow={["以房號快速判斷住戶所屬戶別。","操作前先核對姓名與房號組合。"]} logic={["房號是戶別管理與費用關聯關鍵欄位。"]} align="center" /></span></th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">電話<HelpHint title="管理端電話欄" description="顯示聯絡電話，供通知或聯繫使用。" workflow={["需要聯絡時先檢查電話欄最新值。","若號碼失效，立即進入編輯更新。"]} logic={["電話欄直接影響緊急聯繫品質。"]} align="center" /></span></th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">Email<HelpHint title="管理端 Email 欄" description="顯示電子郵件，供帳號通知使用。" workflow={["檢查 Email 是否完整可用。","通知退信時優先回來修正此欄。"]} logic={["Email 影響帳號通知與重設流程。"]} align="center" /></span></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">緊急聯絡人<HelpHint title="管理端緊急聯絡人" description="顯示住戶指定的緊急聯絡人姓名。" workflow={["確認聯絡人姓名是否為最新。","如有異動，請立即更新。"]} logic={["緊急事件時會優先參考此欄位。"]} align="center" /></span></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">緊急聯絡電話<HelpHint title="管理端緊急聯絡電話" description="顯示住戶緊急聯絡電話。" workflow={["確認電話格式完整可撥通。","變更後請通知住戶確認。"]} logic={["緊急通報速度取決於此欄正確性。"]} align="center" /></span></th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">身分<HelpHint title="管理端身分欄" description="顯示該帳號在系統中的角色。" workflow={["先檢查角色是否符合職責。","需要調整權限時進入編輯修改。"]} logic={["角色會決定後台可見功能範圍。"]} align="center" /></span></th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">關係<HelpHint title="管理端關係欄" description="顯示與該戶的關係類型。" workflow={["核對戶主/成員/租客是否正確。","異動時同步修正，維持戶別資料正確。"]} logic={["關係欄影響住戶統計與管理決策。"]} align="center" /></span></th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">操作<HelpHint title="管理端操作" description="可編輯或刪除資料，刪除前請先確認是否仍在住。" workflow={["點編輯更新欄位資料。","確認不再使用時再執行刪除。","操作後回列表確認結果。"]} logic={["刪除屬高風險操作，建議先確認關聯資料影響。"]} align="center" /></span></th>
@@ -606,6 +649,12 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-all">
                       {row.email || "-"}
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
+                      {row.emergency_contact_name || "-"}
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
+                      {row.emergency_contact_phone || "-"}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
                       {getResidentRoleLabel(row.role)}
@@ -637,7 +686,7 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
                 ))
             ) : (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                <td colSpan={9} className="p-8 text-center text-[var(--theme-text-secondary)]">
                   {searchTerm ? "沒有符合條件的住戶資料" : "目前沒有資料"}
                 </td>
               </tr>
@@ -653,6 +702,7 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
         onSave={handleFormSave}
         onChange={handleFormChange}
         isEditing={editingIndex !== null}
+        isSaving={isSaving}
       />
       </>
       )}

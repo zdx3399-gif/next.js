@@ -24,6 +24,8 @@ export function useResidents() {
       room: "",
       phone: "",
       email: "",
+      emergency_contact_name: "",
+      emergency_contact_phone: "",
       role: "resident",
       relationship: "household_member", // Set default relationship
     }
@@ -50,6 +52,8 @@ export function useResidents() {
         room: resident.room,
         phone: resident.phone,
         email: resident.email,
+        emergency_contact_name: resident.emergency_contact_name,
+        emergency_contact_phone: resident.emergency_contact_phone,
         role: resident.role,
         relationship: resident.relationship, // Include relationship in creation
       })

@@ -57,9 +57,10 @@ interface FinanceFormModalProps {
   onChange: (field: keyof FinanceRecord, value: any) => void
   onSave: () => void
   isEditing: boolean
+  isSaving: boolean
 }
 
-function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing }: FinanceFormModalProps) {
+function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing, isSaving }: FinanceFormModalProps) {
   const [calc, setCalc] = useState({ parking: 0, car: 0, ping: 0 })
   const [units, setUnits] = useState<UnitOption[]>([])
   const [loadingUnits, setLoadingUnits] = useState(false)
@@ -238,15 +239,17 @@ function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
         <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)]"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             取消
           </button>
           <button
             onClick={onSave}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isEditing ? "儲存" : "新增"}
+            {isSaving ? "儲存中..." : isEditing ? "儲存" : "新增"}
           </button>
         </div>
       </div>
@@ -262,9 +265,10 @@ interface ExpenseFormModalProps {
   onChange: (field: keyof ExpenseRecord, value: any) => void
   onSave: () => void
   isEditing: boolean
+  isSaving: boolean
 }
 
-function ExpenseFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing }: ExpenseFormModalProps) {
+function ExpenseFormModal({ isOpen, onClose, formData, onChange, onSave, isEditing, isSaving }: ExpenseFormModalProps) {
   if (!isOpen) return null
 
   return (
@@ -335,15 +339,17 @@ function ExpenseFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
         <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)]"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             取消
           </button>
           <button
             onClick={onSave}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isEditing ? "儲存" : "新增支出"}
+            {isSaving ? "儲存中..." : isEditing ? "儲存" : "新增支出"}
           </button>
         </div>
       </div>
@@ -372,6 +378,8 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
   const [expenses, setExpenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES)
   const [searchTerm, setSearchTerm] = useState("")
   const [remindingId, setRemindingId] = useState<string | null>(null)
+  const [incomeSaving, setIncomeSaving] = useState(false)
+  const [expenseSaving, setExpenseSaving] = useState(false)
 
   // Income State
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false)
@@ -445,34 +453,40 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
   }
 
   const handleSaveIncome = async () => {
+    if (incomeSaving) return
+    setIncomeSaving(true)
     console.log("[v0] handleSaveIncome called", { incomeEditingIndex, incomeFormData })
 
-    if (incomeEditingIndex !== null) {
-      const recordToSave = {
-        ...records[incomeEditingIndex],
-        ...incomeFormData,
-        monthly_fee: incomeFormData.amount,
-      }
-      console.log("[v0] Saving updated record:", recordToSave)
-      const success = await saveRecord(recordToSave, incomeEditingIndex)
-      if (success) {
-        console.log("[v0] Save successful, refreshing...")
+    try {
+      if (incomeEditingIndex !== null) {
+        const recordToSave = {
+          ...records[incomeEditingIndex],
+          ...incomeFormData,
+          monthly_fee: incomeFormData.amount,
+        }
+        console.log("[v0] Saving updated record:", recordToSave)
+        const success = await saveRecord(recordToSave, incomeEditingIndex)
+        if (success) {
+          console.log("[v0] Save successful, refreshing...")
+        } else {
+          console.log("[v0] Save failed")
+        }
       } else {
-        console.log("[v0] Save failed")
+        console.log("[v0] Creating new record:", incomeFormData)
+        const success = await saveRecord(
+          { ...incomeFormData, id: undefined, monthly_fee: incomeFormData.amount },
+          records.length,
+        )
+        if (success) {
+          console.log("[v0] Create successful, refreshing...")
+        } else {
+          console.log("[v0] Create failed")
+        }
       }
-    } else {
-      console.log("[v0] Creating new record:", incomeFormData)
-      const success = await saveRecord(
-        { ...incomeFormData, id: undefined, monthly_fee: incomeFormData.amount },
-        records.length,
-      )
-      if (success) {
-        console.log("[v0] Create successful, refreshing...")
-      } else {
-        console.log("[v0] Create failed")
-      }
+      setIsIncomeModalOpen(false)
+    } finally {
+      setIncomeSaving(false)
     }
-    setIsIncomeModalOpen(false)
   }
 
   const handleRemindFee = async (feeId: string) => {
@@ -521,15 +535,21 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
   }
 
   const handleSaveExpense = () => {
-    if (expenseEditingId) {
-      setExpenses((prev) =>
-        prev.map((e) => (e.id === expenseEditingId ? { ...expenseFormData, id: expenseEditingId } : e)),
-      )
-    } else {
-      const newExp = { ...expenseFormData, id: Math.random().toString(36).substr(2, 9) }
-      setExpenses((prev) => [newExp, ...prev])
+    if (expenseSaving) return
+    setExpenseSaving(true)
+    try {
+      if (expenseEditingId) {
+        setExpenses((prev) =>
+          prev.map((e) => (e.id === expenseEditingId ? { ...expenseFormData, id: expenseEditingId } : e)),
+        )
+      } else {
+        const newExp = { ...expenseFormData, id: Math.random().toString(36).substr(2, 9) }
+        setExpenses((prev) => [newExp, ...prev])
+      }
+      setIsExpenseModalOpen(false)
+    } finally {
+      setExpenseSaving(false)
     }
-    setIsExpenseModalOpen(false)
   }
 
   const handleDeleteExpense = (id: string) => {
@@ -1001,6 +1021,7 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
         onChange={(f, v) => setIncomeFormData((prev) => ({ ...prev, [f]: v }))}
         onSave={handleSaveIncome}
         isEditing={incomeEditingIndex !== null}
+        isSaving={incomeSaving}
       />
 
       <ExpenseFormModal
@@ -1010,6 +1031,7 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
         onChange={(f, v) => setExpenseFormData((prev) => ({ ...prev, [f]: v }))}
         onSave={handleSaveExpense}
         isEditing={expenseEditingId !== null}
+        isSaving={expenseSaving}
       />
     </div>
   )

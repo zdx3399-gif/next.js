@@ -32,7 +32,7 @@ export async function POST(req) {
     const client = getLineClient()
 
     const body = await req.json()
-    const { meeting } = body
+    const { meeting, notificationType } = body
 
     if (!meeting || !meeting.topic) {
       return Response.json({ error: "Missing meeting data" }, { status: 400 })
@@ -40,26 +40,31 @@ export async function POST(req) {
 
     const { topic, time, location, key_takeaways, notes, pdf_file_url } = meeting
 
-    // 取得所有綁定的 LINE 用戶
+    // 取得所有已綁定 LINE 的住戶（line_users 已整併至 profiles）
     const { data: lineUsers, error: lineError } = await supabase
-      .from("line_users")
-      .select("line_user_id, display_name")
+      .from("profiles")
+      .select("line_user_id, line_display_name, name")
+      .not("line_user_id", "is", null)
 
     if (lineError || !lineUsers || lineUsers.length === 0) {
       console.log("[Meeting Notify] No LINE users found")
       return Response.json({ success: true, sent: 0, message: "No LINE users to notify" })
     }
 
-    // 建立 Flex Message
+    // 根據通知類型選擇不同的消息內容
+    const isPdfUpdateNotification = notificationType === "pdf_added"
+    const isHttpPdfUrl = typeof pdf_file_url === "string" && /^https?:\/\//i.test(pdf_file_url)
+
     const formatDate = new Date(time).toLocaleString("zh-TW", { hour12: false })
     const takeawaysText =
       key_takeaways && key_takeaways.length > 0
         ? key_takeaways.map((t) => (typeof t === "string" ? t.trim() : "")).filter(Boolean)
         : []
 
+    // 為所有用戶建立 Flex Message
     const flexMessage = {
       type: "flex",
-      altText: `📢 會議紀錄：${topic}`,
+      altText: isPdfUpdateNotification ? `📎 會議紀錄更新：${topic}` : `📢 會議紀錄通知：${topic}`,
       contents: {
         type: "bubble",
         hero: {
@@ -68,13 +73,13 @@ export async function POST(req) {
           contents: [
             {
               type: "text",
-              text: "📢 會議紀錄通知",
+              text: isPdfUpdateNotification ? "📎 會議紀錄已更新" : "📢 會議紀錄通知",
               weight: "bold",
               size: "xl",
               color: "#ffffff",
             },
           ],
-          backgroundColor: "#6c2166",
+          backgroundColor: isPdfUpdateNotification ? "#0066ff" : "#6c2166",
           paddingAll: "20px",
         },
         body: {
@@ -107,7 +112,7 @@ export async function POST(req) {
               color: "#666666",
               margin: "sm",
             },
-            ...(takeawaysText.length > 0
+            ...(takeawaysText.length > 0 && !isPdfUpdateNotification
               ? [
                   {
                     type: "separator",
@@ -130,7 +135,7 @@ export async function POST(req) {
                   })),
                 ]
               : []),
-            ...(notes
+            ...(notes && !isPdfUpdateNotification
               ? [
                   {
                     type: "separator",
@@ -154,7 +159,7 @@ export async function POST(req) {
                   },
                 ]
               : []),
-            ...(pdf_file_url
+            ...(isHttpPdfUrl
               ? [
                   {
                     type: "separator",
@@ -164,7 +169,7 @@ export async function POST(req) {
                     type: "button",
                     action: {
                       type: "uri",
-                      label: "📄 下載完整會議紀錄",
+                      label: isPdfUpdateNotification ? "📄 查看更新的會議紀錄" : "📄 下載完整會議紀錄",
                       uri: pdf_file_url,
                     },
                     style: "link",
@@ -178,29 +183,67 @@ export async function POST(req) {
       },
     }
 
-    // 發送給所有綁定的住戶
+    // 建立要發送的消息（每位住戶共用同一組內容）
+    const messages = [flexMessage]
+    if (pdf_file_url) {
+      if (isPdfUpdateNotification) {
+        messages.push({
+          type: "text",
+          text: isHttpPdfUrl
+            ? `✅ 會議記錄已準備就緒\n📥 長按此訊息可保存檔案連結\n🔗 ${pdf_file_url}`
+            : "✅ 會議記錄已更新\n目前檔案為系統內嵌格式，請至住戶端會議詳情頁下載完整 PDF。",
+        })
+      } else {
+        messages.push({
+          type: "text",
+          text: "📎 會議紀錄檔案已上傳，點擊上方「下載完整會議紀錄」按鈕取得 PDF。\n\n💡 您也可以長按此訊息分享給其他住戶或保存至相簿。",
+        })
+        if (isHttpPdfUrl) {
+          messages.push({
+            type: "text",
+            text: `🔗 直接連結：${pdf_file_url}`,
+          })
+        }
+      }
+    }
+
+    // 發送給所有綁定的住戶（批次並行，避免逐筆等待過久）
     let successCount = 0
     let failureCount = 0
 
-    for (const lineUser of lineUsers) {
-      try {
-        await client.pushMessage(lineUser.line_user_id, flexMessage)
-        successCount++
-      } catch (pushError) {
-        console.error(`[Meeting Notify] Failed to send to ${lineUser.display_name}:`, pushError)
+    const BATCH_SIZE = 20
+    for (let i = 0; i < lineUsers.length; i += BATCH_SIZE) {
+      const batch = lineUsers.slice(i, i + BATCH_SIZE)
+      const results = await Promise.allSettled(
+        batch.map((lineUser) => client.pushMessage(lineUser.line_user_id, messages)),
+      )
+
+      results.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          successCount++
+          return
+        }
+
         failureCount++
-      }
+        const failedUser = batch[index]
+        console.error(
+          `[Meeting Notify] Failed to send to ${failedUser.line_display_name || failedUser.name}:`,
+          result.reason,
+        )
+      })
     }
 
     console.log(
       `[Meeting Notify] Notifications sent: ${successCount} success, ${failureCount} failed out of ${lineUsers.length} users`,
     )
 
+    const notifyTypeLabel = isPdfUpdateNotification ? "PDF 更新通知" : "會議紀錄通知"
     return Response.json({
       success: true,
       sent: successCount,
       failed: failureCount,
       total: lineUsers.length,
+      message: `${notifyTypeLabel}已發送給 ${successCount} 位住戶${pdf_file_url ? '（含檔案分享）' : ''}`,
     })
   } catch (err) {
     console.error("[Meeting Notify] error:", err)

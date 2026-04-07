@@ -18,6 +18,8 @@ interface MeetingFormModalProps {
   isEditing: boolean
   onPDFFileChange: (file: File | null) => void
   pdfFile: File | null
+  isSaving: boolean
+  savingLabel: string
 }
 
 function MeetingFormModal({
@@ -29,6 +31,8 @@ function MeetingFormModal({
   isEditing,
   onPDFFileChange,
   pdfFile,
+  isSaving,
+  savingLabel,
 }: MeetingFormModalProps) {
   const [newTakeaway, setNewTakeaway] = useState("")
   const [editingTakeawayIndex, setEditingTakeawayIndex] = useState<number | null>(null)
@@ -246,15 +250,17 @@ function MeetingFormModal({
         <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
           <button
             onClick={onClose}
+            disabled={isSaving}
             className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all"
           >
             取消
           </button>
           <button
             onClick={onSave}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isEditing ? "儲存變更" : "新增"}
+            {isSaving ? savingLabel : isEditing ? "儲存變更" : "新增"}
           </button>
         </div>
       </div>
@@ -274,6 +280,8 @@ interface MeetingManagementAdminProps {
 
 export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagementAdminProps) {
   const { meetings: realMeetings, loading, addMeeting, editMeeting, removeMeeting, reload } = useMeetings()
+  const [isSaving, setIsSaving] = useState(false)
+  const [savingStage, setSavingStage] = useState<"idle" | "uploading" | "saving">("idle")
 
   // 預覽模式使用模擬資料
   const meetings = isPreviewMode ? PREVIEW_MEETINGS : realMeetings
@@ -307,6 +315,7 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
     setFormData({ topic: "", time: "", location: "", notes: "", key_takeaways: [], pdf_file_url: undefined })
     setEditingId(null)
     setPdfFile(null)
+    setSavingStage("idle")
     setIsModalOpen(true)
   }
 
@@ -321,6 +330,7 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
     })
     setEditingId(meeting.id || null)
     setPdfFile(null)
+    setSavingStage("idle")
     setIsModalOpen(true)
   }
 
@@ -329,15 +339,18 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
   }
 
   const handleSave = async () => {
+    if (isSaving) return
     if (!formData.topic || !formData.time) {
       alert("請填寫主題和時間")
       return
     }
 
+    setIsSaving(true)
     try {
       const finalData = { ...formData }
 
       if (pdfFile) {
+        setSavingStage("uploading")
         try {
           const pdfUrl = await uploadMeetingPDF(pdfFile)
           finalData.pdf_file_url = pdfUrl
@@ -348,17 +361,25 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
         }
       }
 
+      setSavingStage("saving")
+
       if (editingId) {
         await editMeeting(editingId, finalData)
       } else {
         await addMeeting(finalData)
       }
       setIsModalOpen(false)
+      setSavingStage("idle")
     } catch (error) {
       console.error("Error saving meeting:", error)
       alert("儲存失敗，請稍後再試")
+    } finally {
+      setIsSaving(false)
+      setSavingStage("idle")
     }
   }
+
+  const savingLabel = savingStage === "uploading" ? "檔案上傳中..." : "資料儲存中..."
 
   const handleDelete = async (id: string) => {
     if (confirm("確定要刪除此會議/活動嗎？")) {
@@ -504,6 +525,8 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
         isEditing={editingId !== null}
         onPDFFileChange={setPdfFile}
         pdfFile={pdfFile}
+        isSaving={isSaving}
+        savingLabel={savingLabel}
       />
     </div>
   )

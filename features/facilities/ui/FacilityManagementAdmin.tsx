@@ -17,6 +17,7 @@ interface FacilityFormModalProps {
   isEditing: boolean
   imageFile: File | null
   onImageChange: (file: File | null) => void
+  isSaving: boolean
 }
 
 function FacilityFormModal({
@@ -28,6 +29,7 @@ function FacilityFormModal({
   isEditing,
   imageFile,
   onImageChange,
+  isSaving,
 }: FacilityFormModalProps) {
   if (!isOpen) return null
 
@@ -169,15 +171,17 @@ function FacilityFormModal({
         <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
           <button
             onClick={onClose}
+            disabled={isSaving}
             className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all"
           >
             取消
           </button>
           <button
             onClick={onSave}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isEditing ? "儲存變更" : "新增"}
+            {isSaving ? "儲存中..." : isEditing ? "儲存變更" : "新增"}
           </button>
         </div>
       </div>
@@ -210,6 +214,7 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
   const bookings = isPreviewMode ? PREVIEW_BOOKINGS : realBookings
 
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [formData, setFormData] = useState<Facility>({
     id: "",
@@ -272,21 +277,27 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
   }
 
   const onSave = async () => {
-    if (editingIndex !== null) {
-      const facilityToSave = {
-        ...facilities[editingIndex],
-        ...formData,
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      if (editingIndex !== null) {
+        const facilityToSave = {
+          ...facilities[editingIndex],
+          ...formData,
+        }
+        const result = await handleSave(facilityToSave as any, editingIndex, currentImageFile)
+        alert(result.message)
+      } else {
+        const newIndex = facilities.length
+        addNewFacility()
+        const result = await handleSave({ ...formData, id: "" } as any, newIndex, currentImageFile)
+        alert(result.message)
       }
-      const result = await handleSave(facilityToSave as any, editingIndex, currentImageFile)
-      alert(result.message)
-    } else {
-      const newIndex = facilities.length
-      addNewFacility()
-      const result = await handleSave({ ...formData, id: "" } as any, newIndex, currentImageFile)
-      alert(result.message)
+      setIsModalOpen(false)
+      setCurrentImageFile(null)
+    } finally {
+      setIsSaving(false)
     }
-    setIsModalOpen(false)
-    setCurrentImageFile(null)
   }
 
   const onDelete = async (id: string) => {
@@ -553,6 +564,7 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
         isEditing={editingIndex !== null}
         imageFile={currentImageFile}
         onImageChange={setCurrentImageFile}
+        isSaving={isSaving}
       />
     </div>
   )

@@ -30,9 +30,10 @@ interface PackageFormModalProps {
   onChange: (field: keyof NewPackage, value: string) => void
   onSave: () => void
   isEdit: boolean
+  isSaving: boolean
 }
 
-function PackageFormModal({ isOpen, onClose, formData, onChange, onSave, isEdit }: PackageFormModalProps) {
+function PackageFormModal({ isOpen, onClose, formData, onChange, onSave, isEdit, isSaving }: PackageFormModalProps) {
   if (!isOpen) return null
 
   return (
@@ -187,15 +188,17 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave, isEdit 
         <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
           <button
             onClick={onClose}
+            disabled={isSaving}
             className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all"
           >
             取消
           </button>
           <button
             onClick={onSave}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all"
+            disabled={isSaving}
+            className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isEdit ? "儲存變更" : "新增"}
+            {isSaving ? "儲存中..." : isEdit ? "儲存變更" : "新增"}
           </button>
         </div>
       </div>
@@ -245,6 +248,7 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
   const [roomResidents, setRoomResidents] = useState<{ [room: string]: Resident[] }>({})
 
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null)
   const [newPackage, setNewPackage] = useState<NewPackage>({
     courier: "",
@@ -319,21 +323,27 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
   }
 
   const onAddOrUpdatePackage = async () => {
+    if (isSaving) return
     if (!newPackage.courier || !newPackage.recipient_name || !newPackage.recipient_room) {
       alert("請填寫快遞公司、收件人和房號")
       return
     }
 
-    const success = editingPackageId
-      ? await handleUpdatePackage({ id: editingPackageId, ...newPackage })
-      : await handleAddPackage(newPackage)
+    setIsSaving(true)
+    try {
+      const success = editingPackageId
+        ? await handleUpdatePackage({ id: editingPackageId, ...newPackage })
+        : await handleAddPackage(newPackage)
 
-    if (success) {
-      alert(editingPackageId ? "包裹更新成功" : "包裹新增成功")
-      setIsModalOpen(false)
-      resetPackageForm()
-    } else {
-      alert(editingPackageId ? "更新失敗" : "新增失敗")
+      if (success) {
+        alert(editingPackageId ? "包裹更新成功" : "包裹新增成功")
+        setIsModalOpen(false)
+        resetPackageForm()
+      } else {
+        alert(editingPackageId ? "更新失敗" : "新增失敗")
+      }
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -631,6 +641,7 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
         onChange={handleFormChange}
         onSave={onAddOrUpdatePackage}
         isEdit={!!editingPackageId}
+        isSaving={isSaving}
       />
     </div>
   )

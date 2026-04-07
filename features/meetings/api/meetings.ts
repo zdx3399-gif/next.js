@@ -13,6 +13,24 @@ export interface Meeting {
   created_at?: string
 }
 
+async function notifyMeetingLine(meeting: Meeting, notificationType?: "pdf_added") {
+  try {
+    const notifyRes = await fetch("/api/meeting/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meeting, notificationType }),
+      keepalive: true,
+    })
+
+    if (!notifyRes.ok) {
+      const notifyError = await notifyRes.json().catch(() => ({}))
+      console.warn("Meeting notification response:", notifyError)
+    }
+  } catch (err: any) {
+    console.warn("Meeting notification fetch error:", err)
+  }
+}
+
 export async function getMeetingById(id: string): Promise<Meeting | null> {
   const supabase = getSupabaseClient()
   const { data, error } = await supabase.from("meetings").select("*").eq("id", id).single()
@@ -52,26 +70,9 @@ export async function createMeeting(
     return null
   }
 
-  // 同步發送 LINE 通知（確保在 serverless 環境中完成）
+  // 通知採非阻塞，避免儲存流程卡住
   if (data?.id) {
-    try {
-      const notifyRes = await fetch("/api/meeting/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          meeting: data,
-        }),
-      })
-      
-      if (!notifyRes.ok) {
-        const notifyError = await notifyRes.json()
-        console.warn("Meeting notification response:", notifyError)
-        // 不因為通知失敗而中斷會議建立
-      }
-    } catch (err) {
-      console.warn("Meeting notification fetch error:", err)
-      // 不因為通知失敗而中斷會議建立
-    }
+    void notifyMeetingLine(data)
   }
 
   return data
@@ -85,6 +86,12 @@ export async function updateMeeting(id: string, meeting: Partial<Meeting>): Prom
     console.error("Error updating meeting:", error)
     return null
   }
+
+  // 如果更新包含 PDF 檔案，向住戶發送通知
+  if (data && meeting.pdf_file_url) {
+    void notifyMeetingLine(data, "pdf_added")
+  }
+
   return data
 }
 
@@ -100,14 +107,32 @@ export async function deleteMeeting(id: string): Promise<boolean> {
 }
 
 export async function uploadMeetingPDF(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      resolve(reader.result as string)
-    }
-    reader.onerror = () => {
-      reject(new Error("PDF 讀取失敗"))
-    }
-    reader.readAsDataURL(file)
+  if (!(file instanceof File)) {
+    throw new Error("無效的檔案")
+  }
+
+  const ext = (file.name?.split(".").pop() || "").toLowerCase()
+  if (ext !== "pdf") {
+    throw new Error("僅支援 PDF 檔案")
+  }
+
+  const formData = new FormData()
+  formData.append("file", file)
+  formData.append("folder", "meetings/minutes")
+
+  const res = await fetch("/api/upload-file", {
+    method: "POST",
+    body: formData,
   })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok || !payload?.url) {
+    throw new Error(payload?.error || "PDF 上傳失敗")
+  }
+
+  if (!/^https?:\/\//i.test(payload.url)) {
+    throw new Error("PDF 連結格式錯誤")
+  }
+
+  return payload.url
 }

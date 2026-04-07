@@ -18,6 +18,8 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
     room: "",
     phone: "",
     email: "",
+    emergency_contact_name: "",
+    emergency_contact_phone: "",
     password: "",
   })
   const [isUpdating, setIsUpdating] = useState(false)
@@ -33,6 +35,8 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
         room: currentUser.room || "",
         phone: currentUser.phone || "",
         email: currentUser.email || "",
+        emergency_contact_name: currentUser.emergency_contact_name || "",
+        emergency_contact_phone: currentUser.emergency_contact_phone || "",
         line_avatar_url: currentUser.line_avatar_url || "",
         password: "",
       })
@@ -206,6 +210,26 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
             onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
             className="w-full p-3 rounded-lg theme-input outline-none"
             required
+          />
+        </div>
+        <div>
+          <label className="block text-[var(--theme-text-primary)] mb-2">緊急聯絡人姓名</label>
+          <input
+            type="text"
+            value={profileForm.emergency_contact_name || ""}
+            onChange={(e) => setProfileForm({ ...profileForm, emergency_contact_name: e.target.value })}
+            className="w-full p-3 rounded-lg theme-input outline-none"
+            placeholder="請輸入緊急聯絡人姓名"
+          />
+        </div>
+        <div>
+          <label className="block text-[var(--theme-text-primary)] mb-2">緊急聯絡人電話</label>
+          <input
+            type="tel"
+            value={profileForm.emergency_contact_phone || ""}
+            onChange={(e) => setProfileForm({ ...profileForm, emergency_contact_phone: e.target.value })}
+            className="w-full p-3 rounded-lg theme-input outline-none"
+            placeholder="請輸入緊急聯絡人電話"
           />
         </div>
         <div>

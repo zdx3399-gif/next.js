@@ -99,11 +99,19 @@ export async function createVote(vote: {
   created_by?: string
 }): Promise<Vote | null> {
   try {
-    const res = await fetch("/api/votes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "create", ...vote }),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000) // 15 秒超時
+    let res: Response
+    try {
+      res = await fetch("/api/votes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", ...vote }),
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
 
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {

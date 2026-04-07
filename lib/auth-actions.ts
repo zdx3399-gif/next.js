@@ -190,6 +190,8 @@ export async function registerUser(
   unitNumber: string,
   role: UserRole,
   relationship: string,
+  emergencyContactName?: string,
+  emergencyContactPhone?: string,
 ) {
   try {
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
@@ -201,7 +203,17 @@ export async function registerUser(
     }
 
     console.log(`[v0] Registering user:`, normalizedEmail)
-    console.log("[v0] Input data:", { email: normalizedEmail, name, phone, unitNumber, role, relationship, tenantId })
+    console.log("[v0] Input data:", {
+      email: normalizedEmail,
+      name,
+      phone,
+      unitNumber,
+      role,
+      relationship,
+      tenantId,
+      emergencyContactName,
+      emergencyContactPhone,
+    })
 
     const config = validateTenantConfig(tenantId)
     const supabase = createClient(config.url, config.anonKey)
@@ -257,6 +269,8 @@ export async function registerUser(
           status: "active",
           tenant_id: tenantId,
           unit_id: unitId,
+          emergency_contact_name: emergencyContactName || null,
+          emergency_contact_phone: emergencyContactPhone || null,
         },
       ])
       .select("*")

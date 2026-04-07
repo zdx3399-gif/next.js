@@ -100,6 +100,8 @@ export default function AuthPage() {
     const unit = formData.get("unit") as string
     const role = formData.get("role") as UserRole
     const relationship = formData.get("relationship") as string
+    const emergencyContactName = formData.get("emergency_contact_name") as string
+    const emergencyContactPhone = formData.get("emergency_contact_phone") as string
     const tenantId = formData.get("tenant") as TenantId
 
     if (!tenantId) {
@@ -109,7 +111,18 @@ export default function AuthPage() {
     }
 
     try {
-      const result = await registerUser(tenantId, email, password, name, phone, unit, role, relationship)
+      const result = await registerUser(
+        tenantId,
+        email,
+        password,
+        name,
+        phone,
+        unit,
+        role,
+        relationship,
+        emergencyContactName,
+        emergencyContactPhone,
+      )
 
       if (!result.success) {
         throw new Error(result.error)
@@ -336,6 +349,28 @@ export default function AuthPage() {
                 <option value="household_member">住戶成員</option>
                 <option value="tenant">租客</option>
               </select>
+            </div>
+            <div className="mb-6">
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                緊急聯絡人姓名
+              </label>
+              <input
+                type="text"
+                name="emergency_contact_name"
+                placeholder="請輸入緊急聯絡人姓名"
+                className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
+              />
+            </div>
+            <div className="mb-6">
+              <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                緊急聯絡人電話
+              </label>
+              <input
+                type="tel"
+                name="emergency_contact_phone"
+                placeholder="請輸入緊急聯絡人電話"
+                className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
+              />
             </div>
             <button
               type="submit"

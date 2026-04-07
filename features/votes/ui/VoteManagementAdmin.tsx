@@ -88,9 +88,14 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
     }
 
     setLoading(true)
-    const result = await fetchVotes({ scope: "all", withResults: true })
-    setVoteHistory(result.votes)
-    setLoading(false)
+    try {
+      const result = await fetchVotes({ scope: "all", withResults: true })
+      setVoteHistory(result.votes)
+    } catch (err) {
+      console.error("loadHistory failed:", err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -121,19 +126,21 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
     }
 
     setLoading(true)
-
-    const vote = await createVote({
-      title: formData.title.trim(),
-      description: formData.description.trim(),
-      ends_at: new Date(formData.endDate).toISOString(),
-      mode: activeTab,
-      external_url: activeTab === "external" ? formData.externalUrl.trim() : undefined,
-      options: activeTab === "internal" ? parsedOptions : [],
-      author: currentUser?.name || "管委會",
-      created_by: currentUser?.id,
-    })
-
-    setLoading(false)
+    let vote = null
+    try {
+      vote = await createVote({
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        ends_at: new Date(formData.endDate).toISOString(),
+        mode: activeTab,
+        external_url: activeTab === "external" ? formData.externalUrl.trim() : undefined,
+        options: activeTab === "internal" ? parsedOptions : [],
+        author: currentUser?.name || "管委會",
+        created_by: currentUser?.id,
+      })
+    } finally {
+      setLoading(false)
+    }
 
     if (!vote) {
       alert("建立投票失敗")

@@ -6,6 +6,8 @@ export interface ProfileData {
   room?: string // 加入 room 欄位用於表單顯示
   phone: string
   email: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
   line_avatar_url?: string
   password?: string
 }
@@ -24,6 +26,8 @@ export interface User {
   car_spots?: number
   moto_spots?: number
   monthly_fee?: number
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
   line_avatar_url?: string
 }
 
@@ -35,6 +39,8 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     name: data.name,
     phone: data.phone,
     email: data.email,
+    emergency_contact_name: data.emergency_contact_name,
+    emergency_contact_phone: data.emergency_contact_phone,
   }
 
   if (data.line_avatar_url !== undefined) {
@@ -78,6 +84,8 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     car_spots: profile.units?.car_spots,
     moto_spots: profile.units?.moto_spots,
     monthly_fee: profile.units?.monthly_fee,
+    emergency_contact_name: profile.emergency_contact_name || undefined,
+    emergency_contact_phone: profile.emergency_contact_phone || undefined,
     line_avatar_url: profile.line_avatar_url || undefined,
   }
 }
@@ -111,6 +119,8 @@ export async function getProfile(userId: string): Promise<User | null> {
     car_spots: data.units?.car_spots,
     moto_spots: data.units?.moto_spots,
     monthly_fee: data.units?.monthly_fee,
+    emergency_contact_name: data.emergency_contact_name || undefined,
+    emergency_contact_phone: data.emergency_contact_phone || undefined,
     line_avatar_url: data.line_avatar_url || undefined,
   }
 }

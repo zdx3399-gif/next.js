@@ -29,6 +29,7 @@ interface FinanceListProps {
 
 export function FinanceList({ userRoom }: FinanceListProps) {
   const { records, loading } = useFinance(userRoom)
+  const { records: allRecords, loading: allLoading } = useFinance()
   const [activeTab, setActiveTab] = useState<TabType>("income")
   const [expenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES)
 
@@ -50,9 +51,12 @@ export function FinanceList({ userRoom }: FinanceListProps) {
     )
   }
 
+  const totalIncome = allRecords.filter((r) => r.paid).reduce((sum, r) => sum + (r.amount || 0), 0)
+  const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0)
+
   const reportData = {
-    totalIncome: records.reduce((sum, r) => sum + (r.amount || 0), 0),
-    totalExpense: expenses.reduce((sum, e) => sum + e.amount, 0),
+    totalIncome,
+    totalExpense,
     get netIncome() {
       return this.totalIncome - this.totalExpense
     },
@@ -61,16 +65,17 @@ export function FinanceList({ userRoom }: FinanceListProps) {
       expenses.forEach((e) => {
         categories[e.category] = (categories[e.category] || 0) + e.amount
       })
-      const total = Object.values(categories).reduce((a, b) => a + b, 0)
       return Object.entries(categories).map(([name, value]) => ({
         name,
         value,
-        percent: total > 0 ? Math.round((value / total) * 100) : 0,
+        percent: totalExpense > 0 ? (value / totalExpense) * 100 : 0,
       }))
     })(),
   }
 
-  if (loading) {
+  const isPageLoading = activeTab === "report" ? loading || allLoading : loading
+
+  if (isPageLoading) {
     return (
       <div className="flex justify-center items-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[var(--theme-accent)]"></div>

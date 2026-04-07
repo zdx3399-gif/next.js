@@ -86,6 +86,7 @@ export function useFinanceAdmin() {
     } else {
       console.log("[v0] Creating new record")
       const result = await createFinanceRecord({
+        room: record.room,
         amount: record.amount,
         due: record.due,
         invoice: record.invoice,

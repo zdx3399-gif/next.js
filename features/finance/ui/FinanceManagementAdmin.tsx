@@ -6,7 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { RefreshCw, Plus, Search } from "lucide-react"
+import { RefreshCw, Plus, Search, Bell } from "lucide-react"
 
 // --- Types ---
 interface FinanceRecord {
@@ -153,20 +153,6 @@ function FinanceFormModal({ isOpen, onClose, formData, onChange, onSave, isEditi
                 ))}
               </select>
             )}
-          </div>
-
-          <div>
-            <label className="block text-[var(--theme-text-primary)] font-medium mb-2 flex items-center gap-2">
-              每月管理費 <span className="text-xs text-[var(--theme-text-secondary)]">(將更新該房號的管理費設定)</span>
-              <HelpHint title="管理端每月管理費" description="更新後會影響該房號後續收費基準。" workflow={["確認住戶最新管理費標準。","輸入新金額並儲存。","後續新增收費時會沿用此基準。"]} logic={["此欄為長期基準值，不只影響單筆資料。"]} align="center" />
-            </label>
-            <input
-              type="number"
-              value={formData.monthly_fee || 0}
-              onChange={(e) => onChange("monthly_fee", Number(e.target.value))}
-              className="w-full p-3 rounded-xl theme-input outline-none font-semibold"
-              placeholder="輸入每月管理費"
-            />
           </div>
 
           <div className="bg-[var(--theme-accent-light)] p-3 rounded-xl space-y-2 border border-[var(--theme-border)]">
@@ -385,6 +371,7 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
   const [activeTab, setActiveTab] = useState<TabType>("income")
   const [expenses, setExpenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES)
   const [searchTerm, setSearchTerm] = useState("")
+  const [remindingId, setRemindingId] = useState<string | null>(null)
 
   // Income State
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false)
@@ -464,6 +451,7 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
       const recordToSave = {
         ...records[incomeEditingIndex],
         ...incomeFormData,
+        monthly_fee: incomeFormData.amount,
       }
       console.log("[v0] Saving updated record:", recordToSave)
       const success = await saveRecord(recordToSave, incomeEditingIndex)
@@ -474,7 +462,10 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
       }
     } else {
       console.log("[v0] Creating new record:", incomeFormData)
-      const success = await saveRecord({ ...incomeFormData, id: undefined }, records.length)
+      const success = await saveRecord(
+        { ...incomeFormData, id: undefined, monthly_fee: incomeFormData.amount },
+        records.length,
+      )
       if (success) {
         console.log("[v0] Create successful, refreshing...")
       } else {
@@ -482,6 +473,28 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
       }
     }
     setIsIncomeModalOpen(false)
+  }
+
+  const handleRemindFee = async (feeId: string) => {
+    try {
+      setRemindingId(feeId)
+      const res = await fetch("/api/remind-fee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feeId }),
+      })
+
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(payload?.error || "催繳通知發送失敗")
+      }
+
+      alert("催繳通知已送出")
+    } catch (error: any) {
+      alert(error?.message || "催繳通知發送失敗")
+    } finally {
+      setRemindingId(null)
+    }
   }
 
   // --- Handlers: Expense ---
@@ -603,6 +616,16 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
                         >
                           <span className="material-icons text-lg">edit</span>
                         </button>
+                        {!row.paid && row.id && (
+                          <button
+                            onClick={() => handleRemindFee(row.id!)}
+                            disabled={remindingId === row.id}
+                            className="p-2 rounded-lg border border-amber-400 text-amber-600 hover:bg-amber-50 transition-all disabled:opacity-60"
+                            title="催繳"
+                          >
+                            <Bell className="w-4 h-4" />
+                          </button>
+                        )}
                         {row.id && (
                           <button
                             onClick={() => deleteRecord(row.id!)}

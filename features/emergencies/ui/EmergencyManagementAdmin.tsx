@@ -28,7 +28,7 @@ const PREVIEW_EMERGENCIES = [
 ]
 
 export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPreviewMode = false }: EmergencyManagementAdminProps) {
-  const { emergencies: realEmergencies, confirmAndTrigger, editEmergency, deleteEmergency, reload } = useEmergencies(true)
+  const { emergencies: realEmergencies, loading, confirmAndTrigger, editEmergency, deleteEmergency, reload } = useEmergencies(true)
 
   // 預覽模式使用模擬資料
   const emergencies = isPreviewMode ? PREVIEW_EMERGENCIES : realEmergencies

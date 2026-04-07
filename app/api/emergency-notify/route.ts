@@ -6,26 +6,28 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 function getSupabase() {
-  const url = process.env.SUPABASE_URL
-  const anonKey = process.env.SUPABASE_ANON_KEY
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!url || !anonKey) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY")
+  const dbKey = serviceRoleKey || anonKey
+
+  if (!url || !dbKey) {
+    throw new Error("Missing Supabase env. Require SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL and service/anon key")
   }
 
-  return createClient(url, serviceRoleKey || anonKey)
+  return createClient(url, dbKey)
 }
 
 function getLineClient() {
   const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
   const channelSecret = process.env.LINE_CHANNEL_SECRET
 
-  if (!channelAccessToken || !channelSecret) {
-    throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN or LINE_CHANNEL_SECRET")
+  if (!channelAccessToken) {
+    throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN")
   }
 
-  return new Client({ channelAccessToken, channelSecret })
+  return new Client({ channelAccessToken, channelSecret: channelSecret || "unused" })
 }
 
 async function getEmergencyLineTargets(supabase: any) {
@@ -145,10 +147,12 @@ export async function POST(req: NextRequest) {
     let lineSent = 0
     let lineFailed = 0
     let lineError = ""
+    let lineTargetCount = 0
 
     try {
       const lineClient = getLineClient()
       const lineTargets = await getEmergencyLineTargets(supabase)
+      lineTargetCount = lineTargets.length
 
       const message =
         `🚨 緊急事件通知\n` +
@@ -169,17 +173,24 @@ export async function POST(req: NextRequest) {
       lineError = err instanceof Error ? err.message : "LINE 通知失敗"
     }
 
-    return NextResponse.json({
-      success: true,
-      emergencyId: insertedEmergency?.id,
-      reportedById: reportedById || undefined,
-      reportedByName: resolvedReportedByName || "未知",
-      iotSent,
-      iotError: iotError || undefined,
-      lineSent,
-      lineFailed,
-      lineError: lineError || undefined,
-    })
+    const lineDeliveryOk = !lineError && (lineTargetCount === 0 || lineSent > 0)
+    const responseStatus = lineDeliveryOk ? 200 : 502
+
+    return NextResponse.json(
+      {
+        success: lineDeliveryOk,
+        emergencyId: insertedEmergency?.id,
+        reportedById: reportedById || undefined,
+        reportedByName: resolvedReportedByName || "未知",
+        iotSent,
+        iotError: iotError || undefined,
+        lineTargetCount,
+        lineSent,
+        lineFailed,
+        lineError: lineError || (lineDeliveryOk ? undefined : "LINE 完全未送達"),
+      },
+      { status: responseStatus },
+    )
   } catch (err: unknown) {
     return NextResponse.json(
       {

@@ -6,7 +6,7 @@ import 'dotenv/config';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 );
 
 export const runtime = 'nodejs';
@@ -88,8 +88,6 @@ export async function POST(req) {
           line_display_name: profile.displayName || '',
           line_avatar_url: profile.pictureUrl || '',
           line_status_message: profile.statusMessage || '',
-          email: userId + '@line.local', // 預設 email
-          password: userId, // 預設密碼（可自行加密或亂數）
           updated_at: new Date().toISOString(),
         };
         if (existingProfile?.id) upsertProfile.id = existingProfile.id;

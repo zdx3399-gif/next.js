@@ -32,41 +32,23 @@ function getLineClient() {
 
 async function getEmergencyLineTargets(supabase: any) {
   const lineUserIds = new Set<string>()
+  let totalTargets = 0
+  let boundTargets = 0
 
   const { data: roleProfiles } = await supabase
     .from("profiles")
     .select("id, line_user_id")
     .in("role", ["admin", "guard", "committee"])
 
-  const roleProfileIds = (roleProfiles || []).map((p: any) => p.id).filter(Boolean)
+  totalTargets = (roleProfiles || []).length
   ;(roleProfiles || []).forEach((p: any) => {
-    if (p?.line_user_id) lineUserIds.add(p.line_user_id)
+    if (p?.line_user_id) {
+      lineUserIds.add(p.line_user_id)
+      boundTargets++
+    }
   })
 
-  if (roleProfileIds.length > 0) {
-    const { data: linkedLineUsers } = await supabase
-      .from("line_users")
-      .select("line_user_id, profile_id")
-      .in("profile_id", roleProfileIds)
-
-    ;(linkedLineUsers || []).forEach((u: any) => {
-      if (u?.line_user_id) lineUserIds.add(u.line_user_id)
-    })
-  }
-
-  if (lineUserIds.size === 0) {
-    const { data: fallbackAllLineUsers } = await supabase
-      .from("line_users")
-      .select("line_user_id")
-      .not("line_user_id", "is", null)
-      .limit(20)
-
-    ;(fallbackAllLineUsers || []).forEach((u: any) => {
-      if (u?.line_user_id) lineUserIds.add(u.line_user_id)
-    })
-  }
-
-  return [...lineUserIds]
+  return { ids: [...lineUserIds], bound: boundTargets, total: totalTargets }
 }
 
 export async function POST(req: NextRequest) {
@@ -151,7 +133,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const lineClient = getLineClient()
-      const lineTargets = await getEmergencyLineTargets(supabase)
+      const { ids: lineTargets, bound: boundCount, total: totalCount } = await getEmergencyLineTargets(supabase)
       lineTargetCount = lineTargets.length
 
       const message =
@@ -175,6 +157,7 @@ export async function POST(req: NextRequest) {
 
     const lineDeliveryOk = !lineError && (lineTargetCount === 0 || lineSent > 0)
     const responseStatus = lineDeliveryOk ? 200 : 502
+    const lineNotBound = lineTargetCount - lineSent
 
     return NextResponse.json(
       {
@@ -184,10 +167,12 @@ export async function POST(req: NextRequest) {
         reportedByName: resolvedReportedByName || "未知",
         iotSent,
         iotError: iotError || undefined,
-        lineTargetCount,
         lineSent,
+        lineSkipped: lineNotBound,
         lineFailed,
-        lineError: lineError || (lineDeliveryOk ? undefined : "LINE 完全未送達"),
+        lineMessage: lineDeliveryOk && lineSent > 0
+          ? `✅ 緊急通知已推播\n已發送給 ${lineSent} 位管理員${lineNotBound > 0 ? `\n（${lineNotBound} 人 LINE 未綁定，已跳過）` : ''}`
+          : `❌ 推播失敗\n${lineError}`,
       },
       { status: responseStatus },
     )

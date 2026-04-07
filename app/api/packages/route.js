@@ -50,26 +50,9 @@ async function findLineUserByUnit(supabase, unitId) {
         };
       }
 
-      const profileIds = directProfiles.map((p) => p.id).filter(Boolean);
-      if (profileIds.length > 0) {
-        const { data: lineUsers, error: lineUsersError } = await supabase
-          .from("line_users")
-          .select("line_user_id, display_name, profile_id")
-          .in("profile_id", profileIds);
-
-        if (lineUsersError) throw lineUsersError;
-
-        const lineUser = (lineUsers || []).find((u) => u.line_user_id);
-        if (lineUser) {
-          return {
-            lineUserId: lineUser.line_user_id,
-            lineDisplayName: lineUser.display_name || null,
-          };
-        }
-      }
     }
   } catch (e) {
-    console.warn("[LINE] profiles/line_users lookup failed:", e);
+    console.warn("[LINE] profiles lookup failed:", e);
   }
 
   // Strategy 2: household_members -> profiles
@@ -100,20 +83,6 @@ async function findLineUserByUnit(supabase, unitId) {
         };
       }
 
-      const { data: lineUsers, error: lineUsersError } = await supabase
-        .from("line_users")
-        .select("line_user_id, display_name, profile_id")
-        .in("profile_id", profileIds);
-
-      if (lineUsersError) throw lineUsersError;
-
-      const lineUser = (lineUsers || []).find((u) => u.line_user_id);
-      if (lineUser) {
-        return {
-          lineUserId: lineUser.line_user_id,
-          lineDisplayName: lineUser.display_name || null,
-        };
-      }
     }
   } catch (e) {
     console.warn("[LINE] household_members lookup failed:", e);
@@ -320,7 +289,11 @@ export async function POST(req) {
       console.warn(`[LINE] Please ask the resident to bind LINE account via /bind-line page`)
     }
 
-    return Response.json({ success: true, id: insertedPackage?.id });
+    return Response.json({ 
+      success: true, 
+      id: insertedPackage?.id,
+      message: "✅ 包裹建立成功"
+    });
   } catch (err) {
     console.error("[packages] POST error:", err);
     return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 });
@@ -372,7 +345,10 @@ export async function PUT(req) {
 
     if (error) throw error;
 
-    return Response.json({ success: true });
+    return Response.json({ 
+      success: true,
+      message: "✅ 包裹已更新"
+    });
   } catch (err) {
     console.error("[packages] PUT error:", err);
     return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 });
@@ -407,7 +383,10 @@ export async function DELETE(req) {
     const { error } = await supabase.from("packages").delete().eq("id", id);
     if (error) throw error;
 
-    return Response.json({ success: true });
+    return Response.json({ 
+      success: true,
+      message: "✅ 包裹已刪除"
+    });
   } catch (err) {
     console.error("[packages] DELETE error:", err);
     return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 });
@@ -545,7 +524,10 @@ export async function PATCH(req) {
       }
     }
 
-    return Response.json({ success: true });
+    return Response.json({ 
+      success: true,
+      message: "✅ 包裹已領取"
+    });
   } catch (err) {
     console.error("[packages] PATCH error:", err);
     return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 });

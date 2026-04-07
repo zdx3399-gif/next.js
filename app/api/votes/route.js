@@ -44,18 +44,7 @@ async function getAllLineUserIds(supabase) {
     console.warn("[Votes] profiles lookup failed:", e);
   }
 
-  try {
-    const { data: lineUsers } = await supabase
-      .from("line_users")
-      .select("line_user_id")
-      .not("line_user_id", "is", null);
-    (lineUsers || []).forEach((u) => {
-      if (u.line_user_id) lineUserIds.add(u.line_user_id);
-    });
-  } catch (e) {
-    console.warn("[Votes] line_users lookup failed:", e);
-  }
-
+  // line_users 已整併至 profiles，無需額外查詢
   return [...lineUserIds];
 }
 
@@ -181,17 +170,17 @@ async function handleVoteFromLineMessage({ supabase, body }) {
   const vote_id = voteExists.id;
 
   const { data: userProfile, error: userError } = await supabase
-    .from("line_users")
-    .select("display_name, profile_id")
+    .from("profiles")
+    .select("id, line_display_name, name")
     .eq("line_user_id", line_user_id)
     .single();
 
-  if (userError || !userProfile || !userProfile.profile_id) {
-    return Response.json({ error: "找不到住戶資料" }, { status: 400 });
+  if (userError || !userProfile || !userProfile.id) {
+    return Response.json({ error: "找不到住戸資料" }, { status: 400 });
   }
 
-  const user_id = userProfile.profile_id;
-  const user_name = userProfile.display_name;
+  const user_id = userProfile.id;
+  const user_name = userProfile.line_display_name || userProfile.name;
 
   const { data: existingVote, error: existingVoteErr } = await supabase
     .from("vote_records")
@@ -222,7 +211,12 @@ async function handleVoteFromLineMessage({ supabase, body }) {
     return Response.json({ error: "投票失敗", details: recordError.message }, { status: 500 });
   }
 
-  return Response.json({ success: true, message: `確認，您的投票結果為「${option_selected}」` });
+  return Response.json({ 
+    success: true, 
+    sent: 1,
+    skipped: 0,
+    message: `✅ 投票成功\n您的投票結果為「${option_selected}」`
+  });
 }
 
 async function handleSubmitVote({ supabase, body }) {
@@ -278,7 +272,12 @@ async function handleSubmitVote({ supabase, body }) {
     return Response.json({ error: "投票失敗", details: insertError.message }, { status: 500 });
   }
 
-  return Response.json({ success: true });
+  return Response.json({ 
+    success: true,
+    sent: 1,
+    skipped: 0,
+    message: "✅ 您的投票已記錄"
+  });
 }
 
 async function handleCreateVote({ supabase, body }) {
@@ -290,8 +289,9 @@ async function handleCreateVote({ supabase, body }) {
 
   const finalMode = mode === "external" ? "external" : "internal";
   const normalizedOptions = normalizeOptions(options);
+  const normalizedExternalUrl = typeof external_url === "string" ? external_url.trim() : "";
 
-  if (finalMode === "external" && !external_url) {
+  if (finalMode === "external" && !normalizedExternalUrl) {
     return Response.json({ error: "連結模式需要 external_url" }, { status: 400 });
   }
 
@@ -303,7 +303,7 @@ async function handleCreateVote({ supabase, body }) {
     finalMode === "external"
       ? {
           type: "external",
-          external_url,
+          external_url: normalizedExternalUrl,
           options: [],
         }
       : normalizedOptions;
@@ -314,6 +314,9 @@ async function handleCreateVote({ supabase, body }) {
     title,
     description: description || "",
     options: dbOptions,
+    // 提供 LINE Bot 直接從欄位讀取外部連結，不必解析 options JSON
+    vote_url: finalMode === "external" ? normalizedExternalUrl : null,
+    form_url: finalMode === "external" ? normalizedExternalUrl : null,
     created_at: new Date().toISOString(),
     ends_at,
     status: "active",
@@ -367,7 +370,14 @@ async function handleCreateVote({ supabase, body }) {
   }
 
   if (test === true) {
-    return Response.json({ success: true, vote: mapVoteRow(inserted), pushed: 0, failed: 0 });
+    return Response.json({ 
+      success: true, 
+      vote: mapVoteRow(inserted), 
+      sent: 0, 
+      skipped: 0,
+      total: 0,
+      message: "✅ 投票已建立（測試模式，未推播）" 
+    });
   }
 
   let client;
@@ -375,19 +385,33 @@ async function handleCreateVote({ supabase, body }) {
     client = getLineClient();
   } catch (lineErr) {
     console.warn("[Votes] LINE client not available, skip push:", lineErr?.message);
-    return Response.json({ success: true, vote: mapVoteRow(inserted), pushed: 0, failed: 0 });
+    return Response.json({ 
+      success: true, 
+      vote: mapVoteRow(inserted), 
+      sent: 0, 
+      skipped: 0,
+      total: 0,
+      message: "✅ 投票已建立（LINE 客戶端未建立，未推播）" 
+    });
   }
 
   const lineUserIds = await getAllLineUserIds(supabase);
   if (lineUserIds.length === 0) {
-    return Response.json({ success: true, vote: mapVoteRow(inserted), pushed: 0, failed: 0 });
+    return Response.json({ 
+      success: true, 
+      vote: mapVoteRow(inserted), 
+      sent: 0, 
+      skipped: 0,
+      total: 0,
+      message: "✅ 投票已建立（無住戶綁定 LINE）" 
+    });
   }
 
   const internalVoteLink = `${getSystemBaseUrl()}/dashboard`;
 
   const text =
     finalMode === "external"
-      ? `📢 新問卷通知\n標題：${title}\n截止時間：${formatLineDateTime(ends_at)}\n請點擊下方連結填寫：\n${external_url}`
+      ? `📢 新問卷通知\n標題：${title}\n截止時間：${formatLineDateTime(ends_at)}\n請點擊下方連結填寫：\n${normalizedExternalUrl}`
       : `📢 新投票通知\n標題：${title}\n截止時間：${formatLineDateTime(ends_at)}\n${description || "請至社區系統參與投票"}\n\n系統投票入口：\n${internalVoteLink}\n(進入後點選「社區投票」)`;
 
   let totalSent = 0;
@@ -401,7 +425,15 @@ async function handleCreateVote({ supabase, body }) {
     }
   }
 
-  return Response.json({ success: true, vote: mapVoteRow(inserted), pushed: totalSent, failed: totalFailed });
+  const total = lineUserIds.length;
+  return Response.json({ 
+    success: true, 
+    vote: mapVoteRow(inserted), 
+    sent: totalSent, 
+    skipped: totalFailed,
+    total: total,
+    message: `✅ 投票已建立\n已發送給 ${totalSent} 位住戶${totalFailed > 0 ? `\n（${totalFailed} 人推播失敗）` : ""}`
+  });
 }
 
 async function handleCloseVote({ supabase, body }) {

@@ -59,6 +59,19 @@ export async function POST(req: Request) {
       )
     }
 
+    const existingLogs = Array.isArray(maintenance.logs) ? maintenance.logs : []
+    const dispatchLog = {
+      type: 'dispatch',
+      at: new Date().toISOString(),
+      vendor_name,
+      worker_name,
+      worker_phone,
+      scheduled_at,
+      estimated_cost: estimated_cost || null,
+      admin_note: admin_note || null,
+      status: 'dispatched'
+    }
+
     // 2) Update maintenance record with dispatch info
     const { error: updateError } = await supabase
       .from('maintenance')
@@ -70,7 +83,8 @@ export async function POST(req: Request) {
         estimated_cost: estimated_cost || null,
         admin_note: admin_note || null,
         status: 'progress',
-        dispatched_at: new Date().toISOString()
+        dispatched_at: new Date().toISOString(),
+        logs: [...existingLogs, dispatchLog]
       })
       .eq('id', maintenanceId)
 
@@ -82,26 +96,7 @@ export async function POST(req: Request) {
       )
     }
 
-    // 3) Create dispatch record for history tracking
-    const { error: dispatchError } = await supabase
-      .from('maintenance_dispatches')
-      .insert({
-        maintenance_id: maintenanceId,
-        vendor_name,
-        worker_name,
-        worker_phone,
-        scheduled_at,
-        estimated_cost: estimated_cost || null,
-        admin_note: admin_note || null,
-        status: 'dispatched'
-      })
-
-    if (dispatchError) {
-      // Log but don't fail - dispatch table might not exist
-      console.warn('記錄派工歷史失敗 (可忽略):', dispatchError.message)
-    }
-
-    // 4) Find reporter's LINE user ID
+    // 3) Find reporter's LINE user ID
     let lineUserId: string | null = null
     let residentName = maintenance.reported_by_name || '住戶'
 
@@ -130,7 +125,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5) Send LINE notification if user has LINE bound
+    // 4) Send LINE notification if user has LINE bound
     let lineNotificationSent = false
     let lineError: string | null = null
 

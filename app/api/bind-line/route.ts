@@ -6,10 +6,10 @@ import { Client } from '@line/bot-sdk'; // 引入 LINE Bot SDK
 
 export async function POST(req: NextRequest) {
   try {
-    // Supabase 初始化
+    // Supabase 初始化（需要 service role key 以繞過 RLS 更新 profiles）
     const supabase = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!
+      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)!
     );
 
     const {
@@ -85,30 +85,6 @@ export async function POST(req: NextRequest) {
         },
         { status: 409 }
       );
-    }
-
-    // ==========================================
-    // 🔥 新增功能 1: 同步寫入 line_users 資料表
-    // ==========================================
-    const { error: lineUserDbError } = await supabase
-      .from('line_users')
-      .upsert(
-        [
-          {
-            line_user_id: line_user_id,
-            profile_id: profile_id,
-            display_name: line_display_name,
-            avatar_url: line_avatar_url,
-            status_message: line_status_message || "",
-            updated_at: new Date().toISOString()
-          },
-        ],
-        { onConflict: 'line_user_id' }
-      );
-
-    if (lineUserDbError) {
-      console.error("❌ 無法寫入 line_users 資料表:", lineUserDbError);
-      return NextResponse.json({ success: false, message: "資料庫寫入失敗 (line_users)" }, { status: 500 });
     }
 
     // 4. 更新 profiles，綁定 LINE 資訊
@@ -209,10 +185,10 @@ export async function POST(req: NextRequest) {
 // 解除 LINE 綁定 API
 export async function DELETE(req: NextRequest) {
   try {
-    // Supabase 初始化
+    // Supabase 初始化（解除綁定也使用 service role，確保可更新 profiles）
     const supabase = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!
+      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY)!
     );
 
     const { profile_id } = await req.json();
@@ -247,12 +223,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // 2. (選用) 如果你也想從 line_users 表中刪除該紀錄，可以解除下方的註解
-    /*
-    if (profile.line_user_id) {
-       await supabase.from('line_users').delete().eq('line_user_id', profile.line_user_id);
-    }
-    */
+     // line_users 已改為相容層，不再作為主寫入表，這裡只維護 profiles。
 
     console.log('✅ LINE 綁定已解除:', profile.email);
 

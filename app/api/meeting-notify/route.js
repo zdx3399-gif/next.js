@@ -39,18 +39,7 @@ async function getAllLineUserIds(supabase) {
     console.warn("[Meeting] profiles lookup failed:", e);
   }
 
-  try {
-    const { data: lineUsers } = await supabase
-      .from("line_users")
-      .select("line_user_id")
-      .not("line_user_id", "is", null);
-    (lineUsers || []).forEach((u) => {
-      if (u.line_user_id) lineUserIds.add(u.line_user_id);
-    });
-  } catch (e) {
-    console.warn("[Meeting] line_users lookup failed:", e);
-  }
-
+  // line_users 已整併至 profiles，無需額外查詢
   return [...lineUserIds];
 }
 
@@ -116,7 +105,13 @@ export async function POST(req) {
 
     if (lineUserIds.length === 0) {
       console.error('[Meeting] 完全查不到，無法推播');
-      return NextResponse.json({ message: '會議已建立，但無已綁定 LINE 的住戶可推播', pushed: 0 });
+      return NextResponse.json({ 
+        success: true,
+        sent: 0,
+        skipped: 0,
+        total: 0,
+        message: '✅ 會議已建立，但無已綁定 LINE 的住戶可推播' 
+      });
     }
 
     // 逐個推送給每位住戶
@@ -137,7 +132,14 @@ export async function POST(req) {
     }
 
     console.log(`[Meeting] 推播完成 - 成功: ${totalSent}, 失敗: ${totalFailed}`);
-    return NextResponse.json({ message: '會議通知已發送', pushed: totalSent, failed: totalFailed });
+    const total = lineUserIds.length;
+    return NextResponse.json({ 
+      success: true,
+      sent: totalSent, 
+      skipped: totalFailed,
+      total: total,
+      message: `✅ 會議通知已發送\n已發送給 ${totalSent} 位住戶${totalFailed > 0 ? `\n（${totalFailed} 人推播失敗）` : ""}`
+    });
   } catch (error) {
     console.error('Error in meeting notify:', error);
     return NextResponse.json({ error: '伺服器錯誤' }, { status: 500 });

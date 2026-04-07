@@ -44,21 +44,6 @@ async function findLineUserByUnit(supabase, unitId) {
         }
       }
 
-      const profileIds = directProfiles.map((p) => p.id).filter(Boolean)
-      if (profileIds.length > 0) {
-        const { data: lineUsers } = await supabase
-          .from("line_users")
-          .select("line_user_id, display_name, profile_id")
-          .in("profile_id", profileIds)
-
-        const lineUser = (lineUsers || []).find((u) => u.line_user_id)
-        if (lineUser) {
-          return {
-            lineUserId: lineUser.line_user_id,
-            lineDisplayName: lineUser.display_name,
-          }
-        }
-      }
     }
   } catch (e) {
     console.warn("[Visitor LINE] profiles lookup failed:", e)
@@ -86,18 +71,6 @@ async function findLineUserByUnit(supabase, unitId) {
         }
       }
 
-      const { data: lineUsers } = await supabase
-        .from("line_users")
-        .select("line_user_id, display_name, profile_id")
-        .in("profile_id", profileIds)
-
-      const lineUser = (lineUsers || []).find((u) => u.line_user_id)
-      if (lineUser) {
-        return {
-          lineUserId: lineUser.line_user_id,
-          lineDisplayName: lineUser.display_name,
-        }
-      }
     }
   } catch (e) {
     console.warn("[Visitor LINE] household_members lookup failed:", e)
@@ -220,7 +193,11 @@ export async function POST(req) {
       }
     }
 
-    return Response.json({ success: true, id: visitor.id })
+    return Response.json({ 
+      success: true, 
+      id: visitor.id,
+      message: "✅ 訪客預約成功"
+    })
   } catch (err) {
     console.error("[visitor] POST error:", err)
     return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 })
@@ -328,7 +305,10 @@ export async function PATCH(req) {
       }
     }
 
-    return Response.json({ success: true })
+    return Response.json({ 
+      success: true,
+      message: `✅ 訪客${actionText}成功`
+    })
   } catch (err) {
     console.error("[visitor] PATCH error:", err)
     return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 })

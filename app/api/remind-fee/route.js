@@ -67,21 +67,15 @@ export async function POST(req) {
     }
 
     let lineUserId = profile.line_user_id
-    if (!lineUserId) {
-      const { data: lu, error: luErr } = await supabase
-        .from("line_users")
-        .select("line_user_id")
-        .eq("profile_id", profile.id)
-        .maybeSingle()
 
-      if (luErr) {
-        return NextResponse.json({ error: "查詢 LINE 綁定失敗" }, { status: 500 })
-      }
-      lineUserId = lu?.line_user_id
-    }
 
     if (!lineUserId) {
-      return NextResponse.json({ error: "此住戶尚未完成 LINE 綁定" }, { status: 400 })
+      return NextResponse.json({ 
+        success: false, 
+        sent: 0, 
+        skipped: 1, 
+        message: "❌ 推播失敗\n此住戶尚未完成 LINE 綁定"
+      }, { status: 400 })
     }
 
     const text =
@@ -108,12 +102,22 @@ export async function POST(req) {
 
     if (!resp.ok) {
       const errText = await resp.text()
-      return NextResponse.json({ error: "LINE 推播失敗", detail: errText }, { status: 500 })
+      return NextResponse.json({ 
+        success: false, 
+        sent: 0, 
+        skipped: 0, 
+        message: `❌ LINE 推播失敗\n${errText || "未知錯誤"}`
+      }, { status: 500 })
     }
 
     await supabase.from("fees").update({ updated_at: new Date().toISOString() }).eq("id", fee.id)
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ 
+      success: true, 
+      sent: 1, 
+      skipped: 0, 
+      message: `✅ 催繳通知已推播\n已發送給 ${profile.name || "住戶"}`
+    })
   } catch (e) {
     return NextResponse.json({ error: e?.message || "伺服器錯誤" }, { status: 500 })
   }

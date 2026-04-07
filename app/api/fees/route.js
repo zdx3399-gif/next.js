@@ -51,15 +51,7 @@ async function resolveLineUserId(supabase, unitId) {
 
   if (profile?.line_user_id) return profile.line_user_id
 
-  const { data: profileByJoin } = await supabase
-    .from("line_users")
-    .select("line_user_id, profile:profiles!line_users_profile_id_fkey(unit_id)")
-    .eq("profile.unit_id", unitId)
-    .not("line_user_id", "is", null)
-    .limit(1)
-
-  if (profileByJoin && profileByJoin.length > 0) return profileByJoin[0].line_user_id
-
+  // line_users 已整併至 profiles，直接回傳 null
   return null
 }
 
@@ -154,10 +146,18 @@ export async function POST(req) {
       notify = await pushFeeMessage(lineUserId, room, amount, due)
     }
 
+    const sent = notify?.pushed ? 1 : 0
+    const skipped = notify?.pushed ? 0 : 1
     return NextResponse.json({
       success: true,
       record: inserted,
+      sent,
+      skipped,
+      total: 1,
       notify,
+      message: notify?.pushed
+        ? "✅ 管理費已建立並推播成功"
+        : `✅ 管理費已建立\n（1 人未推播：${notify?.reason || "LINE 未綁定"}）`,
     })
   } catch (err) {
     return NextResponse.json(

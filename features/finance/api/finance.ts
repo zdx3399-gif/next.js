@@ -81,28 +81,30 @@ export async function fetchFinanceRecordsByRoom(room: string): Promise<FinanceRe
 export async function createFinanceRecord(
   record: Omit<FinanceRecord, "id" | "created_at">,
 ): Promise<{ success: boolean; error?: string; data?: FinanceRecord }> {
-  const supabase = getSupabaseClient()
-  if (!supabase) return { success: false, error: "Supabase not configured" }
+  try {
+    const response = await fetch("/api/fees", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        room: record.room,
+        amount: record.amount,
+        due: record.due,
+        invoice: record.invoice,
+        paid: record.paid,
+        note: record.note,
+        unit_id: record.unit_id,
+      }),
+    })
 
-  const insertData: Record<string, unknown> = {
-    amount: record.amount,
-    due: record.due,
-    paid: record.paid,
-    invoice: record.invoice,
-    note: record.note,
+    const payload = await response.json().catch(() => null)
+    if (!response.ok || !payload?.success) {
+      return { success: false, error: payload?.error || "建立管理費失敗" }
+    }
+
+    return { success: true, data: payload.record }
+  } catch (err: any) {
+    return { success: false, error: err?.message || "建立管理費失敗" }
   }
-
-  if (record.unit_id) {
-    insertData.unit_id = record.unit_id
-  }
-
-  const { data, error } = await supabase.from("fees").insert([insertData]).select().single()
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  return { success: true, data }
 }
 
 export async function updateFinanceRecord(

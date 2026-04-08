@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { writeServerAuditLog } from '@/lib/audit-server'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -18,6 +19,8 @@ interface CompleteRequest {
   completion_note?: string
   completion_photo_url?: string
   generate_fee?: boolean  // Whether to generate a fee record
+  operatorId?: string | null
+  operatorRole?: string
 }
 
 export async function POST(req: Request) {
@@ -29,10 +32,24 @@ export async function POST(req: Request) {
       final_cost,
       completion_note,
       completion_photo_url,
-      generate_fee = false
+      generate_fee = false,
+      operatorId,
+      operatorRole
     } = body
 
     if (!maintenanceId) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operatorId || undefined,
+        operatorRole: operatorRole || 'unknown',
+        actionType: 'complete_maintenance',
+        targetType: 'maintenance',
+        targetId: 'unknown',
+        reason: '缺少維修單 ID',
+        module: 'maintenance',
+        status: 'blocked',
+        errorCode: 'missing_maintenance_id',
+      })
       return NextResponse.json(
         { error: '缺少維修單 ID' },
         { status: 400 }
@@ -48,6 +65,18 @@ export async function POST(req: Request) {
 
     if (maintError || !maintenance) {
       console.error('查詢維修單失敗:', maintError)
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operatorId || undefined,
+        operatorRole: operatorRole || 'unknown',
+        actionType: 'complete_maintenance',
+        targetType: 'maintenance',
+        targetId: maintenanceId,
+        reason: '找不到該維修單',
+        module: 'maintenance',
+        status: 'blocked',
+        errorCode: 'maintenance_not_found',
+      })
       return NextResponse.json(
         { error: '找不到該維修單' },
         { status: 404 }
@@ -68,6 +97,18 @@ export async function POST(req: Request) {
 
     if (updateError) {
       console.error('更新維修單失敗:', updateError)
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operatorId || undefined,
+        operatorRole: operatorRole || 'unknown',
+        actionType: 'complete_maintenance',
+        targetType: 'maintenance',
+        targetId: maintenanceId,
+        reason: updateError.message,
+        module: 'maintenance',
+        status: 'failed',
+        errorCode: updateError.message,
+      })
       return NextResponse.json(
         { error: '更新維修單失敗: ' + updateError.message },
         { status: 500 }
@@ -102,6 +143,20 @@ export async function POST(req: Request) {
         feeId = feeData?.id
       }
     }
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operatorId || undefined,
+      operatorRole: operatorRole || 'unknown',
+      actionType: 'complete_maintenance',
+      targetType: 'maintenance',
+      targetId: maintenanceId,
+      reason: completion_note || '維修結案',
+      module: 'maintenance',
+      status: 'success',
+      beforeState: { status: maintenance.status || 'progress', estimated_cost: maintenance.estimated_cost || 0 },
+      afterState: { status: 'closed', final_cost: final_cost || maintenance.estimated_cost || 0, fee_generated: feeGenerated, fee_id: feeId },
+    })
 
     // 4) Find reporter's LINE user ID
     let lineUserId: string | null = null

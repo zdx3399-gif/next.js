@@ -69,10 +69,19 @@ export function AuditLogViewer({ currentUser, isPreviewMode = false }: AuditLogV
   const [targetTypeFilter, setTargetTypeFilter] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set())
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalCount, setTotalCount] = useState(0)
+
+  useEffect(() => {
+    setPage(1)
+  }, [actionFilter, targetTypeFilter, startDate, endDate, pageSize])
 
   useEffect(() => {
     loadLogs()
-  }, [actionFilter, targetTypeFilter])
+  }, [actionFilter, targetTypeFilter, page, pageSize, startDate, endDate])
 
   const loadLogs = async () => {
     setLoading(true)
@@ -93,7 +102,10 @@ export function AuditLogViewer({ currentUser, isPreviewMode = false }: AuditLogV
             (log) => log.reason.toLowerCase().includes(q) || log.operator_id.toLowerCase().includes(q),
           )
         }
-        setLogs(filtered)
+        const start = (page - 1) * pageSize
+        const end = start + pageSize
+        setTotalCount(filtered.length)
+        setLogs(filtered.slice(start, end))
         return
       }
 
@@ -104,7 +116,13 @@ export function AuditLogViewer({ currentUser, isPreviewMode = false }: AuditLogV
         return
       }
 
-      let query = supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100)
+      const from = (page - 1) * pageSize
+      const to = from + pageSize - 1
+      let query = supabase
+        .from("audit_logs")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to)
 
       if (actionFilter && actionFilter !== "all") {
         // 支援前綴匹配（如 decryption_、create_、update_、delete_）
@@ -119,14 +137,23 @@ export function AuditLogViewer({ currentUser, isPreviewMode = false }: AuditLogV
         query = query.eq("target_type", targetTypeFilter)
       }
 
+      if (startDate) {
+        query = query.gte("created_at", `${startDate}T00:00:00`)
+      }
+
+      if (endDate) {
+        query = query.lte("created_at", `${endDate}T23:59:59`)
+      }
+
       if (searchQuery) {
         query = query.or(`reason.ilike.%${searchQuery}%,operator_id.ilike.%${searchQuery}%`)
       }
 
-      const { data, error } = await query
+      const { data, error, count } = await query
 
       if (error) throw error
       setLogs(data || [])
+      setTotalCount(count || 0)
     } catch (error: any) {
       console.error("[v0] Error loading audit logs:", error)
     } finally {
@@ -230,6 +257,8 @@ export function AuditLogViewer({ currentUser, isPreviewMode = false }: AuditLogV
           placeholder="搜尋原因或操作者..."
           className="flex-1 min-w-[200px]"
         />
+        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[160px]" />
+        <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[160px]" />
         <Select value={actionFilter} onValueChange={setActionFilter}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="全部動作" />
@@ -264,6 +293,33 @@ export function AuditLogViewer({ currentUser, isPreviewMode = false }: AuditLogV
           </SelectContent>
         </Select>
         <Button onClick={loadLogs}>搜尋</Button>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 text-xs text-[var(--theme-text-secondary)]">
+        <div>共 {totalCount} 筆，第 {page} / {Math.max(1, Math.ceil(totalCount / pageSize))} 頁</div>
+        <div className="flex items-center gap-2">
+          <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="每頁筆數" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20">每頁 20 筆</SelectItem>
+              <SelectItem value="50">每頁 50 筆</SelectItem>
+              <SelectItem value="100">每頁 100 筆</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+            上一頁
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page >= Math.max(1, Math.ceil(totalCount / pageSize))}
+          >
+            下一頁
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -345,6 +401,12 @@ export function AuditLogViewer({ currentUser, isPreviewMode = false }: AuditLogV
                       <span className="material-icons text-sm">article</span>
                       目標: {log.target_id?.slice(0, 8)}
                     </span>
+                    {log.additional_data?.source && (
+                      <span className="flex gap-1 items-center">
+                        <span className="material-icons text-sm">hub</span>
+                        來源: {String(log.additional_data.source)}
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-3">

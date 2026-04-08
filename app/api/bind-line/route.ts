@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Client } from '@line/bot-sdk'; // 引入 LINE Bot SDK
+import { writeServerAuditLog } from '@/lib/audit-server';
 
 
 
@@ -21,6 +22,18 @@ export async function POST(req: NextRequest) {
     } = await req.json();
     // 驗證必要欄位
     if (!profile_id || !line_user_id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile_id || null,
+        operatorRole: 'resident',
+        actionType: 'bind_line_account',
+        targetType: 'user_profile',
+        targetId: profile_id || 'unknown',
+        reason: '缺少必要參數 (profile_id 或 line_user_id)',
+        module: 'bind-line',
+        status: 'blocked',
+        errorCode: 'missing_required_fields',
+      });
       return NextResponse.json(
         { success: false, message: '缺少必要參數 (profile_id 或 line_user_id)' },
         { status: 400 }
@@ -42,6 +55,18 @@ export async function POST(req: NextRequest) {
 
     if (profileError || !currentProfile) {
       console.error('❌ 使用者不存在:', profile_id);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile_id,
+        operatorRole: 'resident',
+        actionType: 'bind_line_account',
+        targetType: 'user_profile',
+        targetId: profile_id,
+        reason: '使用者不存在',
+        module: 'bind-line',
+        status: 'blocked',
+        errorCode: 'profile_not_found',
+      });
       return NextResponse.json(
         { success: false, message: '使用者不存在' },
         { status: 404 }
@@ -50,6 +75,18 @@ export async function POST(req: NextRequest) {
 
     // 檢查帳號狀態
     if (currentProfile.status !== 'active') {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile_id,
+        operatorRole: 'resident',
+        actionType: 'bind_line_account',
+        targetType: 'user_profile',
+        targetId: profile_id,
+        reason: '帳號已被停用，無法綁定 LINE',
+        module: 'bind-line',
+        status: 'blocked',
+        errorCode: 'profile_inactive',
+      });
       return NextResponse.json(
         { success: false, message: '帳號已被停用，無法綁定 LINE' },
         { status: 403 }
@@ -59,6 +96,18 @@ export async function POST(req: NextRequest) {
     // 2. 檢查此 profile 是否已綁定其他 LINE 帳號
     if (currentProfile.line_user_id && currentProfile.line_user_id !== line_user_id) {
       console.warn('⚠️ 帳號已綁定其他 LINE:', currentProfile.line_user_id);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile_id,
+        operatorRole: 'resident',
+        actionType: 'bind_line_account',
+        targetType: 'user_profile',
+        targetId: profile_id,
+        reason: '此帳號已綁定其他 LINE',
+        module: 'bind-line',
+        status: 'blocked',
+        errorCode: 'profile_line_already_bound',
+      });
       return NextResponse.json(
         { 
           success: false, 
@@ -78,6 +127,18 @@ export async function POST(req: NextRequest) {
 
     if (existingUser) {
       console.warn('⚠️ LINE 帳號已被其他使用者綁定:', existingUser.email);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile_id,
+        operatorRole: 'resident',
+        actionType: 'bind_line_account',
+        targetType: 'user_profile',
+        targetId: profile_id,
+        reason: 'LINE 帳號已被其他使用者綁定',
+        module: 'bind-line',
+        status: 'blocked',
+        errorCode: 'line_user_already_bound',
+      });
       return NextResponse.json(
         { 
           success: false, 
@@ -114,6 +175,18 @@ export async function POST(req: NextRequest) {
 
     if (updateError || !updatedProfile) {
       console.error('❌ 更新 profiles 失敗:', updateError);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile_id,
+        operatorRole: 'resident',
+        actionType: 'bind_line_account',
+        targetType: 'user_profile',
+        targetId: profile_id,
+        reason: updateError?.message || '綁定失敗',
+        module: 'bind-line',
+        status: 'failed',
+        errorCode: updateError?.message || 'update_profile_failed',
+      });
       return NextResponse.json(
         { success: false, message: '綁定失敗，請稍後再試' },
         { status: 500 }
@@ -145,6 +218,19 @@ export async function POST(req: NextRequest) {
       email: updatedProfile.email,
       line_user_id: updatedProfile.line_user_id,
       line_display_name: updatedProfile.line_display_name
+    });
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: profile_id,
+      operatorRole: updatedProfile.role || 'resident',
+      actionType: 'bind_line_account',
+      targetType: 'user_profile',
+      targetId: profile_id,
+      reason: 'LINE 綁定成功',
+      afterState: { line_user_id, line_display_name: line_display_name || null },
+      module: 'bind-line',
+      status: 'success',
     });
 
     return NextResponse.json({
@@ -194,6 +280,18 @@ export async function DELETE(req: NextRequest) {
     const { profile_id } = await req.json();
 
     if (!profile_id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: 'resident',
+        actionType: 'unbind_line_account',
+        targetType: 'user_profile',
+        targetId: 'unknown',
+        reason: '缺少 profile_id',
+        module: 'bind-line',
+        status: 'blocked',
+        errorCode: 'missing_profile_id',
+      });
       return NextResponse.json(
         { success: false, message: '缺少 profile_id' },
         { status: 400 }
@@ -217,6 +315,18 @@ export async function DELETE(req: NextRequest) {
       .single();
 
     if (updateError || !profile) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile_id,
+        operatorRole: 'resident',
+        actionType: 'unbind_line_account',
+        targetType: 'user_profile',
+        targetId: profile_id,
+        reason: updateError?.message || '使用者不存在',
+        module: 'bind-line',
+        status: updateError ? 'failed' : 'blocked',
+        errorCode: updateError?.message || 'profile_not_found',
+      });
       return NextResponse.json(
         { success: false, message: '使用者不存在' },
         { status: 404 }
@@ -226,6 +336,18 @@ export async function DELETE(req: NextRequest) {
      // line_users 已改為相容層，不再作為主寫入表，這裡只維護 profiles。
 
     console.log('✅ LINE 綁定已解除:', profile.email);
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: profile_id,
+      operatorRole: 'resident',
+      actionType: 'unbind_line_account',
+      targetType: 'user_profile',
+      targetId: profile_id,
+      reason: 'LINE 綁定已解除',
+      module: 'bind-line',
+      status: 'success',
+    });
 
     return NextResponse.json({
       success: true,

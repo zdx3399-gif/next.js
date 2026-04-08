@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { Client } from "@line/bot-sdk"
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -79,6 +80,13 @@ async function findLineUserByUnit(supabase, unitId) {
   return { lineUserId, lineDisplayName }
 }
 
+function getVisitorOperator(payload = {}) {
+  return {
+    id: payload.actor_id || payload.reserved_by_id || payload.operatorId || undefined,
+    role: payload.actor_role || payload.operatorRole || "unknown",
+  }
+}
+
 // POST: 新增訪客預約
 export async function POST(req) {
   try {
@@ -87,8 +95,21 @@ export async function POST(req) {
 
     const body = await req.json()
     const { name, phone, purpose, reservation_time, unit_id, reserved_by, reserved_by_id } = body
+    const operator = getVisitorOperator(body)
 
     if (!name || !phone || !reservation_time) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_visitor",
+        targetType: "system",
+        targetId: "unknown",
+        reason: "Missing required fields",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      })
       return Response.json({ error: "Missing required fields" }, { status: 400 })
     }
 
@@ -111,8 +132,33 @@ export async function POST(req) {
 
     if (error) {
       console.error("[visitor] POST error:", error)
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_visitor",
+        targetType: "system",
+        targetId: "unknown",
+        reason: error.message,
+        module: "visitor",
+        status: "failed",
+        errorCode: error.message,
+      })
       return Response.json({ error: error.message }, { status: 500 })
     }
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_visitor",
+      targetType: "system",
+      targetId: visitor.id,
+      reason: reserved_by || name,
+      module: "visitor",
+      status: "success",
+      afterState: { status: "reserved", reservation_time, unit_id: unit_id || null },
+    })
 
     // 發送 LINE 通知
     if (unit_id) {
@@ -212,8 +258,21 @@ export async function PATCH(req) {
 
     const body = await req.json()
     const { visitor_id, action } = body
+    const operator = getVisitorOperator(body)
 
     if (!visitor_id || !action) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: action === "check_out" ? "check_out_visitor" : "check_in_visitor",
+        targetType: "system",
+        targetId: visitor_id || "unknown",
+        reason: "Missing visitor_id or action",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      })
       return Response.json({ error: "Missing visitor_id or action" }, { status: 400 })
     }
 
@@ -224,6 +283,18 @@ export async function PATCH(req) {
       .single()
 
     if (fetchError || !visitor) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: action === "check_out" ? "check_out_visitor" : "check_in_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "Visitor not found",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "visitor_not_found",
+      })
       return Response.json({ error: "Visitor not found" }, { status: 404 })
     }
 
@@ -236,14 +307,51 @@ export async function PATCH(req) {
       updateData.status = "checked_out"
       updateData.checked_out_at = new Date().toISOString()
     } else {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "Invalid action",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "invalid_action",
+      })
       return Response.json({ error: "Invalid action" }, { status: 400 })
     }
 
     const { error } = await supabase.from("visitors").update(updateData).eq("id", visitor_id)
 
     if (error) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: action === "check_out" ? "check_out_visitor" : "check_in_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: error.message,
+        module: "visitor",
+        status: "failed",
+        errorCode: error.message,
+      })
       return Response.json({ error: error.message }, { status: 500 })
     }
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: action === "check_out" ? "check_out_visitor" : "check_in_visitor",
+      targetType: "system",
+      targetId: visitor_id,
+      reason: visitor.name,
+      module: "visitor",
+      status: "success",
+      afterState: updateData,
+    })
 
     // 發送 LINE 通知
     if (visitor.unit_id) {
@@ -321,12 +429,37 @@ export async function PUT(req) {
     const supabase = getSupabase()
     const body = await req.json()
     const { visitor_id, name, phone, purpose, reservation_time, actor_id, actor_role } = body
+    const operator = getVisitorOperator(body)
 
     if (!visitor_id || !name || !phone || !reservation_time) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_visitor",
+        targetType: "system",
+        targetId: visitor_id || "unknown",
+        reason: "Missing required fields",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      })
       return Response.json({ error: "Missing required fields" }, { status: 400 })
     }
 
     if (actor_role === "guard") {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "警衛不可修改預約訪客",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "forbidden",
+      })
       return Response.json({ error: "警衛不可修改預約訪客" }, { status: 403 })
     }
 
@@ -337,15 +470,51 @@ export async function PUT(req) {
       .maybeSingle()
 
     if (fetchError || !visitor) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "Visitor not found",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "visitor_not_found",
+      })
       return Response.json({ error: "Visitor not found" }, { status: 404 })
     }
 
     if (visitor.status !== "reserved") {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "僅可修改尚未簽到的預約訪客",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "invalid_status",
+      })
       return Response.json({ error: "僅可修改尚未簽到的預約訪客" }, { status: 400 })
     }
 
     const isPrivileged = actor_role === "admin" || actor_role === "committee"
     if (!isPrivileged && visitor.reserved_by_id && visitor.reserved_by_id !== actor_id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "僅可修改自己預約的訪客",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "forbidden",
+      })
       return Response.json({ error: "僅可修改自己預約的訪客" }, { status: 403 })
     }
 
@@ -360,8 +529,33 @@ export async function PUT(req) {
       .eq("id", visitor_id)
 
     if (error) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: error.message,
+        module: "visitor",
+        status: "failed",
+        errorCode: error.message,
+      })
       return Response.json({ error: error.message }, { status: 500 })
     }
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_visitor",
+      targetType: "system",
+      targetId: visitor_id,
+      reason: name,
+      module: "visitor",
+      status: "success",
+      afterState: { name, phone, purpose: purpose || null, reservation_time },
+    })
 
     return Response.json({ success: true })
   } catch (err) {
@@ -379,12 +573,37 @@ export async function DELETE(req) {
     const visitor_id = searchParams.get("visitor_id")
     const actor_id = searchParams.get("actor_id")
     const actor_role = searchParams.get("actor_role")
+    const operator = getVisitorOperator({ actor_id, actor_role })
 
     if (!visitor_id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_visitor",
+        targetType: "system",
+        targetId: "unknown",
+        reason: "Missing visitor_id",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "missing_visitor_id",
+      })
       return Response.json({ error: "Missing visitor_id" }, { status: 400 })
     }
 
     if (actor_role === "guard") {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "警衛不可刪除預約訪客",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "forbidden",
+      })
       return Response.json({ error: "警衛不可刪除預約訪客" }, { status: 403 })
     }
 
@@ -395,22 +614,82 @@ export async function DELETE(req) {
       .maybeSingle()
 
     if (fetchError || !visitor) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "Visitor not found",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "visitor_not_found",
+      })
       return Response.json({ error: "Visitor not found" }, { status: 404 })
     }
 
     if (visitor.status !== "reserved") {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "僅可刪除尚未簽到的預約訪客",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "invalid_status",
+      })
       return Response.json({ error: "僅可刪除尚未簽到的預約訪客" }, { status: 400 })
     }
 
     const isPrivileged = actor_role === "admin" || actor_role === "committee"
     if (!isPrivileged && visitor.reserved_by_id && visitor.reserved_by_id !== actor_id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: "僅可刪除自己預約的訪客",
+        module: "visitor",
+        status: "blocked",
+        errorCode: "forbidden",
+      })
       return Response.json({ error: "僅可刪除自己預約的訪客" }, { status: 403 })
     }
 
     const { error } = await supabase.from("visitors").delete().eq("id", visitor_id)
     if (error) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_visitor",
+        targetType: "system",
+        targetId: visitor_id,
+        reason: error.message,
+        module: "visitor",
+        status: "failed",
+        errorCode: error.message,
+      })
       return Response.json({ error: error.message }, { status: 500 })
     }
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_visitor",
+      targetType: "system",
+      targetId: visitor_id,
+      reason: "刪除訪客預約",
+      module: "visitor",
+      status: "success",
+    })
 
     return Response.json({ success: true })
   } catch (err) {

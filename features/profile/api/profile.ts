@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface ProfileData {
   name: string
@@ -31,8 +32,22 @@ export interface User {
   line_avatar_url?: string
 }
 
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
+}
+
 export async function updateProfile(userId: string, data: ProfileData): Promise<User> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) throw new Error("Supabase not configured")
 
   const updateData: Record<string, string | undefined> = {
@@ -57,7 +72,21 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
 
   const { error } = await supabase.from("profiles").update(updateData).eq("id", userId)
 
-  if (error) throw error
+  if (error) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_user_profile",
+        targetType: "user",
+        targetId: userId,
+        reason: error.message,
+        afterState: updateData,
+        additionalData: { module: "profile", status: "failed", error_code: error.message },
+      })
+    }
+    throw error
+  }
 
   const { data: profile, error: fetchError } = await supabase
     .from("profiles")
@@ -69,6 +98,19 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     .single()
 
   if (fetchError) throw fetchError
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_user_profile",
+      targetType: "user",
+      targetId: userId,
+      reason: data.name || "更新個人資料",
+      afterState: updateData,
+      additionalData: { module: "profile", status: "success" },
+    })
+  }
 
   return {
     id: userId,

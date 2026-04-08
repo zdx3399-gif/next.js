@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface DecryptionRequest {
   id: string
@@ -107,15 +108,15 @@ export async function committeeReviewDecryptionRequest(
 
   if (error) throw error
 
-  // Create audit log
-  await supabase.from("audit_logs").insert({
-    action_type: data.approved ? "decryption_committee_approved" : "decryption_rejected",
-    operator_id: data.committeeId,
-    operator_role: "committee",
-    target_type: "decryption_request",
-    target_id: requestId,
+  await createAuditLog({
+    operatorId: data.committeeId,
+    operatorRole: "committee",
+    actionType: data.approved ? "decryption_committee_approved" : "decryption_rejected",
+    targetType: "decryption_request",
+    targetId: requestId,
     reason: data.notes || (data.approved ? "管委會初審通過" : "管委會拒絕"),
-    after_state: updateData,
+    afterState: updateData,
+    additionalData: { module: "decryption", status: "success" },
   })
 
   return result
@@ -189,15 +190,15 @@ export async function adminReviewDecryptionRequest(
 
   if (error) throw error
 
-  // Create audit log
-  await supabase.from("audit_logs").insert({
-    action_type: data.approved ? "decryption_fully_approved" : "decryption_rejected",
-    operator_id: data.adminId,
-    operator_role: "admin",
-    target_type: "decryption_request",
-    target_id: requestId,
+  await createAuditLog({
+    operatorId: data.adminId,
+    operatorRole: "admin",
+    actionType: data.approved ? "decryption_fully_approved" : "decryption_rejected",
+    targetType: "decryption_request",
+    targetId: requestId,
     reason: data.notes || (data.approved ? "系統管理員覆核通過" : "系統管理員拒絕"),
-    after_state: updateData,
+    afterState: updateData,
+    additionalData: { module: "decryption", status: "success" },
   })
 
   return result
@@ -226,15 +227,15 @@ export async function getDecryptedAuthorInfo(requestId: string, viewerId: string
     .eq("id", request.decrypted_author_id)
     .single()
 
-  // 記錄查看紀錄
-  await supabase.from("audit_logs").insert({
-    action_type: "decryption_viewed",
-    operator_id: viewerId,
-    operator_role: "admin",
-    target_type: "decryption_request",
-    target_id: requestId,
+  await createAuditLog({
+    operatorId: viewerId,
+    operatorRole: "admin",
+    actionType: "decryption_viewed",
+    targetType: "decryption_request",
+    targetId: requestId,
     reason: "查看解密資訊",
-    after_state: { viewed_at: new Date().toISOString() },
+    afterState: { viewed_at: new Date().toISOString() },
+    additionalData: { module: "decryption", status: "success" },
   })
 
   return author

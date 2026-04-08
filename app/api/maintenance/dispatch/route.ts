@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { writeServerAuditLog } from '@/lib/audit-server'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -20,6 +21,8 @@ interface DispatchRequest {
   scheduled_at: string
   estimated_cost?: number
   admin_note?: string
+  operatorId?: string | null
+  operatorRole?: string
 }
 
 export async function POST(req: Request) {
@@ -33,11 +36,25 @@ export async function POST(req: Request) {
       worker_phone,
       scheduled_at,
       estimated_cost,
-      admin_note
+      admin_note,
+      operatorId,
+      operatorRole
     } = body
 
     // Validate required fields
     if (!maintenanceId || !vendor_name || !worker_name || !scheduled_at) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operatorId || undefined,
+        operatorRole: operatorRole || 'unknown',
+        actionType: 'dispatch_maintenance',
+        targetType: 'maintenance',
+        targetId: maintenanceId || 'unknown',
+        reason: '派工缺少必要欄位',
+        module: 'maintenance',
+        status: 'blocked',
+        errorCode: 'missing_required_fields',
+      })
       return NextResponse.json(
         { error: '缺少必填欄位' },
         { status: 400 }
@@ -53,6 +70,18 @@ export async function POST(req: Request) {
 
     if (maintError || !maintenance) {
       console.error('查詢維修單失敗:', maintError)
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operatorId || undefined,
+        operatorRole: operatorRole || 'unknown',
+        actionType: 'dispatch_maintenance',
+        targetType: 'maintenance',
+        targetId: maintenanceId,
+        reason: '找不到該維修單',
+        module: 'maintenance',
+        status: 'blocked',
+        errorCode: 'maintenance_not_found',
+      })
       return NextResponse.json(
         { error: '找不到該維修單' },
         { status: 404 }
@@ -90,11 +119,37 @@ export async function POST(req: Request) {
 
     if (updateError) {
       console.error('更新維修單失敗:', updateError)
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operatorId || undefined,
+        operatorRole: operatorRole || 'unknown',
+        actionType: 'dispatch_maintenance',
+        targetType: 'maintenance',
+        targetId: maintenanceId,
+        reason: updateError.message,
+        module: 'maintenance',
+        status: 'failed',
+        errorCode: updateError.message,
+      })
       return NextResponse.json(
         { error: '更新維修單失敗: ' + updateError.message },
         { status: 500 }
       )
     }
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operatorId || undefined,
+      operatorRole: operatorRole || 'unknown',
+      actionType: 'dispatch_maintenance',
+      targetType: 'maintenance',
+      targetId: maintenanceId,
+      reason: `${vendor_name} ${worker_name}`,
+      module: 'maintenance',
+      status: 'success',
+      beforeState: { status: maintenance.status || 'open' },
+      afterState: { status: 'progress', vendor_name, worker_name, scheduled_at, estimated_cost: estimated_cost || null },
+    })
 
     // 3) Find reporter's LINE user ID
     let lineUserId: string | null = null

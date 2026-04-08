@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -51,11 +52,36 @@ export async function GET(req: NextRequest) {
 
 // POST: 建立新貼文（含 AI 審核）
 export async function POST(req: NextRequest) {
+  let auditMeta: {
+    operatorId?: string
+    targetId?: string
+    reason?: string
+  } = {}
+
   try {
     const supabase = getSupabase()
 
     const body = await req.json()
     const { author_id, category, display_mode, title, content, structured_data } = body
+    auditMeta.operatorId = author_id
+    auditMeta.reason = title || "建立社群貼文"
+
+    if (!author_id || !category || !display_mode || !title?.trim() || !content?.trim()) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: author_id,
+        operatorRole: "resident",
+        actionType: "create_post",
+        targetType: "post",
+        targetId: author_id,
+        reason: "建立貼文缺少必要欄位",
+        module: "community",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+        additionalData: { category, display_mode },
+      })
+      return NextResponse.json({ error: "缺少必要欄位" }, { status: 400 })
+    }
 
     // ===== LINE 綁定檢查（暫時停用）=====
     // const { data: binding } = await supabase
@@ -157,6 +183,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+    auditMeta.targetId = data.id
 
     // 如果需要審核，加入審核隊列
     if (initialStatus === "pending") {
@@ -179,6 +206,24 @@ export async function POST(req: NextRequest) {
       processPostForKMS(data.id, title, content, category).catch((e) => console.error("[v0] KMS processing failed:", e))
     }
 
+    await writeServerAuditLog({
+      supabase,
+      operatorId: author_id,
+      operatorRole: "resident",
+      actionType: "create_post",
+      targetType: "post",
+      targetId: data.id,
+      reason: title,
+      module: "community",
+      status: "success",
+      afterState: {
+        status: initialStatus,
+        category,
+        display_mode,
+        ai_risk_level: aiResult.riskLevel,
+      },
+    })
+
     return NextResponse.json({
       data,
       aiResult: {
@@ -189,6 +234,21 @@ export async function POST(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("[v0] Error creating post:", error)
+    try {
+      const supabase = getSupabase()
+      await writeServerAuditLog({
+        supabase,
+        operatorId: auditMeta.operatorId,
+        operatorRole: "resident",
+        actionType: "create_post",
+        targetType: "post",
+        targetId: auditMeta.targetId || auditMeta.operatorId,
+        reason: auditMeta.reason || "建立社群貼文失敗",
+        module: "community",
+        status: "failed",
+        errorCode: error?.message || "create_post_failed",
+      })
+    } catch {}
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

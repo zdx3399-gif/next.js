@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -19,10 +20,30 @@ function getSupabase() {
 
 // POST: 建立檢舉
 export async function POST(req: NextRequest) {
+  let auditMeta: { operatorId?: string; targetId?: string; reason?: string } = {}
+
   try {
     const supabase = getSupabase()
     const body = await req.json()
     const { reporter_id, target_type, target_id, reason, description } = body
+    auditMeta.operatorId = reporter_id
+    auditMeta.reason = reason
+
+    if (!reporter_id || !target_type || !target_id || !reason) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: reporter_id,
+        operatorRole: "resident",
+        actionType: "create_report",
+        targetType: "report",
+        targetId: target_id || reporter_id,
+        reason: "建立檢舉缺少必要欄位",
+        module: "community",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      })
+      return NextResponse.json({ error: "缺少必要欄位" }, { status: 400 })
+    }
 
     // ===== LINE 綁定檢查（暫時停用）=====
     // const { data: binding } = await supabase
@@ -56,6 +77,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+    auditMeta.targetId = data.id
 
     // 加入審核隊列
     const { error: qErr } = await supabase.from("moderation_queue").insert([
@@ -70,9 +92,38 @@ export async function POST(req: NextRequest) {
 
     if (qErr) throw qErr
 
+    await writeServerAuditLog({
+      supabase,
+      operatorId: reporter_id,
+      operatorRole: "resident",
+      actionType: "create_report",
+      targetType: "report",
+      targetId: data.id,
+      reason,
+      module: "community",
+      status: "success",
+      afterState: { target_type, target_id, ai_assessment: aiAssessment },
+      additionalData: { description: description || null },
+    })
+
     return NextResponse.json({ data })
   } catch (error: any) {
     console.error("[v0] Error creating report:", error)
+    try {
+      const supabase = getSupabase()
+      await writeServerAuditLog({
+        supabase,
+        operatorId: auditMeta.operatorId,
+        operatorRole: "resident",
+        actionType: "create_report",
+        targetType: "report",
+        targetId: auditMeta.targetId || auditMeta.operatorId,
+        reason: auditMeta.reason || "建立檢舉失敗",
+        module: "community",
+        status: "failed",
+        errorCode: error?.message || "create_report_failed",
+      })
+    } catch {}
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

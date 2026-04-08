@@ -5,6 +5,7 @@
 // 3. 管理員查看客服對話紀錄
 
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface ChatMessage {
   id?: string
@@ -15,9 +16,23 @@ export interface ChatMessage {
   created_at?: string
 }
 
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
+}
+
 // 儲存對話紀錄（可選功能）
 export async function saveChatHistory(chat: Omit<ChatMessage, "id" | "created_at">): Promise<boolean> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) {
     console.error("Supabase client not available")
     return false
@@ -26,7 +41,32 @@ export async function saveChatHistory(chat: Omit<ChatMessage, "id" | "created_at
 
   if (error) {
     console.error("Error saving chat history:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "system_action",
+        targetType: "system",
+        targetId: chat.user_id,
+        reason: error.message,
+        afterState: chat,
+        additionalData: { module: "support", status: "failed", error_code: error.message, action: "save_chat_history" },
+      })
+    }
     return false
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "system_action",
+      targetType: "system",
+      targetId: chat.user_id,
+      reason: "儲存客服對話",
+      afterState: { user_name: chat.user_name },
+      additionalData: { module: "support", status: "success", action: "save_chat_history" },
+    })
   }
 
   return true

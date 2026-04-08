@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface Facility {
   id: string
@@ -83,6 +84,47 @@ export interface UserPointsInfo {
   active_bookings_count: number
 }
 
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
+}
+
+async function logFacilityAudit(params: {
+  action: string
+  targetId: string
+  reason: string
+  status: "success" | "failed" | "blocked"
+  afterState?: Record<string, any>
+  errorCode?: string
+}) {
+  const operator = getCurrentOperator()
+  if (!operator.id) return
+
+  await createAuditLog({
+    operatorId: operator.id,
+    operatorRole: operator.role,
+    actionType: "system_action",
+    targetType: "system",
+    targetId: params.targetId,
+    reason: params.reason,
+    afterState: params.afterState,
+    additionalData: {
+      module: "facilities",
+      status: params.status,
+      action: params.action,
+      error_code: params.errorCode,
+    },
+  })
+}
+
 // ==================== 基本設施查詢 ====================
 
 export async function getFacilities(): Promise<Facility[]> {
@@ -158,6 +200,14 @@ export async function deductPoints(
   const { data: profile } = await supabase.from("profiles").select("points_balance").eq("id", userId).single()
 
   if (!profile || profile.points_balance < amount) {
+    await logFacilityAudit({
+      action: "deduct_points",
+      targetId: userId,
+      reason: "點數不足",
+      status: "blocked",
+      afterState: { amount, transactionType },
+      errorCode: "insufficient_points",
+    })
     return false
   }
 
@@ -169,6 +219,14 @@ export async function deductPoints(
 
   if (updateError) {
     console.error("Error deducting points:", updateError)
+    await logFacilityAudit({
+      action: "deduct_points",
+      targetId: userId,
+      reason: updateError.message,
+      status: "failed",
+      afterState: { amount, transactionType },
+      errorCode: updateError.message,
+    })
     return false
   }
 
@@ -179,6 +237,14 @@ export async function deductPoints(
     transaction_type: transactionType,
     reference_id: referenceId,
     description,
+  })
+
+  await logFacilityAudit({
+    action: "deduct_points",
+    targetId: userId,
+    reason: description || "扣除點數",
+    status: "success",
+    afterState: { amount, transactionType, referenceId },
   })
 
   return true
@@ -203,6 +269,14 @@ export async function refundPoints(
 
   if (updateError) {
     console.error("Error refunding points:", updateError)
+    await logFacilityAudit({
+      action: "refund_points",
+      targetId: userId,
+      reason: updateError.message,
+      status: "failed",
+      afterState: { amount, transactionType },
+      errorCode: updateError.message,
+    })
     return false
   }
 
@@ -212,6 +286,14 @@ export async function refundPoints(
     transaction_type: transactionType,
     reference_id: referenceId,
     description,
+  })
+
+  await logFacilityAudit({
+    action: "refund_points",
+    targetId: userId,
+    reason: description || "退還點數",
+    status: "success",
+    afterState: { amount, transactionType, referenceId },
   })
 
   return true
@@ -301,8 +383,24 @@ export async function generateTimeSlots(facilityId: string, date: string): Promi
   const { error } = await supabase.from("facility_time_slots").insert(slots)
   if (error) {
     console.error("Error generating time slots:", error)
+    await logFacilityAudit({
+      action: "generate_time_slots",
+      targetId: facilityId,
+      reason: error.message,
+      status: "failed",
+      afterState: { date, slots: slots.length },
+      errorCode: error.message,
+    })
     return []
   }
+
+  await logFacilityAudit({
+    action: "generate_time_slots",
+    targetId: facilityId,
+    reason: "生成設施時段",
+    status: "success",
+    afterState: { date, slots: slots.length },
+  })
 
   return getFacilityTimeSlots(facilityId, date)
 }
@@ -404,6 +502,14 @@ export async function attemptBooking(
   // 驗證預約
   const validation = await validateBooking(userId, facilityId, slotId)
   if (!validation.valid) {
+    await logFacilityAudit({
+      action: "attempt_booking",
+      targetId: slotId,
+      reason: validation.message,
+      status: "blocked",
+      afterState: { userId, facilityId },
+      errorCode: "booking_validation_failed",
+    })
     return { success: false, message: validation.message }
   }
 
@@ -411,11 +517,27 @@ export async function attemptBooking(
   const { data: slot } = await supabase.from("facility_time_slots").select("*").eq("id", slotId).single()
 
   if (!slot || slot.status !== "OPEN") {
+    await logFacilityAudit({
+      action: "attempt_booking",
+      targetId: slotId,
+      reason: "此時段已被預約",
+      status: "blocked",
+      afterState: { userId, facilityId },
+      errorCode: "slot_not_open",
+    })
     return { success: false, message: "此時段已被預約" }
   }
 
   // 如果是抽籤時段，不能直接預約
   if (slot.booking_type === "LOTTERY") {
+    await logFacilityAudit({
+      action: "attempt_booking",
+      targetId: slotId,
+      reason: "此為抽籤時段，請使用抽籤登記功能",
+      status: "blocked",
+      afterState: { userId, facilityId },
+      errorCode: "lottery_slot",
+    })
     return { success: false, message: "此為抽籤時段，請使用抽籤登記功能" }
   }
 
@@ -432,6 +554,14 @@ export async function attemptBooking(
       `預約設施 ${slot.slot_date} ${slot.start_time}`,
     )
     if (!deducted) {
+      await logFacilityAudit({
+        action: "attempt_booking",
+        targetId: slotId,
+        reason: "扣除點數失敗",
+        status: "failed",
+        afterState: { userId, finalPrice },
+        errorCode: "deduct_points_failed",
+      })
       return { success: false, message: "扣除點數失敗" }
     }
 
@@ -456,14 +586,38 @@ export async function attemptBooking(
 
     if (bookingError) {
       await refundPoints(userId, finalPrice, "booking_refund", slotId, "預約失敗退款")
+      await logFacilityAudit({
+        action: "attempt_booking",
+        targetId: slotId,
+        reason: bookingError.message,
+        status: "failed",
+        afterState: { userId, facilityId },
+        errorCode: bookingError.message,
+      })
       return { success: false, message: "建立預約失敗：" + bookingError.message }
     }
 
     // 3. 更新時段狀態
     await supabase.from("facility_time_slots").update({ status: "BOOKED" }).eq("id", slotId)
 
+    await logFacilityAudit({
+      action: "attempt_booking",
+      targetId: booking.id,
+      reason: "預約成功",
+      status: "success",
+      afterState: { facilityId, slotId, points_spent: finalPrice },
+    })
+
     return { success: true, message: `預約成功！已扣除 ${finalPrice} 點`, bookingId: booking.id }
   } catch (error: any) {
+    await logFacilityAudit({
+      action: "attempt_booking",
+      targetId: slotId,
+      reason: error.message,
+      status: "failed",
+      afterState: { userId, facilityId },
+      errorCode: error.message,
+    })
     return { success: false, message: "預約失敗：" + error.message }
   }
 }
@@ -508,10 +662,24 @@ export async function cancelBookingWithRefund(
     .single()
 
   if (!booking) {
+    await logFacilityAudit({
+      action: "cancel_booking_with_refund",
+      targetId: bookingId,
+      reason: "找不到預約",
+      status: "blocked",
+      errorCode: "booking_not_found",
+    })
     return { success: false, message: "找不到預約" }
   }
 
   if (booking.status !== "confirmed") {
+    await logFacilityAudit({
+      action: "cancel_booking_with_refund",
+      targetId: bookingId,
+      reason: "此預約無法取消",
+      status: "blocked",
+      errorCode: "invalid_status",
+    })
     return { success: false, message: "此預約無法取消" }
   }
 
@@ -551,8 +719,23 @@ export async function cancelBookingWithRefund(
         ? `預約已取消，退還 ${refundAmount} 點（手續費 ${feeAmount} 點）`
         : `預約已取消，已退還 ${refundAmount} 點`
 
+    await logFacilityAudit({
+      action: "cancel_booking_with_refund",
+      targetId: bookingId,
+      reason: "取消預約",
+      status: "success",
+      afterState: { refundAmount, feeAmount },
+    })
+
     return { success: true, message }
   } catch (error: any) {
+    await logFacilityAudit({
+      action: "cancel_booking_with_refund",
+      targetId: bookingId,
+      reason: error.message,
+      status: "failed",
+      errorCode: error.message,
+    })
     return { success: false, message: "取消失敗：" + error.message }
   }
 }
@@ -571,14 +754,17 @@ export async function checkIn(bookingId: string, userId: string): Promise<{ succ
     .single()
 
   if (!booking) {
+    await logFacilityAudit({ action: "check_in", targetId: bookingId, reason: "找不到預約", status: "blocked", errorCode: "booking_not_found" })
     return { success: false, message: "找不到預約" }
   }
 
   if (booking.status !== "confirmed") {
+    await logFacilityAudit({ action: "check_in", targetId: bookingId, reason: "此預約狀態無法簽到", status: "blocked", errorCode: "invalid_status" })
     return { success: false, message: "此預約狀態無法簽到" }
   }
 
   if (booking.check_in_time) {
+    await logFacilityAudit({ action: "check_in", targetId: bookingId, reason: "已經簽到過了", status: "blocked", errorCode: "already_checked_in" })
     return { success: false, message: "已經簽到過了" }
   }
 
@@ -589,10 +775,12 @@ export async function checkIn(bookingId: string, userId: string): Promise<{ succ
   const checkInEnd = new Date(bookingStart.getTime() + 15 * 60 * 1000)
 
   if (now < checkInStart) {
+    await logFacilityAudit({ action: "check_in", targetId: bookingId, reason: "還未到簽到時間", status: "blocked", errorCode: "too_early" })
     return { success: false, message: "還未到簽到時間" }
   }
 
   if (now > checkInEnd) {
+    await logFacilityAudit({ action: "check_in", targetId: bookingId, reason: "已超過簽到時間", status: "blocked", errorCode: "too_late" })
     return { success: false, message: "已超過簽到時間" }
   }
 
@@ -602,8 +790,11 @@ export async function checkIn(bookingId: string, userId: string): Promise<{ succ
     .eq("id", bookingId)
 
   if (error) {
+    await logFacilityAudit({ action: "check_in", targetId: bookingId, reason: "簽到失敗", status: "failed", errorCode: error.message || "check_in_failed" })
     return { success: false, message: "簽到失敗" }
   }
+
+  await logFacilityAudit({ action: "check_in", targetId: bookingId, reason: "簽到成功", status: "success", afterState: { userId } })
 
   return { success: true, message: "簽到成功！" }
 }
@@ -626,10 +817,12 @@ export async function joinLottery(
     .single()
 
   if (!slot || slot.booking_type !== "LOTTERY") {
+    await logFacilityAudit({ action: "join_lottery", targetId: slotId, reason: "此時段不是抽籤模式", status: "blocked", errorCode: "not_lottery_slot" })
     return { success: false, message: "此時段不是抽籤模式" }
   }
 
   if (slot.status !== "OPEN" && slot.status !== "LOCKED_FOR_LOTTERY") {
+    await logFacilityAudit({ action: "join_lottery", targetId: slotId, reason: "此時段已不開放登記", status: "blocked", errorCode: "slot_closed" })
     return { success: false, message: "此時段已不開放登記" }
   }
 
@@ -642,18 +835,21 @@ export async function joinLottery(
     .single()
 
   if (existing) {
+    await logFacilityAudit({ action: "join_lottery", targetId: slotId, reason: "您已經登記過此時段", status: "blocked", errorCode: "already_joined" })
     return { success: false, message: "您已經登記過此時段" }
   }
 
   // 驗證用戶和預約條件
   const validation = await validateBooking(userId, slot.facility_id, slotId)
   if (!validation.valid) {
+    await logFacilityAudit({ action: "join_lottery", targetId: slotId, reason: validation.message, status: "blocked", errorCode: "lottery_validation_failed" })
     return { success: false, message: validation.message }
   }
 
   // 檢查點數是否足夠支付投標
   const userInfo = await getUserPointsInfo(userId)
   if (!userInfo || userInfo.points_balance < pointsBid) {
+    await logFacilityAudit({ action: "join_lottery", targetId: slotId, reason: "點數不足", status: "blocked", errorCode: "insufficient_points" })
     return { success: false, message: "點數不足" }
   }
 
@@ -666,8 +862,11 @@ export async function joinLottery(
   })
 
   if (error) {
+    await logFacilityAudit({ action: "join_lottery", targetId: slotId, reason: error.message, status: "failed", errorCode: error.message })
     return { success: false, message: "登記失敗：" + error.message }
   }
+
+  await logFacilityAudit({ action: "join_lottery", targetId: slotId, reason: "抽籤登記成功", status: "success", afterState: { userId, pointsBid } })
 
   return { success: true, message: "抽籤登記成功！結果將於截止後公布" }
 }
@@ -798,32 +997,54 @@ export async function createBooking(booking: {
     },
   ])
 
-  if (error) throw error
+  if (error) {
+    await logFacilityAudit({ action: "create_booking", targetId: booking.user_id, reason: error.message, status: "failed", errorCode: error.message })
+    throw error
+  }
+
+  await logFacilityAudit({ action: "create_booking", targetId: booking.user_id, reason: "建立預約", status: "success", afterState: booking as Record<string, any> })
 }
 
 export async function cancelBooking(bookingId: string): Promise<void> {
   const supabase = getSupabaseClient()
   const { error } = await supabase.from("facility_bookings").update({ status: "cancelled" }).eq("id", bookingId)
 
-  if (error) throw error
+  if (error) {
+    await logFacilityAudit({ action: "cancel_booking", targetId: bookingId, reason: error.message, status: "failed", errorCode: error.message })
+    throw error
+  }
+
+  await logFacilityAudit({ action: "cancel_booking", targetId: bookingId, reason: "取消預約", status: "success" })
 }
 
 export async function createFacility(facility: Omit<Facility, "id" | "created_at">): Promise<void> {
   const supabase = getSupabaseClient()
   const { error } = await supabase.from("facilities").insert([facility])
-  if (error) throw error
+  if (error) {
+    await logFacilityAudit({ action: "create_facility", targetId: facility.name, reason: error.message, status: "failed", errorCode: error.message })
+    throw error
+  }
+  await logFacilityAudit({ action: "create_facility", targetId: facility.name, reason: "建立設施", status: "success", afterState: facility as Record<string, any> })
 }
 
 export async function updateFacility(id: string, facility: Partial<Facility>): Promise<void> {
   const supabase = getSupabaseClient()
   const { error } = await supabase.from("facilities").update(facility).eq("id", id)
-  if (error) throw error
+  if (error) {
+    await logFacilityAudit({ action: "update_facility", targetId: id, reason: error.message, status: "failed", errorCode: error.message })
+    throw error
+  }
+  await logFacilityAudit({ action: "update_facility", targetId: id, reason: "更新設施", status: "success", afterState: facility as Record<string, any> })
 }
 
 export async function deleteFacility(id: string): Promise<void> {
   const supabase = getSupabaseClient()
   const { error } = await supabase.from("facilities").delete().eq("id", id)
-  if (error) throw error
+  if (error) {
+    await logFacilityAudit({ action: "delete_facility", targetId: id, reason: error.message, status: "failed", errorCode: error.message })
+    throw error
+  }
+  await logFacilityAudit({ action: "delete_facility", targetId: id, reason: "刪除設施", status: "success" })
 }
 
 export async function uploadFacilityImage(file: File): Promise<string> {

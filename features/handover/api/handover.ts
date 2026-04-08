@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface HandoverKnowledgeCard {
   id: string
@@ -14,6 +15,19 @@ export interface HandoverKnowledgeCard {
 }
 
 export const HANDOVER_SCENARIO = "handover_sop"
+
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
+}
 
 export async function getHandoverCards(filters?: { category?: string; status?: string; search?: string }) {
   const supabase = getSupabaseClient()
@@ -50,6 +64,7 @@ export async function createHandoverCard(input: {
   createdBy: string
 }) {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) throw new Error("Supabase client not available")
 
   const { data, error } = await supabase
@@ -71,6 +86,18 @@ export async function createHandoverCard(input: {
     .single()
 
   if (error) throw error
+  if (operator.id && data?.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_knowledge_card",
+      targetType: "knowledge_card",
+      targetId: data.id,
+      reason: input.title,
+      afterState: { category: input.category, scenario: HANDOVER_SCENARIO },
+      additionalData: { module: "handover", status: "success" },
+    })
+  }
   return data
 }
 
@@ -83,6 +110,7 @@ export async function updateHandoverCard(
   },
 ) {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) throw new Error("Supabase client not available")
 
   const { error } = await supabase
@@ -96,10 +124,23 @@ export async function updateHandoverCard(
     .eq("situation", HANDOVER_SCENARIO)
 
   if (error) throw error
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_knowledge_card",
+      targetType: "knowledge_card",
+      targetId: cardId,
+      reason: input.title,
+      afterState: { title: input.title, category: input.category },
+      additionalData: { module: "handover", status: "success" },
+    })
+  }
 }
 
 export async function deleteHandoverCard(cardId: string) {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) throw new Error("Supabase client not available")
 
   const { error } = await supabase
@@ -109,4 +150,15 @@ export async function deleteHandoverCard(cardId: string) {
     .eq("situation", HANDOVER_SCENARIO)
 
   if (error) throw error
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_knowledge_card",
+      targetType: "knowledge_card",
+      targetId: cardId,
+      reason: "刪除交屋卡片",
+      additionalData: { module: "handover", status: "success" },
+    })
+  }
 }

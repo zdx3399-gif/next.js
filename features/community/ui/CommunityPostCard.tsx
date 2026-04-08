@@ -68,9 +68,11 @@ interface PostCardProps {
   onWithdraw?: (postId: string) => void
   onEdit?: (postId: string) => void
   onReport?: (postId: string) => void
+  onAppeal?: (postId: string, reason: string) => Promise<void> | void
   onRequestDecryption?: (postId: string, reason: string, triggerCondition: string) => void
   isLiked?: boolean
   isBookmarked?: boolean
+  appealStatus?: "pending" | "reviewing" | "restored" | "rejected" | "cancelled"
 }
 
 export function CommunityPostCard({
@@ -84,21 +86,29 @@ export function CommunityPostCard({
   onWithdraw,
   onEdit,
   onReport,
+  onAppeal,
   onRequestDecryption,
   isLiked = false,
   isBookmarked = false,
+  appealStatus,
 }: PostCardProps) {
   const [liked, setLiked] = useState(isLiked)
   const [bookmarked, setBookmarked] = useState(isBookmarked)
   const [showDecryptionDialog, setShowDecryptionDialog] = useState(false)
   const [decryptionReason, setDecryptionReason] = useState("")
   const [triggerCondition, setTriggerCondition] = useState("")
+  const [showAppealDialog, setShowAppealDialog] = useState(false)
+  const [appealReason, setAppealReason] = useState("")
+  const [appealSubmitting, setAppealSubmitting] = useState(false)
 
   const isAuthor = currentUserId && post.author_id && currentUserId === post.author_id
   const isRedacted = post.status === "redacted"
   const isShadow = post.status === "shadow"
   const isRemoved = post.status === "removed"
   const canRequestDecryption = isAdmin && (isRedacted || isShadow || isRemoved)
+  const hasOpenAppeal = appealStatus === "pending" || appealStatus === "reviewing"
+  const isAppealRejected = appealStatus === "rejected"
+  const canAppeal = isAuthor && !isAdmin && isRemoved && !hasOpenAppeal && !isAppealRejected
 
   const handleLike = () => {
     setLiked(!liked)
@@ -128,6 +138,29 @@ export function CommunityPostCard({
     alert("解密申請已提交，請等待審核")
   }
 
+  const handleSubmitAppeal = async () => {
+    if (isAppealRejected) {
+      alert("此貼文申訴已被駁回，無法再次申請")
+      return
+    }
+
+    if (!appealReason.trim()) {
+      alert("請輸入申訴理由")
+      return
+    }
+
+    if (!onAppeal) return
+
+    setAppealSubmitting(true)
+    try {
+      await onAppeal(post.id, appealReason.trim())
+      setShowAppealDialog(false)
+      setAppealReason("")
+    } finally {
+      setAppealSubmitting(false)
+    }
+  }
+
   const getPostTypeDisplay = (type: string) => {
     const types: Record<string, { label: string; color: string }> = {
       case: { label: "案例", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
@@ -147,6 +180,24 @@ export function CommunityPostCard({
 
   const displayTitle = isRedacted && post.redacted_title ? post.redacted_title : post.title
   const displayContent = isRedacted && post.redacted_content ? post.redacted_content : post.content
+
+  const getAppealBadge = (status?: PostCardProps["appealStatus"]) => {
+    if (status === "pending" || status === "reviewing") {
+      return { label: "申訴處理中", className: "border-amber-500/40 text-amber-500 bg-amber-500/10" }
+    }
+    if (status === "rejected") {
+      return { label: "申訴失敗", className: "border-red-500/40 text-red-500 bg-red-500/10" }
+    }
+    if (status === "restored") {
+      return { label: "申訴成功", className: "border-emerald-500/40 text-emerald-500 bg-emerald-500/10" }
+    }
+    if (status === "cancelled") {
+      return { label: "申訴已取消", className: "border-slate-400/40 text-slate-500 bg-slate-500/10" }
+    }
+    return null
+  }
+
+  const appealBadge = getAppealBadge(appealStatus)
 
   return (
     <>
@@ -203,6 +254,32 @@ export function CommunityPostCard({
               )}
             </div>
           )}
+          {isRemoved && canAppeal && (
+            <div className="flex items-center gap-2 mb-3 p-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <ShieldAlert className="w-4 h-4 text-blue-500" />
+              <span className="text-xs text-blue-500">此貼文已下架，可提出申訴要求人工複審</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-6 text-xs border-blue-500/50 text-blue-500 hover:bg-blue-500/10 bg-transparent"
+                onClick={() => setShowAppealDialog(true)}
+              >
+                提出申訴
+              </Button>
+            </div>
+          )}
+          {isRemoved && hasOpenAppeal && (
+            <div className="flex items-center gap-2 mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              <ShieldAlert className="w-4 h-4 text-amber-500" />
+              <span className="text-xs font-medium text-amber-500">此貼文已有處理中的申訴案件</span>
+            </div>
+          )}
+          {isRemoved && isAppealRejected && (
+            <div className="flex items-center gap-2 mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded-lg">
+              <ShieldAlert className="w-4 h-4 text-red-500" />
+              <span className="text-xs font-medium text-red-500">此貼文申訴已駁回，無法再次申請</span>
+            </div>
+          )}
 
           <div className="flex items-start gap-3 mb-3">
             <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-medium">
@@ -233,6 +310,11 @@ export function CommunityPostCard({
                 {isRemoved && isAdmin && (
                   <Badge variant="outline" className="text-xs px-2 py-0 border-red-500/50 text-red-500">
                     已下架
+                  </Badge>
+                )}
+                {appealBadge && (
+                  <Badge variant="outline" className={`text-xs px-2 py-0 ${appealBadge.className}`}>
+                    {appealBadge.label}
                   </Badge>
                 )}
               </div>
@@ -271,6 +353,12 @@ export function CommunityPostCard({
                       <Flag className="w-4 h-4 mr-2" />
                       檢舉貼文
                     </DropdownMenuItem>
+                    {canAppeal && (
+                      <DropdownMenuItem onClick={() => setShowAppealDialog(true)}>
+                        <ShieldAlert className="w-4 h-4 mr-2" />
+                        提出申訴
+                      </DropdownMenuItem>
+                    )}
                     {canRequestDecryption && (
                       <>
                         <DropdownMenuSeparator />
@@ -399,6 +487,34 @@ export function CommunityPostCard({
               取消
             </Button>
             <Button onClick={handleSubmitDecryption}>提交申請</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAppealDialog} onOpenChange={setShowAppealDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>提交內容申訴</DialogTitle>
+            <DialogDescription>請說明你認為被誤判的原因，管理員將進行人工複審。</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label>申訴理由</Label>
+            <Textarea
+              value={appealReason}
+              onChange={(e) => setAppealReason(e.target.value)}
+              placeholder="請提供具體理由，例如：內容不含違規資訊、已修正敏感字詞等"
+              rows={4}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAppealDialog(false)} disabled={appealSubmitting}>
+              取消
+            </Button>
+            <Button onClick={handleSubmitAppeal} disabled={appealSubmitting}>
+              {appealSubmitting ? "提交中..." : "送出申訴"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

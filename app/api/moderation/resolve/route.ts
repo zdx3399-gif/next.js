@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 
@@ -211,22 +212,59 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to update queue status: " + updateError.message }, { status: 500 })
     }
 
-    // 記錄稽核日誌
-    try {
-      await supabase.from("audit_logs").insert([
-        {
-          operator_id: userId,
-          operator_role: operatorRole,
-          action_type: `moderation_${resolution.action}`,
-          target_type: queueItem.item_type,
-          target_id: queueItem.item_id,
-          reason: resolution.reason || "審核處理",
-          after_state: { status: "resolved", resolution },
-        },
-      ])
-      console.log("[v0] Audit log created")
-    } catch (auditError) {
-      console.error("[v0] Error creating audit log:", auditError)
+    await writeServerAuditLog({
+      supabase,
+      operatorId: userId || null,
+      operatorRole,
+      actionType: `moderation_${resolution.action}`,
+      targetType: queueItem.item_type,
+      targetId: queueItem.item_id,
+      reason: resolution.reason || "審核處理",
+      afterState: { status: "resolved", resolution },
+      module: "moderation-resolve",
+      status: "success",
+    })
+
+    // 若此貼文有待處理申訴，依本次人工複審結果回寫申訴狀態
+    if (queueItem.item_type === "post") {
+      try {
+        const { data: openAppeal } = await supabase
+          .from("moderation_appeals")
+          .select("id")
+          .eq("post_id", queueItem.item_id)
+          .in("status", ["pending", "reviewing"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (openAppeal?.id) {
+          const appealStatus = resolution.action === "approve" ? "restored" : "rejected"
+          await supabase
+            .from("moderation_appeals")
+            .update({
+              status: appealStatus,
+              reviewed_by: userId,
+              reviewed_at: new Date().toISOString(),
+              review_note: resolution.reason || null,
+            })
+            .eq("id", openAppeal.id)
+
+          await writeServerAuditLog({
+            supabase,
+            operatorId: userId || null,
+            operatorRole,
+            actionType: appealStatus === "restored" ? "appeal_restored" : "appeal_rejected",
+            targetType: "community_post",
+            targetId: queueItem.item_id,
+            reason: resolution.reason || "申訴複審完成",
+            relatedRequestId: openAppeal.id,
+            module: "moderation-resolve",
+            status: "success",
+          })
+        }
+      } catch (appealUpdateError) {
+        console.error("[v0] Error updating moderation appeal:", appealUpdateError)
+      }
     }
 
     console.log("[v0] Moderation resolved successfully")

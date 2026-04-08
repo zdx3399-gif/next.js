@@ -2,6 +2,7 @@ import { Client, validateSignature } from '@line/bot-sdk';
 import { createClient } from '@supabase/supabase-js';
 import { chat } from '@/lib/ai-chat';
 import { facilityCarousel, createClarificationQuickReply, createMessageWithFeedback } from '@/utils/lineMessage';
+import { writeServerAuditLog } from '@/lib/audit-server';
 import 'dotenv/config';
 
 const supabase = createClient(
@@ -132,6 +133,18 @@ export async function POST(req) {
             const user_name = existingProfile?.line_display_name;
 
             if (!user_id) {
+              await writeServerAuditLog({
+                supabase,
+                operatorId: null,
+                operatorRole: 'resident',
+                actionType: 'submit_vote',
+                targetType: 'vote',
+                targetId: vote_id,
+                reason: '找不到住戶資料',
+                module: 'line-webhook',
+                status: 'blocked',
+                errorCode: 'profile_not_found',
+              });
               await client.replyMessage(replyToken, { type: 'text', text: '找不到住戶資料' });
               continue;
             }
@@ -145,6 +158,18 @@ export async function POST(req) {
               .maybeSingle();
 
             if (existingVote) {
+              await writeServerAuditLog({
+                supabase,
+                operatorId: user_id,
+                operatorRole: 'resident',
+                actionType: 'submit_vote',
+                targetType: 'vote',
+                targetId: vote_id,
+                reason: '您已經投過票',
+                module: 'line-webhook',
+                status: 'blocked',
+                errorCode: 'already_voted',
+              });
               await client.replyMessage(replyToken, { type: 'text', text: '您已經投過票' });
               continue;
             }
@@ -159,9 +184,34 @@ export async function POST(req) {
 
             if (voteError) {
               console.error('❌ 投票寫入失敗:', voteError);
+              await writeServerAuditLog({
+                supabase,
+                operatorId: user_id,
+                operatorRole: 'resident',
+                actionType: 'submit_vote',
+                targetType: 'vote',
+                targetId: vote_id,
+                reason: voteError.message,
+                module: 'line-webhook',
+                status: 'failed',
+                errorCode: voteError.message,
+              });
               await client.replyMessage(replyToken, { type: 'text', text: '投票失敗' });
               continue;
             }
+
+            await writeServerAuditLog({
+              supabase,
+              operatorId: user_id,
+              operatorRole: 'resident',
+              actionType: 'submit_vote',
+              targetType: 'vote',
+              targetId: vote_id,
+              reason: 'LINE 投票成功',
+              afterState: { option_selected: option_selected },
+              module: 'line-webhook',
+              status: 'success',
+            });
 
             await client.replyMessage(replyToken, { type: 'text', text: `確認，您的投票結果為「${option_selected}」` });
           } catch (err) {
@@ -237,6 +287,31 @@ export async function POST(req) {
               await supabase
                 .from('clarification_options')
                 .insert(clarificationRecords);
+              await writeServerAuditLog({
+                supabase,
+                operatorId: existingProfile?.id || null,
+                operatorRole: 'resident',
+                actionType: 'system_action',
+                targetType: 'system',
+                targetId: String(chatLogId),
+                reason: '建立追問 chat_event',
+                afterState: { needs_clarification: true },
+                module: 'line-webhook',
+                status: 'success',
+              });
+            } else if (insertError) {
+              await writeServerAuditLog({
+                supabase,
+                operatorId: existingProfile?.id || null,
+                operatorRole: 'resident',
+                actionType: 'system_action',
+                targetType: 'system',
+                targetId: eventId || 'chat_event',
+                reason: insertError.message,
+                module: 'line-webhook',
+                status: 'failed',
+                errorCode: insertError.message,
+              });
             }
             
             // 建立 Quick Reply 訊息
@@ -314,8 +389,34 @@ export async function POST(req) {
           if (!insertError && insertData?.[0]) {
             chatLogId = insertData[0].id;
             console.log('[DEBUG] chatLogId 已取得:', chatLogId);
+            await writeServerAuditLog({
+              supabase,
+              operatorId: existingProfile?.id || null,
+              operatorRole: 'resident',
+              actionType: 'system_action',
+              targetType: 'system',
+              targetId: String(chatLogId),
+              reason: '建立 chat_event',
+              afterState: { needs_clarification: false },
+              module: 'line-webhook',
+              status: 'success',
+            });
           } else {
             console.error('[ERROR] 無法取得 chatLogId, insertError:', insertError);
+            if (insertError) {
+              await writeServerAuditLog({
+                supabase,
+                operatorId: existingProfile?.id || null,
+                operatorRole: 'resident',
+                actionType: 'system_action',
+                targetType: 'system',
+                targetId: eventId || 'chat_event',
+                reason: insertError.message,
+                module: 'line-webhook',
+                status: 'failed',
+                errorCode: insertError.message,
+              });
+            }
           }
           
           // 只有在有 chatLogId 時才建立回饋按鈕
@@ -433,11 +534,39 @@ export async function POST(req) {
             if (feedbackType === 'not_helpful') {
               updateData.answered = false;
             }
-            await supabase
+            const { error: feedbackUpdateError } = await supabase
               .from('chat_events')
               .update(updateData)
               .eq('id', chatLogId)
               .eq('source', 'chat_log');
+
+            if (feedbackUpdateError) {
+              await writeServerAuditLog({
+                supabase,
+                operatorId: existingProfile?.id || null,
+                operatorRole: 'resident',
+                actionType: 'system_action',
+                targetType: 'system',
+                targetId: chatLogId,
+                reason: feedbackUpdateError.message,
+                module: 'line-webhook',
+                status: 'failed',
+                errorCode: feedbackUpdateError.message,
+              });
+            } else {
+              await writeServerAuditLog({
+                supabase,
+                operatorId: existingProfile?.id || null,
+                operatorRole: 'resident',
+                actionType: 'system_action',
+                targetType: 'system',
+                targetId: chatLogId,
+                reason: '更新 LINE 回饋狀態',
+                afterState: { feedbackType },
+                module: 'line-webhook',
+                status: 'success',
+              });
+            }
             
             // 回覆訊息
             let responseText = '';

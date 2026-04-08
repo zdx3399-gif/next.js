@@ -10,6 +10,12 @@ export type AuditActionType =
   | "create_post"
   | "update_post"
   | "delete_post"
+  | "create_comment"
+  | "delete_comment"
+  | "create_report"
+  | "appeal_submit"
+  | "appeal_rejected"
+  | "appeal_restored"
   // 審核相關
   | "approve"
   | "remove"
@@ -36,8 +42,41 @@ export type AuditActionType =
   | "publish_announcement"
   // 投票相關
   | "create_vote"
+  | "submit_vote"
+  | "update_vote"
   | "close_vote"
   | "delete_vote"
+  | "attach_vote_result"
+  // 維修與緊急事件
+  | "dispatch_maintenance"
+  | "complete_maintenance"
+  | "create_emergency"
+  | "update_emergency"
+  | "delete_emergency"
+  | "create_visitor"
+  | "update_visitor"
+  | "delete_visitor"
+  | "check_in_visitor"
+  | "check_out_visitor"
+  | "create_package"
+  | "update_package"
+  | "delete_package"
+  | "pickup_package"
+  | "register_user"
+  | "create_meeting"
+  | "update_meeting"
+  | "delete_meeting"
+  | "create_maintenance_request"
+  | "update_maintenance_request"
+  | "delete_maintenance_request"
+  | "update_finance_record"
+  | "delete_finance_record"
+  | "create_resident"
+  | "update_resident"
+  | "delete_resident"
+  | "create_unit"
+  | "update_unit"
+  | "delete_unit"
   // 用戶管理
   | "update_user_role"
   | "ban_user"
@@ -56,6 +95,8 @@ export type AuditTargetType =
   | "announcement"
   | "vote"
   | "report"
+  | "maintenance"
+  | "emergency"
   | "decryption_request"
   | "system"
 
@@ -150,6 +191,12 @@ export const ACTION_TYPE_LABELS: Record<AuditActionType, string> = {
   create_post: "發布貼文",
   update_post: "更新貼文",
   delete_post: "刪除貼文",
+  create_comment: "建立留言",
+  delete_comment: "刪除留言",
+  create_report: "建立檢舉",
+  appeal_submit: "提出申訴",
+  appeal_rejected: "申訴駁回",
+  appeal_restored: "申訴恢復",
   approve: "核准發布",
   remove: "下架內容",
   redact: "遮蔽敏感",
@@ -171,8 +218,40 @@ export const ACTION_TYPE_LABELS: Record<AuditActionType, string> = {
   delete_announcement: "刪除公告",
   publish_announcement: "公開公告",
   create_vote: "建立投票",
+  submit_vote: "提交投票",
+  update_vote: "更新投票",
   close_vote: "結束投票",
   delete_vote: "刪除投票",
+  attach_vote_result: "上傳投票結果",
+  dispatch_maintenance: "維修派工",
+  complete_maintenance: "維修結案",
+  create_emergency: "建立緊急事件",
+  update_emergency: "更新緊急事件",
+  delete_emergency: "刪除緊急事件",
+  create_visitor: "建立訪客預約",
+  update_visitor: "更新訪客預約",
+  delete_visitor: "刪除訪客預約",
+  check_in_visitor: "訪客簽到",
+  check_out_visitor: "訪客簽退",
+  create_package: "建立包裹",
+  update_package: "更新包裹",
+  delete_package: "刪除包裹",
+  pickup_package: "包裹領取",
+  register_user: "註冊用戶",
+  create_meeting: "建立會議",
+  update_meeting: "更新會議",
+  delete_meeting: "刪除會議",
+  create_maintenance_request: "建立維修申請",
+  update_maintenance_request: "更新維修申請",
+  delete_maintenance_request: "刪除維修申請",
+  update_finance_record: "更新財務紀錄",
+  delete_finance_record: "刪除財務紀錄",
+  create_resident: "建立住戶",
+  update_resident: "更新住戶",
+  delete_resident: "刪除住戶",
+  create_unit: "建立單位",
+  update_unit: "更新單位",
+  delete_unit: "刪除單位",
   update_user_role: "變更用戶角色",
   ban_user: "禁言用戶",
   unban_user: "解除禁言",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -34,11 +35,35 @@ export async function POST(req) {
     const supabase = getSupabase()
     const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
     if (!LINE_TOKEN) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: "admin",
+        actionType: "system_action",
+        targetType: "fee",
+        targetId: "unknown",
+        reason: "缺少 LINE_CHANNEL_ACCESS_TOKEN 環境變數",
+        module: "remind-fee",
+        status: "failed",
+        errorCode: "missing_line_token",
+      })
       return NextResponse.json({ error: "缺少 LINE_CHANNEL_ACCESS_TOKEN 環境變數" }, { status: 500 })
     }
 
     const { feeId, customMessage } = await req.json()
     if (!feeId) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: "admin",
+        actionType: "system_action",
+        targetType: "fee",
+        targetId: "unknown",
+        reason: "feeId 必填",
+        module: "remind-fee",
+        status: "blocked",
+        errorCode: "missing_fee_id",
+      })
       return NextResponse.json({ error: "feeId 必填" }, { status: 400 })
     }
 
@@ -49,6 +74,18 @@ export async function POST(req) {
       .single()
 
     if (feeErr || !fee) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: "admin",
+        actionType: "system_action",
+        targetType: "fee",
+        targetId: feeId,
+        reason: "Fee not found",
+        module: "remind-fee",
+        status: "blocked",
+        errorCode: "fee_not_found",
+      })
       return NextResponse.json({ error: "Fee not found" }, { status: 404 })
     }
 
@@ -59,10 +96,34 @@ export async function POST(req) {
       .maybeSingle()
 
     if (pErr) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile?.id || null,
+        operatorRole: "admin",
+        actionType: "system_action",
+        targetType: "fee",
+        targetId: fee.id,
+        reason: "查詢住戶資料失敗",
+        module: "remind-fee",
+        status: "failed",
+        errorCode: pErr.message,
+      })
       return NextResponse.json({ error: "查詢住戶資料失敗" }, { status: 500 })
     }
 
     if (!profile?.id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: "admin",
+        actionType: "system_action",
+        targetType: "fee",
+        targetId: fee.id,
+        reason: `未找到單位 ID ${fee.unit_id} 的住戶`,
+        module: "remind-fee",
+        status: "blocked",
+        errorCode: "profile_not_found",
+      })
       return NextResponse.json({ error: `未找到單位 ID ${fee.unit_id} 的住戶` }, { status: 404 })
     }
 
@@ -70,6 +131,18 @@ export async function POST(req) {
 
 
     if (!lineUserId) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile.id,
+        operatorRole: "resident",
+        actionType: "system_action",
+        targetType: "fee",
+        targetId: fee.id,
+        reason: "住戶尚未完成 LINE 綁定",
+        module: "remind-fee",
+        status: "blocked",
+        errorCode: "line_not_bound",
+      })
       return NextResponse.json({ 
         success: false, 
         sent: 0, 
@@ -102,6 +175,18 @@ export async function POST(req) {
 
     if (!resp.ok) {
       const errText = await resp.text()
+      await writeServerAuditLog({
+        supabase,
+        operatorId: profile.id,
+        operatorRole: "resident",
+        actionType: "system_action",
+        targetType: "fee",
+        targetId: fee.id,
+        reason: errText || "LINE 推播失敗",
+        module: "remind-fee",
+        status: "failed",
+        errorCode: `line_push_failed_${resp.status}`,
+      })
       return NextResponse.json({ 
         success: false, 
         sent: 0, 
@@ -111,6 +196,19 @@ export async function POST(req) {
     }
 
     await supabase.from("fees").update({ updated_at: new Date().toISOString() }).eq("id", fee.id)
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: profile.id,
+      operatorRole: "resident",
+      actionType: "system_action",
+      targetType: "fee",
+      targetId: fee.id,
+      reason: "發送管理費催繳通知",
+      afterState: { due: fee.due, paid: fee.paid, hasCustomMessage: !!customMessage },
+      module: "remind-fee",
+      status: "success",
+    })
 
     return NextResponse.json({ 
       success: true, 

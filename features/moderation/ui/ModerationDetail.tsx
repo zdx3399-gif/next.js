@@ -25,9 +25,63 @@ export function ModerationDetail({ itemId, currentUser, onBack, onResolved }: Mo
   const [redactedContent, setRedactedContent] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
+  const requireSecondConfirmationIfNeeded = () => {
+    const key = "moderation_resolve_timestamps"
+    const now = Date.now()
+    const windowMs = 10 * 60 * 1000
+    const threshold = 5
+
+    let timestamps: number[] = []
+    try {
+      const raw = localStorage.getItem(key)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          timestamps = parsed.filter((n) => typeof n === "number")
+        }
+      }
+    } catch {
+      timestamps = []
+    }
+
+    const recent = timestamps.filter((ts) => now - ts <= windowMs)
+    if (recent.length >= threshold) {
+      const ok = window.confirm("你在短時間內已高頻處理多筆案件，請再次確認本次決策是否正確。")
+      if (!ok) return false
+    }
+    return true
+  }
+
+  const markResolvedTimestamp = () => {
+    const key = "moderation_resolve_timestamps"
+    const now = Date.now()
+    const windowMs = 10 * 60 * 1000
+    let timestamps: number[] = []
+
+    try {
+      const raw = localStorage.getItem(key)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          timestamps = parsed.filter((n) => typeof n === "number")
+        }
+      }
+    } catch {
+      timestamps = []
+    }
+
+    const recent = timestamps.filter((ts) => now - ts <= windowMs)
+    recent.push(now)
+    localStorage.setItem(key, JSON.stringify(recent))
+  }
+
   const handleResolve = async () => {
     if (!reason.trim()) {
       alert("請輸入處理原因")
+      return
+    }
+
+    if (!requireSecondConfirmationIfNeeded()) {
       return
     }
 
@@ -47,6 +101,8 @@ export function ModerationDetail({ itemId, currentUser, onBack, onResolved }: Mo
           },
         }),
       })
+
+      markResolvedTimestamp()
 
       alert("處理完成")
       onResolved()

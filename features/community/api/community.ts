@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface CommunityPost {
   id: string
@@ -77,6 +78,32 @@ export interface PostAttachment {
   expires_at: string | null
   contains_pii: boolean
   created_at: string
+}
+
+export interface ModerationAppeal {
+  id: string
+  post_id: string
+  author_id: string
+  reason: string
+  status: "pending" | "reviewing" | "restored" | "rejected" | "cancelled"
+  review_note?: string | null
+  reviewed_by?: string | null
+  reviewed_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
 }
 
 export async function getCommunityPosts(filters?: {
@@ -195,10 +222,24 @@ export async function createPost(post: {
 
 export async function updatePost(postId: string, updates: Partial<CommunityPost>): Promise<CommunityPost | null> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
 
   if (!supabase) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_post",
+        targetType: "post",
+        targetId: postId,
+        reason: "請先登入",
+        additionalData: { module: "community", status: "blocked", error_code: "unauthenticated" },
+      })
+    }
     throw new Error("請先登入")
   }
+
+  const { data: beforePost } = await supabase.from("community_posts").select("id,status,title").eq("id", postId).maybeSingle()
 
   const { data, error } = await supabase
     .from("community_posts")
@@ -207,26 +248,103 @@ export async function updatePost(postId: string, updates: Partial<CommunityPost>
     .select()
     .single()
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_post",
+        targetType: "post",
+        targetId: postId,
+        reason: error.message,
+        additionalData: { module: "community", status: "failed", error_code: error.message },
+      })
+    }
+    throw new Error(error.message)
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_post",
+      targetType: "post",
+      targetId: postId,
+      reason: data?.title || "更新貼文",
+      beforeState: beforePost || undefined,
+      afterState: { status: data?.status, title: data?.title },
+      additionalData: { module: "community", status: "success" },
+    })
+  }
+
   return data as CommunityPost
 }
 
 export async function deletePost(postId: string, userId: string): Promise<void> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
 
   if (!supabase) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_post",
+        targetType: "post",
+        targetId: postId,
+        reason: "請先登入",
+        additionalData: { module: "community", status: "blocked", error_code: "unauthenticated" },
+      })
+    }
     throw new Error("請先登入")
   }
 
   const { data: post } = await supabase.from("community_posts").select("author_id").eq("id", postId).single()
 
   if (!post || post.author_id !== userId) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_post",
+        targetType: "post",
+        targetId: postId,
+        reason: "Unauthorized",
+        additionalData: { module: "community", status: "blocked", error_code: "unauthorized" },
+      })
+    }
     throw new Error("Unauthorized")
   }
 
   const { error } = await supabase.from("community_posts").update({ status: "deleted" }).eq("id", postId)
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_post",
+        targetType: "post",
+        targetId: postId,
+        reason: error.message,
+        additionalData: { module: "community", status: "failed", error_code: error.message },
+      })
+    }
+    throw new Error(error.message)
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_post",
+      targetType: "post",
+      targetId: postId,
+      reason: "刪除貼文",
+      afterState: { status: "deleted" },
+      additionalData: { module: "community", status: "success" },
+    })
+  }
 }
 
 export async function getPostComments(postId: string): Promise<PostComment[]> {
@@ -260,14 +378,39 @@ export async function createComment(comment: {
   display_name?: string
 }): Promise<PostComment | null> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
 
   if (!supabase) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_comment",
+        targetType: "comment",
+        targetId: comment.post_id,
+        reason: "請先登入",
+        additionalData: { module: "community", status: "blocked", error_code: "unauthenticated" },
+      })
+    }
     throw new Error("請先登入")
   }
 
   const { data, error } = await supabase.from("post_comments").insert([comment]).select().single()
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_comment",
+        targetType: "comment",
+        targetId: comment.post_id,
+        reason: error.message,
+        additionalData: { module: "community", status: "failed", error_code: error.message },
+      })
+    }
+    throw new Error(error.message)
+  }
 
   try {
     await supabase.rpc("increment_comment_count", { post_id: comment.post_id })
@@ -275,13 +418,38 @@ export async function createComment(comment: {
     console.error("[v0] Failed to increment comment count:", e)
   }
 
+  if (operator.id && data?.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_comment",
+      targetType: "comment",
+      targetId: data.id,
+      reason: "建立留言",
+      afterState: { post_id: comment.post_id },
+      additionalData: { module: "community", status: "success" },
+    })
+  }
+
   return data as PostComment
 }
 
 export async function deleteComment(commentId: string, userId: string): Promise<void> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
 
   if (!supabase) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_comment",
+        targetType: "comment",
+        targetId: commentId,
+        reason: "請先登入",
+        additionalData: { module: "community", status: "blocked", error_code: "unauthenticated" },
+      })
+    }
     throw new Error("請先登入")
   }
 
@@ -292,17 +460,54 @@ export async function deleteComment(commentId: string, userId: string): Promise<
     .single()
 
   if (!comment || comment.author_id !== userId) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_comment",
+        targetType: "comment",
+        targetId: commentId,
+        reason: "Unauthorized",
+        additionalData: { module: "community", status: "blocked", error_code: "unauthorized" },
+      })
+    }
     throw new Error("Unauthorized")
   }
 
   const { error } = await supabase.from("post_comments").update({ status: "deleted" }).eq("id", commentId)
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_comment",
+        targetType: "comment",
+        targetId: commentId,
+        reason: error.message,
+        additionalData: { module: "community", status: "failed", error_code: error.message },
+      })
+    }
+    throw new Error(error.message)
+  }
 
   try {
     await supabase.rpc("decrement_comment_count", { post_id: comment.post_id })
   } catch (e) {
     console.error("[v0] Failed to decrement comment count:", e)
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_comment",
+      targetType: "comment",
+      targetId: commentId,
+      reason: "刪除留言",
+      afterState: { status: "deleted" },
+      additionalData: { module: "community", status: "success" },
+    })
   }
 }
 
@@ -314,15 +519,113 @@ export async function createReport(report: {
   description?: string
 }): Promise<Report | null> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
 
   if (!supabase) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_report",
+        targetType: "report",
+        targetId: report.target_id,
+        reason: "請先登入",
+        additionalData: { module: "community", status: "blocked", error_code: "unauthenticated" },
+      })
+    }
     throw new Error("請先登入")
   }
 
   const { data, error } = await supabase.from("reports").insert([report]).select().single()
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_report",
+        targetType: "report",
+        targetId: report.target_id,
+        reason: error.message,
+        additionalData: { module: "community", status: "failed", error_code: error.message },
+      })
+    }
+    throw new Error(error.message)
+  }
+
+  if (operator.id && data?.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_report",
+      targetType: "report",
+      targetId: data.id,
+      reason: report.reason,
+      afterState: { target_type: report.target_type, target_id: report.target_id },
+      additionalData: { module: "community", status: "success" },
+    })
+  }
+
   return data as Report
+}
+
+export async function getOwnModeratedPosts(userId: string): Promise<CommunityPost[]> {
+  const supabase = getSupabaseClient()
+
+  if (!supabase || !userId) {
+    return []
+  }
+
+  const { data, error } = await supabase
+    .from("community_posts")
+    .select("*")
+    .eq("author_id", userId)
+    .in("status", ["removed", "shadow", "redacted"])
+    .order("updated_at", { ascending: false })
+
+  if (error) {
+    console.error("[v0] Error fetching moderated posts:", error)
+    return []
+  }
+
+  return (data || []) as CommunityPost[]
+}
+
+export async function submitModerationAppeal(params: {
+  postId: string
+  authorId: string
+  reason: string
+}): Promise<{ success: boolean; message: string }> {
+  const res = await fetch("/api/community/appeals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(payload?.error || "申訴提交失敗")
+  }
+
+  return {
+    success: true,
+    message: payload?.message || "申訴已送出",
+  }
+}
+
+export async function getUserModerationAppeals(authorId: string): Promise<ModerationAppeal[]> {
+  if (!authorId) return []
+
+  const res = await fetch(`/api/community/appeals?authorId=${encodeURIComponent(authorId)}`, {
+    cache: "no-store",
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(payload?.error || "讀取申訴紀錄失敗")
+  }
+
+  return Array.isArray(payload?.data) ? (payload.data as ModerationAppeal[]) : []
 }
 
 export async function getUserReports(userId: string): Promise<Report[]> {
@@ -352,8 +655,20 @@ export async function togglePostInteraction(
   interactionType: "like" | "bookmark" | "helpful" | "not_helpful",
 ): Promise<boolean> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
 
   if (!supabase) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "system_action",
+        targetType: targetType === "post" ? "post" : targetType === "comment" ? "comment" : "knowledge_card",
+        targetId,
+        reason: "請先登入",
+        additionalData: { module: "community", status: "blocked", error_code: "unauthenticated", interactionType },
+      })
+    }
     throw new Error("請先登入")
   }
 
@@ -389,6 +704,19 @@ export async function togglePostInteraction(
       console.log("[v0] Like removed, decremented count")
     }
 
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "system_action",
+        targetType: targetType === "post" ? "post" : targetType === "comment" ? "comment" : "knowledge_card",
+        targetId,
+        reason: "取消互動",
+        afterState: { interactionType, active: false },
+        additionalData: { module: "community", status: "success" },
+      })
+    }
+
     return false
   } else {
     const { error: insertError } = await supabase.from("user_interactions").insert([
@@ -402,6 +730,17 @@ export async function togglePostInteraction(
 
     if (insertError) {
       console.error("[v0] Failed to insert interaction:", insertError)
+      if (operator.id) {
+        await createAuditLog({
+          operatorId: operator.id,
+          operatorRole: operator.role,
+          actionType: "system_action",
+          targetType: targetType === "post" ? "post" : targetType === "comment" ? "comment" : "knowledge_card",
+          targetId,
+          reason: insertError.message,
+          additionalData: { module: "community", status: "failed", error_code: insertError.message, interactionType },
+        })
+      }
       throw new Error(insertError.message)
     }
 
@@ -415,6 +754,19 @@ export async function togglePostInteraction(
           .eq("id", targetId)
       }
       console.log("[v0] Like added, incremented count")
+    }
+
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "system_action",
+        targetType: targetType === "post" ? "post" : targetType === "comment" ? "comment" : "knowledge_card",
+        targetId,
+        reason: "新增互動",
+        afterState: { interactionType, active: true },
+        additionalData: { module: "community", status: "success" },
+      })
     }
 
     return true

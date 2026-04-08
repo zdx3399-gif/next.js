@@ -1,5 +1,6 @@
 import { chat } from '@/lib/ai-chat';
 import { createClient } from '@supabase/supabase-js';
+import { writeServerAuditLog } from '@/lib/audit-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,18 @@ export async function POST(req) {
     const supabase = getSupabase();
     const { query, userId, eventId } = await req.json();
     if (!query) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: userId || null,
+        operatorRole: 'resident',
+        actionType: 'system_action',
+        targetType: 'system',
+        targetId: eventId || 'llm',
+        reason: '缺少 query 參數',
+        module: 'llm',
+        status: 'blocked',
+        errorCode: 'missing_query',
+      });
       return new Response(JSON.stringify({ error: '缺少 query 參數' }), { status: 400 });
     }
     
@@ -64,6 +77,18 @@ export async function POST(req) {
     const { error: insertError, data: insertData } = await supabase.from('chat_log').insert([logData]).select();
     if (insertError) {
       console.error('[Supabase Insert Error]', insertError);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: userId || null,
+        operatorRole: 'resident',
+        actionType: 'system_action',
+        targetType: 'system',
+        targetId: eventId || 'llm',
+        reason: insertError.message,
+        module: 'llm',
+        status: 'failed',
+        errorCode: insertError.message,
+      });
       return new Response(JSON.stringify({ ...result, supabase_error: insertError.message }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
@@ -72,6 +97,19 @@ export async function POST(req) {
     
     // 取得新插入的 chat_log id
     const chatLogId = insertData?.[0]?.id;
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: userId || null,
+      operatorRole: 'resident',
+      actionType: 'system_action',
+      targetType: 'system',
+      targetId: String(chatLogId || eventId || 'llm'),
+      reason: 'LLM 對話寫入 chat_log',
+      afterState: { event_id: eventId || null, answered: logData.answered },
+      module: 'llm',
+      status: 'success',
+    });
 
     return new Response(JSON.stringify({ ...result, chatLogId }), {
       status: 200,

@@ -15,7 +15,7 @@ import { VisitorList } from "@/features/visitors/ui/VisitorList"
 import { MaintenanceList } from "@/features/maintenance/ui/MaintenanceList"
 import { FinanceList } from "@/features/finance/ui/FinanceList"
 import { MeetingList } from "@/features/meetings/ui/MeetingList"
-// import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
+import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
 import { FacilityList } from "@/features/facilities/ui/FacilityList"
 import { AiChat } from "@/features/support/ui/AiChat"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -273,7 +273,7 @@ export default function DashboardPage() {
     { id: "finance", icon: "account_balance", label: "管理費/收支" },
     { id: "visitors", icon: "how_to_reg", label: "訪客紀錄" },
     { id: "meetings", icon: "event", label: "會議記錄" },
-    // { id: "emergencies", icon: "emergency", label: "緊急事件" },
+    { id: "emergencies", icon: "emergency", label: "緊急事件" },
     { id: "facilities", icon: "meeting_room", label: "設施預約" },
     { id: "community", icon: "forum", label: "社區討論" },
     { id: "knowledge-base", icon: "school", label: "知識庫" },
@@ -376,15 +376,13 @@ export default function DashboardPage() {
                 </section>
               )}
 
-              {/* Emergency Actions (temporarily disabled)
               <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-xl p-3">
                 <h3 className="flex items-center gap-1 text-[var(--theme-text-primary)]/90 text-sm font-bold mb-2">
                   <span className="material-icons">emergency</span>
                   <span className="text-[var(--theme-danger)] font-bold">緊急事件</span>
                 </h3>
-                <EmergencyButtons userId={currentUser?.id} userName={currentUser?.name} onTrigger={() => {}} variant="sidebar" />
+                <EmergencyButtons userId={currentUser?.id} userName={getNameString(currentUser?.name)} onTrigger={() => {}} variant="sidebar" />
               </div>
-              */}
             </section>
           )}
           {currentSection === "packages" && (
@@ -409,9 +407,9 @@ export default function DashboardPage() {
           {currentSection === "finance" && <FinanceList userRoom={currentUser?.room} />}
           {currentSection === "visitors" && <VisitorList userRoom={currentUser?.room} currentUser={currentUser} />}
           {currentSection === "meetings" && <MeetingList />}
-          {/* {currentSection === "emergencies" && (
+          {currentSection === "emergencies" && (
             <EmergencyButtons userId={currentUser?.id} userName={getNameString(currentUser?.name)} variant="full" />
-          )} */}
+          )}
           {currentSection === "facilities" && (
             <FacilityList
               userId={currentUser?.id}

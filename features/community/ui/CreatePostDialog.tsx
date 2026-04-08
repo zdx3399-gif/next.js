@@ -90,7 +90,7 @@ export function CreatePostDialog({ open, onClose, onSubmit, currentUser }: Creat
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="semi_anonymous">��匿名（住戶#編號）- 推薦</SelectItem>
+                <SelectItem value="semi_anonymous">匿名（住戶#編號）- 推薦</SelectItem>
                 <SelectItem value="anonymous">完全匿名</SelectItem>
                 <SelectItem value="real_name">實名顯示</SelectItem>
               </SelectContent>

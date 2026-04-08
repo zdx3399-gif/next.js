@@ -222,6 +222,23 @@ interface AnnouncementManagementAdminProps {
   isPreviewMode?: boolean
 }
 
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown", name: "" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown", name: "" }
+    const parsed = JSON.parse(raw)
+    return {
+      id: parsed?.id || "",
+      role: parsed?.role || "unknown",
+      name: parsed?.name || "",
+    }
+  } catch {
+    return { id: "", role: "unknown", name: "" }
+  }
+}
+
 export function AnnouncementManagementAdmin({ isPreviewMode = false }: AnnouncementManagementAdminProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
@@ -274,6 +291,7 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
     console.log("[UI] 📝 editingAnnouncement:", !!editingAnnouncement);
 
     setIsSaving(true)
+    const operator = getCurrentOperator()
     try {
       const finalData = { ...formData }
       console.log("[UI] ✅ finalData 初始化:", finalData);
@@ -315,6 +333,9 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
               content: finalData.content,
               image_url: finalData.image_url,
               author: finalData.author_name || "管理委員會",
+              operatorId: operator.id || null,
+              operatorRole: operator.role,
+              operatorName: operator.name || finalData.author_name || "管理委員會",
               pushOnly: false,
               test: false,
             }),

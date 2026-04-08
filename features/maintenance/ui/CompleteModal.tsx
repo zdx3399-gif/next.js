@@ -10,6 +10,19 @@ interface CompleteModalProps {
   onSuccess: () => void
 }
 
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
+}
+
 export function CompleteModal({ isOpen, onClose, maintenanceId, estimatedCost, onSuccess }: CompleteModalProps) {
   const [formData, setFormData] = useState({
     final_cost: estimatedCost || 0,
@@ -37,6 +50,7 @@ export function CompleteModal({ isOpen, onClose, maintenanceId, estimatedCost, o
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    const operator = getCurrentOperator()
 
     try {
       const response = await fetch('/api/maintenance/complete', {
@@ -47,7 +61,9 @@ export function CompleteModal({ isOpen, onClose, maintenanceId, estimatedCost, o
           final_cost: formData.final_cost,
           completion_note: formData.completion_note,
           completion_photo_url: formData.completion_photo_url,
-          generate_fee: formData.generate_fee && formData.final_cost > 0
+          generate_fee: formData.generate_fee && formData.final_cost > 0,
+          operatorId: operator.id || null,
+          operatorRole: operator.role,
         })
       })
 

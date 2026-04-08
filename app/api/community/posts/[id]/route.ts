@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,22 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const body = await req.json();
     const { user_id, ...updates } = body;
 
+    if (!user_id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: "resident",
+        actionType: "update_post",
+        targetType: "post",
+        targetId: id,
+        reason: "編輯貼文缺少 user_id",
+        module: "community",
+        status: "blocked",
+        errorCode: "missing_user_id",
+      })
+      return NextResponse.json({ error: "缺少 user_id" }, { status: 400 });
+    }
+
     // 檢查權限
     const { data: post, error: postErr } = await supabase
       .from("community_posts")
@@ -57,11 +74,36 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (postErr) throw postErr;
 
     if (!post || post.author_id !== user_id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: user_id,
+        operatorRole: "resident",
+        actionType: "update_post",
+        targetType: "post",
+        targetId: id,
+        reason: "無權限編輯此貼文",
+        module: "community",
+        status: "blocked",
+        errorCode: "forbidden",
+      })
       return NextResponse.json({ error: "無權限編輯此貼文" }, { status: 403 });
     }
 
     // 檢查是否超過編輯期限
     if (post.can_edit_until && new Date(post.can_edit_until) < new Date()) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: user_id,
+        operatorRole: "resident",
+        actionType: "update_post",
+        targetType: "post",
+        targetId: id,
+        reason: "已超過可編輯期限",
+        module: "community",
+        status: "blocked",
+        errorCode: "edit_window_expired",
+        beforeState: { can_edit_until: post.can_edit_until },
+      })
       return NextResponse.json({ error: "已超過可編輯期限" }, { status: 403 });
     }
 
@@ -73,6 +115,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       .single();
 
     if (error) throw error;
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: "resident",
+      actionType: "update_post",
+      targetType: "post",
+      targetId: id,
+      reason: "更新社群貼文",
+      module: "community",
+      status: "success",
+      beforeState: { can_edit_until: post.can_edit_until },
+      afterState: { ...updates, edited_at: data.edited_at },
+    })
 
     return NextResponse.json({ data });
   } catch (error: any) {
@@ -91,6 +147,18 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const userId = searchParams.get("userId");
 
     if (!userId) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: "resident",
+        actionType: "delete_post",
+        targetType: "post",
+        targetId: id,
+        reason: "刪除貼文缺少 userId",
+        module: "community",
+        status: "blocked",
+        errorCode: "missing_user_id",
+      })
       return NextResponse.json({ error: "缺少 userId" }, { status: 400 });
     }
 
@@ -104,11 +172,36 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     if (postErr) throw postErr;
 
     if (!post || post.author_id !== userId) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: userId,
+        operatorRole: "resident",
+        actionType: "delete_post",
+        targetType: "post",
+        targetId: id,
+        reason: "無權限刪除此貼文",
+        module: "community",
+        status: "blocked",
+        errorCode: "forbidden",
+      })
       return NextResponse.json({ error: "無權限刪除此貼文" }, { status: 403 });
     }
 
     const { error } = await supabase.from("community_posts").update({ status: "deleted" }).eq("id", id);
     if (error) throw error;
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: userId,
+      operatorRole: "resident",
+      actionType: "delete_post",
+      targetType: "post",
+      targetId: id,
+      reason: "刪除社群貼文",
+      module: "community",
+      status: "success",
+      afterState: { status: "deleted" },
+    })
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

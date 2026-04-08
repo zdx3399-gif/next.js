@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { writeServerAuditLog } from '@/lib/audit-server';
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
@@ -15,6 +16,18 @@ export async function POST(req) {
     const { chatLogId, feedbackType, userId, clarificationChoice, comment } = await req.json();
 
     if (!chatLogId || !feedbackType) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: userId || null,
+        operatorRole: 'resident',
+        actionType: 'system_action',
+        targetType: 'feedback',
+        targetId: chatLogId || 'unknown',
+        reason: '缺少必要參數: chatLogId 或 feedbackType',
+        module: 'feedback',
+        status: 'blocked',
+        errorCode: 'missing_required_fields',
+      });
       return new Response(
         JSON.stringify({ error: '缺少必要參數: chatLogId 或 feedbackType' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -24,6 +37,18 @@ export async function POST(req) {
     // 驗證 feedbackType
     const validTypes = ['helpful', 'unclear', 'not_helpful'];
     if (!validTypes.includes(feedbackType)) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: userId || null,
+        operatorRole: 'resident',
+        actionType: 'system_action',
+        targetType: 'feedback',
+        targetId: chatLogId || 'unknown',
+        reason: '無效的 feedbackType',
+        module: 'feedback',
+        status: 'blocked',
+        errorCode: 'invalid_feedback_type',
+      });
       return new Response(
         JSON.stringify({ error: '無效的 feedbackType，必須是: helpful, unclear, not_helpful' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -45,6 +70,18 @@ export async function POST(req) {
 
     if (feedbackError) {
       console.error('[Feedback Insert Error]', feedbackError);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: userId || null,
+        operatorRole: 'resident',
+        actionType: 'system_action',
+        targetType: 'feedback',
+        targetId: chatLogId,
+        reason: feedbackError.message,
+        module: 'feedback',
+        status: 'failed',
+        errorCode: feedbackError.message,
+      });
       return new Response(
         JSON.stringify({ error: '回饋記錄失敗', details: feedbackError.message }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -83,6 +120,18 @@ export async function POST(req) {
 
     if (updateError) {
       console.error('[Chat Log Update Error]', updateError);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: userId || null,
+        operatorRole: 'resident',
+        actionType: 'system_action',
+        targetType: 'feedback',
+        targetId: chatLogId,
+        reason: updateError.message,
+        module: 'feedback',
+        status: 'failed',
+        errorCode: updateError.message,
+      });
       return new Response(
         JSON.stringify({ error: '更新 chat_log 失敗', details: updateError.message }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -111,6 +160,19 @@ export async function POST(req) {
         // responseMessage += '\n\n你方便說一下你想知道的是哪一部分嗎？';
         break;
     }
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: userId || null,
+      operatorRole: 'resident',
+      actionType: 'system_action',
+      targetType: 'feedback',
+      targetId: chatLogId,
+      reason: '送出對話回饋',
+      afterState: { feedbackType, clarificationChoice: clarificationChoice || null },
+      module: 'feedback',
+      status: 'success',
+    });
 
     return new Response(
       JSON.stringify({

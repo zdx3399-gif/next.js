@@ -33,6 +33,19 @@ interface WorkerOption {
   phone: string
 }
 
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
+}
+
 export function DispatchModal({ isOpen, onClose, maintenanceId, onSuccess }: DispatchModalProps) {
   const [formData, setFormData] = useState<VendorDetails>({
     vendor_name: "",
@@ -126,6 +139,7 @@ export function DispatchModal({ isOpen, onClose, maintenanceId, onSuccess }: Dis
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    const operator = getCurrentOperator()
 
     try {
       // Call dispatch API which handles DB update + LINE notification
@@ -139,7 +153,9 @@ export function DispatchModal({ isOpen, onClose, maintenanceId, onSuccess }: Dis
           worker_phone: formData.worker_phone,
           scheduled_at: formData.scheduled_at,
           estimated_cost: formData.estimated_cost,
-          admin_note: formData.admin_note
+          admin_note: formData.admin_note,
+          operatorId: operator.id || null,
+          operatorRole: operator.role,
         })
       })
 

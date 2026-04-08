@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { Client } from "@line/bot-sdk";
+import { writeServerAuditLog } from "@/lib/audit-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,7 +84,7 @@ export async function POST(req) {
 
     console.log("[Announce] ⏳ 解析 request body...");
     const body = await req.json();
-    const { title, content, image_url, author, test, pushOnly } = body;
+    const { title, content, image_url, author, test, pushOnly, operatorId, operatorRole, operatorName } = body;
     console.log("[Announce] ✅ Request body 解析成功");
     console.log("[Announce]    - title:", title);
     console.log("[Announce]    - content length:", content?.length || 0);
@@ -95,25 +96,52 @@ export async function POST(req) {
     // Validation
     if (!title || !content) {
       console.error("[Announce] ❌ 缺少必要欄位: title/content");
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operatorId || undefined,
+        operatorRole: operatorRole || "unknown",
+        actionType: "create_announcement",
+        targetType: "announcement",
+        targetId: "unknown",
+        reason: "建立公告缺少必要欄位",
+        module: "announcements",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      });
       return Response.json({ error: "Missing required fields: title/content" }, { status: 400 });
     }
+
+    let insertedAnnouncementId = null;
 
     // pushOnly = true 時只推播，不重複寫入公告資料庫
     if (pushOnly !== true) {
       console.log("[Announce] ⏳ 將公告寫入 Supabase...");
-      const { error: insertErr } = await supabase.from("announcements").insert([
+      const { data: insertedAnnouncement, error: insertErr } = await supabase.from("announcements").insert([
         {
           title,
           content,
           image_url: image_url || null,
           status: "published",
         },
-      ]);
+      ]).select("id").single();
 
       if (insertErr) {
         console.error("❌ [ERROR] Supabase 寫入失敗:", insertErr.message);
+        await writeServerAuditLog({
+          supabase,
+          operatorId: operatorId || undefined,
+          operatorRole: operatorRole || "unknown",
+          actionType: "create_announcement",
+          targetType: "announcement",
+          targetId: "unknown",
+          reason: insertErr.message,
+          module: "announcements",
+          status: "failed",
+          errorCode: insertErr.message,
+        });
         return Response.json({ error: insertErr.message }, { status: 500 });
       }
+      insertedAnnouncementId = insertedAnnouncement?.id || null;
       console.log("[Announce] ✅ 公告寫入成功");
     } else {
       console.log("[Announce] ⏭️  pushOnly=true，跳過資料庫寫入，直接推播");
@@ -122,6 +150,19 @@ export async function POST(req) {
     // Skip LINE if testing
     if (test === true) {
       console.log("[Announce] 🧪 測試模式，跳過 LINE 推播");
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operatorId || undefined,
+        operatorRole: operatorRole || "unknown",
+        actionType: "create_announcement",
+        targetType: "announcement",
+        targetId: insertedAnnouncementId || operatorId || "unknown",
+        reason: title,
+        module: "announcements",
+        status: "success",
+        afterState: { status: "published", test: true },
+        additionalData: { author: operatorName || author || "管理委員會" },
+      });
       return Response.json({ message: "測試成功，未推播" });
     }
 
@@ -147,6 +188,20 @@ export async function POST(req) {
 
     if (finalUserIds.length === 0) {
       console.error("[Announce] ❌ 完全查不到，無法推播");
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operatorId || undefined,
+        operatorRole: operatorRole || "unknown",
+        actionType: "create_announcement",
+        targetType: "announcement",
+        targetId: insertedAnnouncementId || operatorId || "unknown",
+        reason: title,
+        module: "announcements",
+        status: "failed",
+        afterState: { status: "published", sent: 0, skipped: totalCount },
+        additionalData: { author: operatorName || author || "管理委員會" },
+        errorCode: "no_line_targets",
+      });
       return Response.json({ 
         success: false, 
         sent: 0, 
@@ -222,6 +277,21 @@ export async function POST(req) {
     const responseMessage = isUsingFallback 
       ? `⚠️ 推播測試模式\n已發送給 ${totalSent} 位用戶（備用清單）`
       : `✅ 推播成功\n已發送給 ${totalSent} 位住戶${notBoundCount > 0 ? `\n（${notBoundCount} 人 LINE 未綁定，已跳過）` : ''}`;
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operatorId || undefined,
+      operatorRole: operatorRole || "unknown",
+      actionType: "create_announcement",
+      targetType: "announcement",
+      targetId: insertedAnnouncementId || operatorId || "unknown",
+      reason: title,
+      module: "announcements",
+      status: totalSent > 0 ? "success" : "failed",
+      afterState: { status: "published", sent: totalSent, skipped: notBoundCount },
+      additionalData: { author: operatorName || author || "管理委員會", fallback_push: isUsingFallback },
+      errorCode: totalSent > 0 ? undefined : "line_push_failed",
+    });
 
     return Response.json({ 
       success: totalSent > 0, 

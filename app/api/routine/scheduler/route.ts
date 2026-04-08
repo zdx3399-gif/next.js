@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createTenantServerClient, type TenantId } from "@/lib/tenant-server"
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -47,6 +48,18 @@ async function runSchedulerForTenant(tenantId: TenantId, now: Date) {
     .eq("active", true)
 
   if (error) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: null,
+      operatorRole: "system",
+      actionType: "system_action",
+      targetType: "system",
+      targetId: tenantId,
+      reason: error.message,
+      module: "routine-scheduler",
+      status: "failed",
+      errorCode: error.message,
+    })
     return { tenantId, generated: 0, notifications: 0, error: error.message }
   }
 
@@ -81,6 +94,19 @@ async function runSchedulerForTenant(tenantId: TenantId, now: Date) {
     if (insertError || !instance?.id) continue
     generated += 1
 
+    await writeServerAuditLog({
+      supabase,
+      operatorId: null,
+      operatorRole: "system",
+      actionType: "system_action",
+      targetType: "system",
+      targetId: instance.id,
+      reason: `建立例行任務 ${template.title}`,
+      afterState: { template_id: template.id, due_date: dueDate, tenantId },
+      module: "routine-scheduler",
+      status: "success",
+    })
+
     const { data: users } = await supabase
       .from("profiles")
       .select("id")
@@ -103,7 +129,22 @@ async function runSchedulerForTenant(tenantId: TenantId, now: Date) {
           },
         },
       ])
-      if (!notifyError) notifications += 1
+      if (!notifyError) {
+        notifications += 1
+      } else {
+        await writeServerAuditLog({
+          supabase,
+          operatorId: user.id,
+          operatorRole: template.assignee_role,
+          actionType: "system_action",
+          targetType: "system",
+          targetId: instance.id,
+          reason: notifyError.message,
+          module: "routine-scheduler",
+          status: "failed",
+          errorCode: notifyError.message,
+        })
+      }
     }
   }
 

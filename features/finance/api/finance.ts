@@ -1,4 +1,18 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
+
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
+}
 
 export interface FinanceRecord {
   id: string
@@ -112,6 +126,7 @@ export async function updateFinanceRecord(
   updates: Partial<FinanceRecord>,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) return { success: false, error: "Supabase not configured" }
 
   console.log("[v0] updateFinanceRecord called with:", { id, updates })
@@ -124,6 +139,17 @@ export async function updateFinanceRecord(
 
     if (unitError) {
       console.error("[v0] Error updating unit monthly_fee:", unitError)
+      if (operator.id) {
+        await createAuditLog({
+          operatorId: operator.id,
+          operatorRole: operator.role,
+          actionType: "update_finance_record",
+          targetType: "system",
+          targetId: unit_id,
+          reason: unitError.message,
+          additionalData: { module: "finance", status: "failed", error_code: unitError.message },
+        })
+      }
       return { success: false, error: unitError.message }
     }
     console.log("[v0] Unit monthly_fee updated successfully")
@@ -134,7 +160,32 @@ export async function updateFinanceRecord(
 
   if (error) {
     console.error("[v0] Error updating fees:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_finance_record",
+        targetType: "system",
+        targetId: id,
+        reason: error.message,
+        afterState: safeUpdates,
+        additionalData: { module: "finance", status: "failed", error_code: error.message },
+      })
+    }
     return { success: false, error: error.message }
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_finance_record",
+      targetType: "system",
+      targetId: id,
+      reason: "更新財務紀錄",
+      afterState: { ...safeUpdates, monthly_fee, unit_id },
+      additionalData: { module: "finance", status: "success" },
+    })
   }
 
   console.log("[v0] Fees updated successfully")
@@ -143,13 +194,37 @@ export async function updateFinanceRecord(
 
 export async function deleteFinanceRecord(id: string): Promise<boolean> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) return false
 
   const { error } = await supabase.from("fees").delete().eq("id", id)
 
   if (error) {
     console.error("Error deleting finance record:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_finance_record",
+        targetType: "system",
+        targetId: id,
+        reason: error.message,
+        additionalData: { module: "finance", status: "failed", error_code: error.message },
+      })
+    }
     return false
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_finance_record",
+      targetType: "system",
+      targetId: id,
+      reason: "刪除財務紀錄",
+      additionalData: { module: "finance", status: "success" },
+    })
   }
 
   return true

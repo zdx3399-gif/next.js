@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface KnowledgeCard {
   id: string
@@ -24,6 +25,51 @@ export interface KnowledgeCard {
   verified_at: string | null
   created_at: string
   updated_at: string
+}
+
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
+}
+
+async function logKmsAudit(params: {
+  operatorId?: string
+  actionType:
+    | "import_post_to_kms"
+    | "reject_kms_suggestion"
+    | "create_knowledge_card"
+    | "update_knowledge_card"
+    | "delete_knowledge_card"
+    | "verify_knowledge_card"
+    | "system_action"
+  targetId: string
+  reason: string
+  status: "success" | "failed" | "blocked"
+  afterState?: Record<string, any>
+  errorCode?: string
+}) {
+  const operator = getCurrentOperator()
+  const id = params.operatorId || operator.id
+  if (!id) return
+
+  await createAuditLog({
+    operatorId: id,
+    operatorRole: operator.role,
+    actionType: params.actionType,
+    targetType: "knowledge_card",
+    targetId: params.targetId,
+    reason: params.reason,
+    afterState: params.afterState,
+    additionalData: { module: "kms", status: params.status, error_code: params.errorCode },
+  })
 }
 
 // 獲取 AI 建議入庫的貼文
@@ -97,6 +143,15 @@ export async function importPostToKMS(
 
   if (cardError) throw cardError
 
+  await logKmsAudit({
+    operatorId: userId,
+    actionType: "import_post_to_kms",
+    targetId: card.id,
+    reason: post.title || "貼文入庫",
+    status: "success",
+    afterState: { source_id: postId },
+  })
+
   // 標記貼文已入庫
   await supabase
     .from("community_posts")
@@ -147,6 +202,15 @@ export async function rejectKMSSuggestion(postId: string, userId: string, reason
       },
     })
     .eq("id", postId)
+
+  await logKmsAudit({
+    operatorId: userId,
+    actionType: "reject_kms_suggestion",
+    targetId: postId,
+    reason,
+    status: "success",
+    afterState: { rejected: true },
+  })
 }
 
 export async function getKnowledgeCards(filters?: { category?: string; credibility?: string; search?: string }) {
@@ -224,6 +288,15 @@ export async function createKnowledgeCard(card: {
     .single()
 
   if (error) throw error
+
+  await logKmsAudit({
+    operatorId: card.created_by,
+    actionType: "create_knowledge_card",
+    targetId: data.id,
+    reason: card.title,
+    status: "success",
+    afterState: { category: card.category, credibility: card.credibility || "community" },
+  })
   return data as KnowledgeCard
 }
 
@@ -272,6 +345,15 @@ export async function updateKnowledgeCard(
   // 將舊版本標記為 archived
   await supabase.from("knowledge_cards").update({ status: "archived" }).eq("id", cardId)
 
+  await logKmsAudit({
+    operatorId: userId,
+    actionType: "update_knowledge_card",
+    targetId: newCard.id,
+    reason: updates.changelog || "更新知識卡",
+    status: "success",
+    afterState: { previous_version_id: cardId, version: newCard.version },
+  })
+
   return newCard as KnowledgeCard
 }
 
@@ -282,6 +364,14 @@ export async function deleteKnowledgeCard(cardId: string) {
   const { error } = await supabase.from("knowledge_cards").update({ status: "removed" }).eq("id", cardId)
 
   if (error) throw error
+
+  await logKmsAudit({
+    actionType: "delete_knowledge_card",
+    targetId: cardId,
+    reason: "刪除知識卡",
+    status: "success",
+    afterState: { status: "removed" },
+  })
 }
 
 export async function verifyKnowledgeCard(cardId: string, verifiedBy: string) {
@@ -300,6 +390,15 @@ export async function verifyKnowledgeCard(cardId: string, verifiedBy: string) {
     .single()
 
   if (error) throw error
+
+  await logKmsAudit({
+    operatorId: verifiedBy,
+    actionType: "verify_knowledge_card",
+    targetId: cardId,
+    reason: "驗證知識卡",
+    status: "success",
+    afterState: { credibility: "verified" },
+  })
   return data as KnowledgeCard
 }
 
@@ -319,6 +418,15 @@ export async function markAsOfficial(cardId: string, verifiedBy: string) {
     .single()
 
   if (error) throw error
+
+  await logKmsAudit({
+    operatorId: verifiedBy,
+    actionType: "verify_knowledge_card",
+    targetId: cardId,
+    reason: "標記為官方知識卡",
+    status: "success",
+    afterState: { credibility: "official" },
+  })
   return data as KnowledgeCard
 }
 
@@ -371,6 +479,15 @@ export async function voteKnowledgeCard(cardId: string, userId: string, voteType
       const column = voteType === "helpful" ? "helpful_count" : "not_helpful_count"
       await supabase.rpc(`decrement_card_${voteType}_count`, { card_id: cardId })
 
+      await logKmsAudit({
+        operatorId: userId,
+        actionType: "system_action",
+        targetId: cardId,
+        reason: "取消知識卡投票",
+        status: "success",
+        afterState: { voteType, active: false },
+      })
+
       return false
     } else {
       // 如果投票類型不同，則更新
@@ -381,6 +498,15 @@ export async function voteKnowledgeCard(cardId: string, userId: string, voteType
       const newColumn = voteType === "helpful" ? "helpful_count" : "not_helpful_count"
       await supabase.rpc(`decrement_card_${existing.interaction_type}_count`, { card_id: cardId })
       await supabase.rpc(`increment_card_${voteType}_count`, { card_id: cardId })
+
+      await logKmsAudit({
+        operatorId: userId,
+        actionType: "system_action",
+        targetId: cardId,
+        reason: "更新知識卡投票",
+        status: "success",
+        afterState: { voteType, active: true },
+      })
 
       return true
     }
@@ -397,6 +523,15 @@ export async function voteKnowledgeCard(cardId: string, userId: string, voteType
 
     // 更新計數
     await supabase.rpc(`increment_card_${voteType}_count`, { card_id: cardId })
+
+    await logKmsAudit({
+      operatorId: userId,
+      actionType: "system_action",
+      targetId: cardId,
+      reason: "新增知識卡投票",
+      status: "success",
+      afterState: { voteType, active: true },
+    })
 
     return true
   }

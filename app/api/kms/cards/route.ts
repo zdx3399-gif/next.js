@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,6 +58,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (profileErr) throw profileErr;
 
     if (!profile || !["committee", "admin"].includes(profile.role)) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: user_id,
+        operatorRole: profile?.role || "unknown",
+        actionType: "update_knowledge_card",
+        targetType: "knowledge_card",
+        targetId: id,
+        reason: "無權限更新知識卡",
+        module: "kms",
+        status: "blocked",
+        errorCode: "forbidden",
+      })
       return NextResponse.json({ error: "無權限更新知識卡" }, { status: 403 });
     }
 
@@ -70,6 +83,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (oldErr) throw oldErr;
 
     if (!oldCard) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: user_id,
+        operatorRole: profile.role,
+        actionType: "update_knowledge_card",
+        targetType: "knowledge_card",
+        targetId: id,
+        reason: "知識卡不存在",
+        module: "kms",
+        status: "blocked",
+        errorCode: "knowledge_card_not_found",
+      })
       return NextResponse.json({ error: "知識卡不存在" }, { status: 404 });
     }
 
@@ -103,6 +128,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     if (archiveErr) throw archiveErr;
 
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: profile.role,
+      actionType: "update_knowledge_card",
+      targetType: "knowledge_card",
+      targetId: newCard.id,
+      reason: changelog || "更新知識卡",
+      module: "kms",
+      status: "success",
+      beforeState: { id: oldCard.id, version: oldCard.version, status: oldCard.status },
+      afterState: { id: newCard.id, version: newCard.version, previous_version_id: id, status: newCard.status },
+    })
+
     return NextResponse.json({ data: newCard });
   } catch (error: any) {
     console.error("[kms/cards/[id]] Error updating knowledge card:", error);
@@ -133,11 +172,36 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     if (profileErr) throw profileErr;
 
     if (!profile || !["committee", "admin"].includes(profile.role)) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: userId,
+        operatorRole: profile?.role || "unknown",
+        actionType: "delete_knowledge_card",
+        targetType: "knowledge_card",
+        targetId: id,
+        reason: "無權限刪除知識卡",
+        module: "kms",
+        status: "blocked",
+        errorCode: "forbidden",
+      })
       return NextResponse.json({ error: "無權限刪除知識卡" }, { status: 403 });
     }
 
     const { error } = await supabase.from("knowledge_cards").update({ status: "removed" }).eq("id", id);
     if (error) throw error;
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: userId,
+      operatorRole: profile.role,
+      actionType: "delete_knowledge_card",
+      targetType: "knowledge_card",
+      targetId: id,
+      reason: "刪除知識卡",
+      module: "kms",
+      status: "success",
+      afterState: { status: "removed" },
+    })
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

@@ -31,6 +31,23 @@ interface FetchVotesOptions {
   withResults?: boolean
 }
 
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown", name: "" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown", name: "" }
+    const parsed = JSON.parse(raw)
+    return {
+      id: parsed?.id || "",
+      role: parsed?.role || "unknown",
+      name: parsed?.name || "",
+    }
+  } catch {
+    return { id: "", role: "unknown", name: "" }
+  }
+}
+
 function buildVoteQuery(options?: FetchVotesOptions) {
   const params = new URLSearchParams()
   if (options?.scope) params.set("scope", options.scope)
@@ -65,6 +82,7 @@ export async function fetchUserVotedPolls(userId: string): Promise<Set<string>> 
 
 export async function submitVote(voteRecord: VoteRecord): Promise<{ success: boolean; error?: string }> {
   try {
+    const operator = getCurrentOperator()
     const res = await fetch("/api/votes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -74,6 +92,8 @@ export async function submitVote(voteRecord: VoteRecord): Promise<{ success: boo
         user_id: voteRecord.user_id,
         user_name: voteRecord.user_name || "住戶",
         option_selected: voteRecord.option_selected,
+        operatorId: operator.id || voteRecord.user_id,
+        operatorRole: operator.id ? operator.role : "resident",
       }),
     })
 
@@ -99,6 +119,7 @@ export async function createVote(vote: {
   created_by?: string
 }): Promise<Vote | null> {
   try {
+    const operator = getCurrentOperator()
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 15000) // 15 秒超時
     let res: Response
@@ -106,7 +127,13 @@ export async function createVote(vote: {
       res = await fetch("/api/votes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", ...vote }),
+        body: JSON.stringify({
+          action: "create",
+          ...vote,
+          operatorId: operator.id || vote.created_by || null,
+          operatorRole: operator.role,
+          operatorName: operator.name || vote.author || "管委會",
+        }),
         signal: controller.signal,
       })
     } finally {
@@ -127,10 +154,16 @@ export async function createVote(vote: {
 
 export async function closeVote(voteId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const operator = getCurrentOperator()
     const res = await fetch("/api/votes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "close", vote_id: voteId }),
+      body: JSON.stringify({
+        action: "close",
+        vote_id: voteId,
+        operatorId: operator.id || null,
+        operatorRole: operator.role,
+      }),
     })
 
     const data = await res.json().catch(() => ({}))
@@ -149,12 +182,15 @@ export async function updateVoteEndTime(params: {
   ends_at: string
 }): Promise<{ success: boolean; vote?: Vote; error?: string }> {
   try {
+    const operator = getCurrentOperator()
     const res = await fetch("/api/votes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "update_vote",
         ...params,
+        operatorId: operator.id || null,
+        operatorRole: operator.role,
       }),
     })
 
@@ -171,12 +207,15 @@ export async function updateVoteEndTime(params: {
 
 export async function deleteVoteById(voteId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const operator = getCurrentOperator()
     const res = await fetch("/api/votes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "delete_vote",
         vote_id: voteId,
+        operatorId: operator.id || null,
+        operatorRole: operator.role,
       }),
     })
 
@@ -222,12 +261,15 @@ export async function attachExternalResultFile(params: {
   result_file_name?: string
 }): Promise<{ success: boolean; vote?: Vote; error?: string }> {
   try {
+    const operator = getCurrentOperator()
     const res = await fetch("/api/votes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "attach_external_result",
         ...params,
+        operatorId: operator.id || null,
+        operatorRole: operator.role,
       }),
     })
 

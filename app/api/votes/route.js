@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { Client } from "@line/bot-sdk";
+import { writeServerAuditLog } from "@/lib/audit-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -116,6 +117,14 @@ function getSystemBaseUrl() {
   return fixedProductionUrl;
 }
 
+function getOperator(body, fallback = {}) {
+  return {
+    id: body?.operatorId || fallback.id || body?.user_id || body?.created_by || undefined,
+    role: body?.operatorRole || fallback.role || "unknown",
+    name: body?.operatorName || fallback.name || body?.user_name || body?.author || "",
+  };
+}
+
 function mapVoteRow(row) {
   const rawOptions = row?.options;
   const options = normalizeOptions(rawOptions);
@@ -147,10 +156,23 @@ function mapVoteRow(row) {
 }
 
 async function handleVoteFromLineMessage({ supabase, body }) {
+  const operator = getOperator(body, { role: "resident" });
   const line_user_id = body.line_user_id;
 
   const parts = body.vote_message.split(":");
   if (parts.length < 3) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: "unknown",
+      reason: "LINE 投票訊息格式錯誤",
+      module: "votes",
+      status: "blocked",
+      errorCode: "invalid_line_vote_message",
+    });
     return Response.json({ error: "投票訊息格式錯誤" }, { status: 400 });
   }
 
@@ -164,6 +186,18 @@ async function handleVoteFromLineMessage({ supabase, body }) {
     .single();
 
   if (voteExistsErr || !voteExists) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: voteIdFromMsg,
+      reason: "投票已過期或不存在",
+      module: "votes",
+      status: "blocked",
+      errorCode: "vote_not_found",
+    });
     return Response.json({ error: "投票已過期或不存在，請點擊最新投票訊息" }, { status: 400 });
   }
 
@@ -176,6 +210,18 @@ async function handleVoteFromLineMessage({ supabase, body }) {
     .single();
 
   if (userError || !userProfile || !userProfile.id) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: "找不到住戶資料",
+      module: "votes",
+      status: "blocked",
+      errorCode: "profile_not_found",
+    });
     return Response.json({ error: "找不到住戸資料" }, { status: 400 });
   }
 
@@ -190,10 +236,34 @@ async function handleVoteFromLineMessage({ supabase, body }) {
     .maybeSingle();
 
   if (existingVoteErr) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: userProfile.id,
+      operatorRole: "resident",
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: "查詢投票紀錄失敗",
+      module: "votes",
+      status: "failed",
+      errorCode: "vote_record_lookup_failed",
+    });
     return Response.json({ error: "系統錯誤，請稍後再試" }, { status: 500 });
   }
 
   if (existingVote) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: "resident",
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: "重複投票",
+      module: "votes",
+      status: "blocked",
+      errorCode: "duplicate_vote",
+    });
     return Response.json({ error: "您已經投過票，不能重複投票" }, { status: 400 });
   }
 
@@ -208,8 +278,33 @@ async function handleVoteFromLineMessage({ supabase, body }) {
   ]);
 
   if (recordError) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: "resident",
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: recordError.message || "投票失敗",
+      module: "votes",
+      status: "failed",
+      errorCode: recordError.message || "insert_vote_record_failed",
+    });
     return Response.json({ error: "投票失敗", details: recordError.message }, { status: 500 });
   }
+
+  await writeServerAuditLog({
+    supabase,
+    operatorId: user_id,
+    operatorRole: "resident",
+    actionType: "submit_vote",
+    targetType: "vote",
+    targetId: vote_id,
+    reason: option_selected,
+    module: "votes",
+    status: "success",
+    afterState: { option_selected, channel: "line" },
+  });
 
   return Response.json({ 
     success: true, 
@@ -220,9 +315,22 @@ async function handleVoteFromLineMessage({ supabase, body }) {
 }
 
 async function handleSubmitVote({ supabase, body }) {
+  const operator = getOperator(body, { role: "resident" });
   const { vote_id, user_id, user_name, option_selected } = body;
 
   if (!vote_id || !user_id || !option_selected) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id || "unknown",
+      reason: "vote_id、user_id、option_selected 為必填",
+      module: "votes",
+      status: "blocked",
+      errorCode: "missing_required_fields",
+    });
     return Response.json({ error: "vote_id、user_id、option_selected 為必填" }, { status: 400 });
   }
 
@@ -234,10 +342,34 @@ async function handleSubmitVote({ supabase, body }) {
     .single();
 
   if (voteError || !vote) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: "投票不存在",
+      module: "votes",
+      status: "blocked",
+      errorCode: "vote_not_found",
+    });
     return Response.json({ error: "投票不存在" }, { status: 404 });
   }
 
   if (vote.status !== "active" || (vote.ends_at && vote.ends_at <= now)) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: "投票已截止",
+      module: "votes",
+      status: "blocked",
+      errorCode: "vote_closed",
+    });
     return Response.json({ error: "投票已截止" }, { status: 400 });
   }
 
@@ -249,9 +381,33 @@ async function handleSubmitVote({ supabase, body }) {
     .maybeSingle();
 
   if (existingVoteErr) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: "查詢投票紀錄失敗",
+      module: "votes",
+      status: "failed",
+      errorCode: "vote_record_lookup_failed",
+    });
     return Response.json({ error: "查詢投票紀錄失敗" }, { status: 500 });
   }
   if (existingVote) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: "您已經投過票了",
+      module: "votes",
+      status: "blocked",
+      errorCode: "duplicate_vote",
+    });
     return Response.json({ error: "您已經投過票了" }, { status: 409 });
   }
 
@@ -266,11 +422,36 @@ async function handleSubmitVote({ supabase, body }) {
   ]);
 
   if (insertError) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: insertError.message || "投票失敗",
+      module: "votes",
+      status: insertError.code === "23505" ? "blocked" : "failed",
+      errorCode: insertError.code || insertError.message || "submit_vote_failed",
+    });
     if (insertError.code === "23505") {
       return Response.json({ error: "您已經投過票了" }, { status: 409 });
     }
     return Response.json({ error: "投票失敗", details: insertError.message }, { status: 500 });
   }
+
+  await writeServerAuditLog({
+    supabase,
+    operatorId: user_id,
+    operatorRole: operator.role,
+    actionType: "submit_vote",
+    targetType: "vote",
+    targetId: vote_id,
+    reason: option_selected,
+    module: "votes",
+    status: "success",
+    afterState: { option_selected, user_name: user_name || "住戶", channel: "app" },
+  });
 
   return Response.json({ 
     success: true,
@@ -281,9 +462,22 @@ async function handleSubmitVote({ supabase, body }) {
 }
 
 async function handleCreateVote({ supabase, body }) {
+  const operator = getOperator(body, { role: "committee" });
   const { title, description, author, created_by, ends_at, mode, external_url, options, test } = body;
 
   if (!title || !ends_at) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_vote",
+      targetType: "vote",
+      targetId: "unknown",
+      reason: "title、ends_at 為必填",
+      module: "votes",
+      status: "blocked",
+      errorCode: "missing_required_fields",
+    });
     return Response.json({ error: "title、ends_at 為必填" }, { status: 400 });
   }
 
@@ -292,10 +486,34 @@ async function handleCreateVote({ supabase, body }) {
   const normalizedExternalUrl = typeof external_url === "string" ? external_url.trim() : "";
 
   if (finalMode === "external" && !normalizedExternalUrl) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_vote",
+      targetType: "vote",
+      targetId: "unknown",
+      reason: "連結模式需要 external_url",
+      module: "votes",
+      status: "blocked",
+      errorCode: "missing_external_url",
+    });
     return Response.json({ error: "連結模式需要 external_url" }, { status: 400 });
   }
 
   if (finalMode === "internal" && normalizedOptions.length < 2) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_vote",
+      targetType: "vote",
+      targetId: "unknown",
+      reason: "內部投票至少需要 2 個選項",
+      module: "votes",
+      status: "blocked",
+      errorCode: "insufficient_options",
+    });
     return Response.json({ error: "內部投票至少需要 2 個選項" }, { status: 400 });
   }
 
@@ -366,10 +584,34 @@ async function handleCreateVote({ supabase, body }) {
   }
 
   if (insertError) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id || safeCreatedBy || undefined,
+      operatorRole: operator.role,
+      actionType: "create_vote",
+      targetType: "vote",
+      targetId: "unknown",
+      reason: insertError.message || "投票儲存失敗",
+      module: "votes",
+      status: "failed",
+      errorCode: insertError.message || "create_vote_failed",
+    });
     return Response.json({ error: "投票儲存失敗", details: insertError.message }, { status: 500 });
   }
 
   if (test === true) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id || safeCreatedBy || undefined,
+      operatorRole: operator.role,
+      actionType: "create_vote",
+      targetType: "vote",
+      targetId: inserted?.id || "unknown",
+      reason: title,
+      module: "votes",
+      status: "success",
+      afterState: { mode: finalMode, status: "active", test: true },
+    });
     return Response.json({ 
       success: true, 
       vote: mapVoteRow(inserted), 
@@ -397,6 +639,19 @@ async function handleCreateVote({ supabase, body }) {
 
   const lineUserIds = await getAllLineUserIds(supabase);
   if (lineUserIds.length === 0) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id || safeCreatedBy || undefined,
+      operatorRole: operator.role,
+      actionType: "create_vote",
+      targetType: "vote",
+      targetId: inserted?.id || "unknown",
+      reason: title,
+      module: "votes",
+      status: "success",
+      afterState: { mode: finalMode, status: "active", sent: 0, total: 0 },
+      additionalData: { notification: "no_line_binding" },
+    });
     return Response.json({ 
       success: true, 
       vote: mapVoteRow(inserted), 
@@ -426,6 +681,20 @@ async function handleCreateVote({ supabase, body }) {
   }
 
   const total = lineUserIds.length;
+  await writeServerAuditLog({
+    supabase,
+    operatorId: operator.id || safeCreatedBy || undefined,
+    operatorRole: operator.role,
+    actionType: "create_vote",
+    targetType: "vote",
+    targetId: inserted?.id || "unknown",
+    reason: title,
+    module: "votes",
+    status: totalSent > 0 ? "success" : "failed",
+    afterState: { mode: finalMode, status: "active", sent: totalSent, total },
+    additionalData: { push_failed: totalFailed },
+    errorCode: totalSent > 0 ? undefined : "line_push_failed",
+  });
   return Response.json({ 
     success: true, 
     vote: mapVoteRow(inserted), 
@@ -437,9 +706,22 @@ async function handleCreateVote({ supabase, body }) {
 }
 
 async function handleCloseVote({ supabase, body }) {
+  const operator = getOperator(body, { role: "committee" });
   const { vote_id } = body;
 
   if (!vote_id) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "close_vote",
+      targetType: "vote",
+      targetId: "unknown",
+      reason: "vote_id 為必填",
+      module: "votes",
+      status: "blocked",
+      errorCode: "missing_vote_id",
+    });
     return Response.json({ error: "vote_id 為必填" }, { status: 400 });
   }
 
@@ -451,16 +733,54 @@ async function handleCloseVote({ supabase, body }) {
     .single();
 
   if (error) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "close_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: error.message || "關閉投票失敗",
+      module: "votes",
+      status: "failed",
+      errorCode: error.message || "close_vote_failed",
+    });
     return Response.json({ error: "關閉投票失敗", details: error.message }, { status: 500 });
   }
+
+  await writeServerAuditLog({
+    supabase,
+    operatorId: operator.id,
+    operatorRole: operator.role,
+    actionType: "close_vote",
+    targetType: "vote",
+    targetId: vote_id,
+    reason: updated?.title || "手動關閉投票",
+    module: "votes",
+    status: "success",
+    afterState: { status: "closed" },
+  });
 
   return Response.json({ success: true, vote: mapVoteRow(updated) });
 }
 
 async function handleUpdateVote({ supabase, body }) {
+  const operator = getOperator(body, { role: "committee" });
   const { vote_id, ends_at } = body;
 
   if (!vote_id || !ends_at) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_vote",
+      targetType: "vote",
+      targetId: vote_id || "unknown",
+      reason: "vote_id、ends_at 為必填",
+      module: "votes",
+      status: "blocked",
+      errorCode: "missing_required_fields",
+    });
     return Response.json({ error: "vote_id、ends_at 為必填" }, { status: 400 });
   }
 
@@ -472,16 +792,54 @@ async function handleUpdateVote({ supabase, body }) {
     .single();
 
   if (error) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: error.message || "更新投票失敗",
+      module: "votes",
+      status: "failed",
+      errorCode: error.message || "update_vote_failed",
+    });
     return Response.json({ error: "更新投票失敗", details: error.message }, { status: 500 });
   }
+
+  await writeServerAuditLog({
+    supabase,
+    operatorId: operator.id,
+    operatorRole: operator.role,
+    actionType: "update_vote",
+    targetType: "vote",
+    targetId: vote_id,
+    reason: updated?.title || "更新投票截止時間",
+    module: "votes",
+    status: "success",
+    afterState: { ends_at },
+  });
 
   return Response.json({ success: true, vote: mapVoteRow(updated) });
 }
 
 async function handleDeleteVote({ supabase, body }) {
+  const operator = getOperator(body, { role: "committee" });
   const { vote_id } = body;
 
   if (!vote_id) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_vote",
+      targetType: "vote",
+      targetId: "unknown",
+      reason: "vote_id 為必填",
+      module: "votes",
+      status: "blocked",
+      errorCode: "missing_vote_id",
+    });
     return Response.json({ error: "vote_id 為必填" }, { status: 400 });
   }
 
@@ -492,6 +850,18 @@ async function handleDeleteVote({ supabase, body }) {
     .eq("vote_id", vote_id);
 
   if (recordsError) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: recordsError.message || "刪除投票紀錄失敗",
+      module: "votes",
+      status: "failed",
+      errorCode: recordsError.message || "delete_vote_records_failed",
+    });
     return Response.json({ error: "刪除投票紀錄失敗", details: recordsError.message }, { status: 500 });
   }
 
@@ -501,16 +871,53 @@ async function handleDeleteVote({ supabase, body }) {
     .eq("id", vote_id);
 
   if (voteError) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: voteError.message || "刪除投票失敗",
+      module: "votes",
+      status: "failed",
+      errorCode: voteError.message || "delete_vote_failed",
+    });
     return Response.json({ error: "刪除投票失敗", details: voteError.message }, { status: 500 });
   }
+
+  await writeServerAuditLog({
+    supabase,
+    operatorId: operator.id,
+    operatorRole: operator.role,
+    actionType: "delete_vote",
+    targetType: "vote",
+    targetId: vote_id,
+    reason: "刪除投票",
+    module: "votes",
+    status: "success",
+  });
 
   return Response.json({ success: true });
 }
 
 async function handleAttachExternalResult({ supabase, body }) {
+  const operator = getOperator(body, { role: "committee" });
   const { vote_id, result_file_url, result_file_name } = body;
 
   if (!vote_id || !result_file_url) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "attach_vote_result",
+      targetType: "vote",
+      targetId: vote_id || "unknown",
+      reason: "vote_id、result_file_url 為必填",
+      module: "votes",
+      status: "blocked",
+      errorCode: "missing_required_fields",
+    });
     return Response.json({ error: "vote_id、result_file_url 為必填" }, { status: 400 });
   }
 
@@ -521,6 +928,18 @@ async function handleAttachExternalResult({ supabase, body }) {
     .single();
 
   if (queryError || !currentVote) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "attach_vote_result",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: "找不到投票活動",
+      module: "votes",
+      status: "blocked",
+      errorCode: "vote_not_found",
+    });
     return Response.json({ error: "找不到投票活動" }, { status: 404 });
   }
 
@@ -552,11 +971,49 @@ async function handleAttachExternalResult({ supabase, body }) {
       .single();
 
     if (fallback.error) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "attach_vote_result",
+        targetType: "vote",
+        targetId: vote_id,
+        reason: fallback.error.message || "更新外部結果檔失敗",
+        module: "votes",
+        status: "failed",
+        errorCode: fallback.error.message || "attach_vote_result_failed",
+      });
       return Response.json({ error: "更新外部結果檔失敗", details: fallback.error.message }, { status: 500 });
     }
 
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "attach_vote_result",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: result_file_name || "上傳外部投票結果",
+      module: "votes",
+      status: "success",
+      afterState: { result_file_url, result_file_name: result_file_name || "" },
+    });
+
     return Response.json({ success: true, vote: mapVoteRow(fallback.data) });
   }
+
+  await writeServerAuditLog({
+    supabase,
+    operatorId: operator.id,
+    operatorRole: operator.role,
+    actionType: "attach_vote_result",
+    targetType: "vote",
+    targetId: vote_id,
+    reason: result_file_name || "上傳外部投票結果",
+    module: "votes",
+    status: "success",
+    afterState: { result_file_url, result_file_name: result_file_name || "" },
+  });
 
   return Response.json({ success: true, vote: mapVoteRow(updated) });
 }

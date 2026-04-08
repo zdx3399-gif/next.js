@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Client } from '@line/bot-sdk';
+import { writeServerAuditLog } from '@/lib/audit-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -150,6 +151,18 @@ export async function PATCH(req) {
     const { id, status, priority, assigned_to, notes } = body;
 
     if (!id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: body?.updated_by || body?.user_id || null,
+        operatorRole: 'admin',
+        actionType: 'update_maintenance_request',
+        targetType: 'maintenance_request',
+        targetId: 'unknown',
+        reason: '缺少報修單 ID',
+        module: 'repairs',
+        status: 'blocked',
+        errorCode: 'missing_repair_id',
+      });
       return Response.json({ error: '缺少報修單 ID' }, { status: 400 });
     }
 
@@ -161,6 +174,18 @@ export async function PATCH(req) {
       .single();
 
     if (!currentRepair) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: body?.updated_by || body?.user_id || null,
+        operatorRole: 'admin',
+        actionType: 'update_maintenance_request',
+        targetType: 'maintenance_request',
+        targetId: id,
+        reason: '找不到報修單',
+        module: 'repairs',
+        status: 'blocked',
+        errorCode: 'repair_not_found',
+      });
       return Response.json({ error: '找不到報修單' }, { status: 404 });
     }
 
@@ -187,6 +212,18 @@ export async function PATCH(req) {
       .select();
 
     if (error) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: body?.updated_by || body?.user_id || null,
+        operatorRole: 'admin',
+        actionType: 'update_maintenance_request',
+        targetType: 'maintenance_request',
+        targetId: id,
+        reason: error.message,
+        module: 'repairs',
+        status: 'failed',
+        errorCode: error.message,
+      });
       return Response.json({ error: error.message }, { status: 400 });
     }
 
@@ -240,6 +277,20 @@ export async function PATCH(req) {
       }
     }
 
+    await writeServerAuditLog({
+      supabase,
+      operatorId: body?.updated_by || body?.user_id || null,
+      operatorRole: 'admin',
+      actionType: 'update_maintenance_request',
+      targetType: 'maintenance_request',
+      targetId: id,
+      reason: '更新報修單狀態',
+      beforeState: { status: currentRepair.status, note: currentRepair.note },
+      afterState: { status: updatedRepair?.status, note: updatedRepair?.note },
+      module: 'repairs',
+      status: 'success',
+    });
+
     return Response.json({ success: true, data: toRepairResponse(updatedRepair) });
   } catch (err) {
     console.error('PATCH /api/repairs 錯誤:', err);
@@ -255,6 +306,18 @@ export async function POST(req) {
     const { user_id, building, location, description, category, priority } = body;
 
     if (!location || !description) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: user_id || null,
+        operatorRole: user_id ? 'resident' : 'admin',
+        actionType: 'create_maintenance_request',
+        targetType: 'maintenance_request',
+        targetId: 'unknown',
+        reason: '缺少必要欄位',
+        module: 'repairs',
+        status: 'blocked',
+        errorCode: 'missing_required_fields',
+      });
       return Response.json({ error: '缺少必要欄位' }, { status: 400 });
     }
 
@@ -274,8 +337,33 @@ export async function POST(req) {
       .select();
 
     if (error) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: user_id || null,
+        operatorRole: user_id ? 'resident' : 'admin',
+        actionType: 'create_maintenance_request',
+        targetType: 'maintenance_request',
+        targetId: 'unknown',
+        reason: error.message,
+        module: 'repairs',
+        status: 'failed',
+        errorCode: error.message,
+      });
       return Response.json({ error: error.message }, { status: 400 });
     }
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id || null,
+      operatorRole: user_id ? 'resident' : 'admin',
+      actionType: 'create_maintenance_request',
+      targetType: 'maintenance_request',
+      targetId: data?.[0]?.id || 'unknown',
+      reason: '建立報修單',
+      afterState: { category, building, location, priority },
+      module: 'repairs',
+      status: 'success',
+    });
 
     return Response.json({ success: true, data: toRepairResponse(data[0]) }, { status: 201 });
   } catch (err) {
@@ -292,6 +380,18 @@ export async function DELETE(req) {
     const id = searchParams.get('id'); // 修正：原始碼為 sear.get('id')（typo）
 
     if (!id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: 'admin',
+        actionType: 'delete_maintenance_request',
+        targetType: 'maintenance_request',
+        targetId: 'unknown',
+        reason: '缺少報修單 ID',
+        module: 'repairs',
+        status: 'blocked',
+        errorCode: 'missing_repair_id',
+      });
       return Response.json({ error: '缺少報修單 ID' }, { status: 400 });
     }
 
@@ -301,8 +401,32 @@ export async function DELETE(req) {
       .eq('id', id);
 
     if (error) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: 'admin',
+        actionType: 'delete_maintenance_request',
+        targetType: 'maintenance_request',
+        targetId: id,
+        reason: error.message,
+        module: 'repairs',
+        status: 'failed',
+        errorCode: error.message,
+      });
       return Response.json({ error: error.message }, { status: 400 });
     }
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: null,
+      operatorRole: 'admin',
+      actionType: 'delete_maintenance_request',
+      targetType: 'maintenance_request',
+      targetId: id,
+      reason: '刪除報修單',
+      module: 'repairs',
+      status: 'success',
+    });
 
     return Response.json({ success: true, message: '報修單已刪除' });
   } catch (err) {

@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface Meeting {
   id?: string
@@ -11,6 +12,19 @@ export interface Meeting {
   minutes_url?: string
   created_by?: string
   created_at?: string
+}
+
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
 }
 
 async function notifyMeetingLine(meeting: Meeting, notificationType?: "pdf_added") {
@@ -58,6 +72,7 @@ export async function createMeeting(
   userId?: string,
 ): Promise<Meeting | null> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   // 先保存會議到資料庫
   const { data, error } = await supabase
     .from("meetings")
@@ -67,11 +82,35 @@ export async function createMeeting(
 
   if (error) {
     console.error("Error creating meeting:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_meeting",
+        targetType: "system",
+        targetId: userId || operator.id,
+        reason: error.message,
+        afterState: meeting as Record<string, any>,
+        additionalData: { module: "meetings", status: "failed", error_code: error.message },
+      })
+    }
     return null
   }
 
   // 通知採非阻塞，避免儲存流程卡住
   if (data?.id) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_meeting",
+        targetType: "system",
+        targetId: data.id,
+        reason: meeting.topic,
+        afterState: { time: meeting.time, location: meeting.location },
+        additionalData: { module: "meetings", status: "success" },
+      })
+    }
     void notifyMeetingLine(data)
   }
 
@@ -80,11 +119,37 @@ export async function createMeeting(
 
 export async function updateMeeting(id: string, meeting: Partial<Meeting>): Promise<Meeting | null> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   const { data, error } = await supabase.from("meetings").update(meeting).eq("id", id).select().single()
 
   if (error) {
     console.error("Error updating meeting:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_meeting",
+        targetType: "system",
+        targetId: id,
+        reason: error.message,
+        afterState: meeting as Record<string, any>,
+        additionalData: { module: "meetings", status: "failed", error_code: error.message },
+      })
+    }
     return null
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_meeting",
+      targetType: "system",
+      targetId: id,
+      reason: meeting.topic || "更新會議",
+      afterState: meeting as Record<string, any>,
+      additionalData: { module: "meetings", status: "success" },
+    })
   }
 
   // 如果更新包含 PDF 檔案，向住戶發送通知
@@ -97,11 +162,35 @@ export async function updateMeeting(id: string, meeting: Partial<Meeting>): Prom
 
 export async function deleteMeeting(id: string): Promise<boolean> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   const { error } = await supabase.from("meetings").delete().eq("id", id)
 
   if (error) {
     console.error("Error deleting meeting:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_meeting",
+        targetType: "system",
+        targetId: id,
+        reason: error.message,
+        additionalData: { module: "meetings", status: "failed", error_code: error.message },
+      })
+    }
     return false
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_meeting",
+      targetType: "system",
+      targetId: id,
+      reason: "刪除會議",
+      additionalData: { module: "meetings", status: "success" },
+    })
   }
   return true
 }

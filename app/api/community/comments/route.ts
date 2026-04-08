@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { type NextRequest, NextResponse } from "next/server"
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -46,10 +47,29 @@ export async function GET(req: NextRequest) {
 
 // POST: 建立留言
 export async function POST(req: NextRequest) {
+  let auditMeta: { operatorId?: string; targetId?: string } = {}
+
   try {
     const supabase = getSupabase()
     const body = await req.json()
     const { post_id, author_id, parent_comment_id, content, display_mode } = body
+    auditMeta.operatorId = author_id
+
+    if (!post_id || !author_id || !content?.trim()) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: author_id,
+        operatorRole: "resident",
+        actionType: "create_comment",
+        targetType: "comment",
+        targetId: post_id || author_id,
+        reason: "建立留言缺少必要欄位",
+        module: "community",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      })
+      return NextResponse.json({ error: "缺少必要欄位" }, { status: 400 })
+    }
 
     // ===== LINE 綁定檢查（暫時停用）=====
     // const { data: binding } = await supabase
@@ -88,13 +108,42 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
+    auditMeta.targetId = data.id
 
     // 更新貼文留言數
     await supabase.rpc("increment_comment_count", { post_id })
 
+    await writeServerAuditLog({
+      supabase,
+      operatorId: author_id,
+      operatorRole: "resident",
+      actionType: "create_comment",
+      targetType: "comment",
+      targetId: data.id,
+      reason: content.slice(0, 120),
+      module: "community",
+      status: "success",
+      afterState: { post_id, parent_comment_id: parent_comment_id || null, display_mode },
+    })
+
     return NextResponse.json({ data })
   } catch (error: any) {
     console.error("[v0] Error creating comment:", error)
+    try {
+      const supabase = getSupabase()
+      await writeServerAuditLog({
+        supabase,
+        operatorId: auditMeta.operatorId,
+        operatorRole: "resident",
+        actionType: "create_comment",
+        targetType: "comment",
+        targetId: auditMeta.targetId || auditMeta.operatorId,
+        reason: "建立留言失敗",
+        module: "community",
+        status: "failed",
+        errorCode: error?.message || "create_comment_failed",
+      })
+    } catch {}
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -109,6 +110,18 @@ export async function POST(req) {
     } = body || {}
 
     if (!amount || !due) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: body?.user_id || null,
+        operatorRole: "admin",
+        actionType: "system_action",
+        targetType: "fee",
+        targetId: rawUnitId || room || "unknown",
+        reason: "amount, due 為必填",
+        module: "fees",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      })
       return NextResponse.json({ error: "amount, due 為必填" }, { status: 400 })
     }
 
@@ -118,6 +131,18 @@ export async function POST(req) {
 
     const unitId = await resolveUnitId(supabase, room, rawUnitId)
     if (!unitId) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: body?.user_id || null,
+        operatorRole: "admin",
+        actionType: "create_fee",
+        targetType: "fee",
+        targetId: room || "unknown",
+        reason: "查無對應單位",
+        module: "fees",
+        status: "blocked",
+        errorCode: "unit_not_found",
+      })
       return NextResponse.json({ error: "查無對應單位，請確認房號或 unit_id" }, { status: 404 })
     }
 
@@ -137,6 +162,18 @@ export async function POST(req) {
       .single()
 
     if (insertError) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: body?.user_id || null,
+        operatorRole: "admin",
+        actionType: "create_fee",
+        targetType: "fee",
+        targetId: unitId,
+        reason: insertError.message,
+        module: "fees",
+        status: "failed",
+        errorCode: insertError.message,
+      })
       return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
 
@@ -148,6 +185,20 @@ export async function POST(req) {
 
     const sent = notify?.pushed ? 1 : 0
     const skipped = notify?.pushed ? 0 : 1
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: body?.user_id || null,
+      operatorRole: "admin",
+      actionType: "create_fee",
+      targetType: "fee",
+      targetId: inserted?.id || unitId,
+      reason: "建立管理費",
+      afterState: { unit_id: unitId, amount, due, paid: !!paid, notify },
+      module: "fees",
+      status: "success",
+    })
+
     return NextResponse.json({
       success: true,
       record: inserted,
@@ -160,6 +211,21 @@ export async function POST(req) {
         : `✅ 管理費已建立\n（1 人未推播：${notify?.reason || "LINE 未綁定"}）`,
     })
   } catch (err) {
+    try {
+      const supabase = getSupabase()
+      await writeServerAuditLog({
+        supabase,
+        operatorId: null,
+        operatorRole: "admin",
+        actionType: "create_fee",
+        targetType: "fee",
+        targetId: "unknown",
+        reason: err?.message || String(err),
+        module: "fees",
+        status: "failed",
+        errorCode: err?.message || "internal_error",
+      })
+    } catch {}
     return NextResponse.json(
       { error: "Internal Server Error", details: err?.message || String(err) },
       { status: 500 },

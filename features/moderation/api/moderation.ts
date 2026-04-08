@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface ModerationQueueItem {
   id: string
@@ -169,19 +170,21 @@ export async function resolveModerationItem(
 
   if (error) throw error
 
-  // 記錄稽核日誌
-  await supabase.from("audit_logs").insert([
-    {
-      operator_id: userId,
-      operator_role: "committee",
-      action_type: resolution.action,
-      target_type: queueItem.item_type,
-      target_id: queueItem.item_id,
-      reason: resolution.reason,
-      additional_data: resolution,
+  await createAuditLog({
+    operatorId: userId,
+    operatorRole: "committee",
+    actionType: resolution.action,
+    targetType: queueItem.item_type as "post" | "comment" | "report",
+    targetId: queueItem.item_id,
+    reason: resolution.reason,
+    additionalData: {
+      ...resolution,
+      module: "moderation",
+      status: "success",
       related_request_id: itemId,
     },
-  ])
+    relatedRequestId: itemId,
+  })
 
   return data as ModerationQueueItem
 }

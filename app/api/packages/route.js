@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { Client } from "@line/bot-sdk";
+import { writeServerAuditLog } from "@/lib/audit-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -145,6 +146,13 @@ async function resolveUnitByRoom(supabase, recipientRoom) {
   return foundUnit;
 }
 
+function getPackageOperator(payload = {}) {
+  return {
+    id: payload.operatorId || payload.created_by || payload.picked_up_by_id || undefined,
+    role: payload.operatorRole || "unknown",
+  };
+}
+
 // 1. ADDING A NEW PACKAGE (POST)
 export async function POST(req) {
   try {
@@ -153,9 +161,22 @@ export async function POST(req) {
 
     const body = await req.json();
     const { courier, recipient_name, recipient_room, tracking_number, arrived_at, test } = body;
+    const operator = getPackageOperator(body);
 
     // Validation
     if (!courier || !recipient_name || !recipient_room || !arrived_at) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_package",
+        targetType: "system",
+        targetId: "unknown",
+        reason: "Missing required fields",
+        module: "packages",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      });
       return Response.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -164,6 +185,18 @@ export async function POST(req) {
     const foundUnit = await resolveUnitByRoom(supabase, recipient_room)
 
     if (!foundUnit) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_package",
+        targetType: "system",
+        targetId: "unknown",
+        reason: "Room not found in database",
+        module: "packages",
+        status: "blocked",
+        errorCode: "unit_not_found",
+      });
       return Response.json({ error: "Room not found in database" }, { status: 404 })
     }
 
@@ -183,6 +216,19 @@ export async function POST(req) {
       .single();
 
     if (insertError) throw insertError;
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_package",
+      targetType: "system",
+      targetId: insertedPackage?.id || "unknown",
+      reason: recipient_name,
+      module: "packages",
+      status: "success",
+      afterState: { courier, recipient_room, status: "pending" },
+    });
 
     // Find LINE User ID with multi-strategy lookup (profiles + line_users)
     const { lineUserId, lineDisplayName } = await findLineUserByUnit(supabase, foundUnit.id)
@@ -307,8 +353,21 @@ export async function PUT(req) {
     const body = await req.json();
 
     const { id, courier, recipient_name, recipient_room, tracking_number, arrived_at } = body;
+    const operator = getPackageOperator(body);
 
     if (!id || !courier || !recipient_name || !recipient_room || !arrived_at) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_package",
+        targetType: "system",
+        targetId: id || "unknown",
+        reason: "Missing required fields",
+        module: "packages",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      });
       return Response.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -319,15 +378,51 @@ export async function PUT(req) {
       .maybeSingle();
 
     if (existingError || !existing) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_package",
+        targetType: "system",
+        targetId: id,
+        reason: "Package not found",
+        module: "packages",
+        status: "blocked",
+        errorCode: "package_not_found",
+      });
       return Response.json({ error: "Package not found" }, { status: 404 });
     }
 
     if (existing.status === "picked_up") {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_package",
+        targetType: "system",
+        targetId: id,
+        reason: "已領取包裹不可編輯",
+        module: "packages",
+        status: "blocked",
+        errorCode: "invalid_status",
+      });
       return Response.json({ error: "已領取包裹不可編輯" }, { status: 400 });
     }
 
     const foundUnit = await resolveUnitByRoom(supabase, recipient_room);
     if (!foundUnit) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_package",
+        targetType: "system",
+        targetId: id,
+        reason: "Room not found in database",
+        module: "packages",
+        status: "blocked",
+        errorCode: "unit_not_found",
+      });
       return Response.json({ error: "Room not found in database" }, { status: 404 });
     }
 
@@ -345,6 +440,19 @@ export async function PUT(req) {
 
     if (error) throw error;
 
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_package",
+      targetType: "system",
+      targetId: id,
+      reason: recipient_name,
+      module: "packages",
+      status: "success",
+      afterState: { courier, recipient_room, tracking_number: tracking_number || null },
+    });
+
     return Response.json({ 
       success: true,
       message: "✅ 包裹已更新"
@@ -361,8 +469,24 @@ export async function DELETE(req) {
     const supabase = getSupabase();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
+    const operator = getPackageOperator({
+      operatorId: searchParams.get("operatorId"),
+      operatorRole: searchParams.get("operatorRole"),
+    });
 
     if (!id) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_package",
+        targetType: "system",
+        targetId: "unknown",
+        reason: "Package ID required",
+        module: "packages",
+        status: "blocked",
+        errorCode: "missing_package_id",
+      });
       return Response.json({ error: "Package ID required" }, { status: 400 });
     }
 
@@ -373,15 +497,51 @@ export async function DELETE(req) {
       .maybeSingle();
 
     if (existingError || !existing) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_package",
+        targetType: "system",
+        targetId: id,
+        reason: "Package not found",
+        module: "packages",
+        status: "blocked",
+        errorCode: "package_not_found",
+      });
       return Response.json({ error: "Package not found" }, { status: 404 });
     }
 
     if (existing.status === "picked_up") {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_package",
+        targetType: "system",
+        targetId: id,
+        reason: "已領取包裹不可刪除",
+        module: "packages",
+        status: "blocked",
+        errorCode: "invalid_status",
+      });
       return Response.json({ error: "已領取包裹不可刪除" }, { status: 400 });
     }
 
     const { error } = await supabase.from("packages").delete().eq("id", id);
     if (error) throw error;
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_package",
+      targetType: "system",
+      targetId: id,
+      reason: "刪除包裹",
+      module: "packages",
+      status: "success",
+    });
 
     return Response.json({ 
       success: true,
@@ -401,8 +561,21 @@ export async function PATCH(req) {
 
     const body = await req.json();
     const { packageId, picked_up_by } = body;
+    const operator = getPackageOperator(body);
 
     if (!packageId || !picked_up_by) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "pickup_package",
+        targetType: "system",
+        targetId: packageId || "unknown",
+        reason: "Package ID and Picker Name required",
+        module: "packages",
+        status: "blocked",
+        errorCode: "missing_required_fields",
+      });
       return Response.json({ error: "Package ID and Picker Name required" }, { status: 400 });
     }
 
@@ -415,6 +588,18 @@ export async function PATCH(req) {
 
     if (fetchError || !packageData) {
       console.error("[PATCH] Package not found:", fetchError);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "pickup_package",
+        targetType: "system",
+        targetId: packageId,
+        reason: "Package not found",
+        module: "packages",
+        status: "blocked",
+        errorCode: "package_not_found",
+      });
       return Response.json({ error: "Package not found" }, { status: 404 });
     }
 
@@ -429,6 +614,19 @@ export async function PATCH(req) {
       .eq("id", packageId);
 
     if (error) throw error;
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "pickup_package",
+      targetType: "system",
+      targetId: packageId,
+      reason: picked_up_by,
+      module: "packages",
+      status: "success",
+      afterState: { status: "picked_up", picked_up_by },
+    });
 
     // 發送「已領取」LINE 通知
     if (packageData.unit_id) {

@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface Resident {
   id?: string
@@ -15,6 +16,19 @@ export interface Resident {
   // FK 欄位
   unit_id?: string
   profile_id?: string
+}
+
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
 }
 
 export async function fetchResidents(): Promise<Resident[]> {
@@ -46,7 +60,18 @@ export async function fetchResidents(): Promise<Resident[]> {
       .select("id, phone, email, role, emergency_contact_name, emergency_contact_phone")
       .in("id", profileIds)
     if (profiles) {
-      profilesMap = Object.fromEntries(profiles.map((p) => [p.id, { phone: p.phone, email: p.email, role: p.role }]))
+      profilesMap = Object.fromEntries(
+        profiles.map((p) => [
+          p.id,
+          {
+            phone: p.phone,
+            email: p.email,
+            role: p.role,
+            emergency_contact_name: p.emergency_contact_name,
+            emergency_contact_phone: p.emergency_contact_phone,
+          },
+        ]),
+      )
     }
   }
 
@@ -80,6 +105,7 @@ export async function createResident(
   resident: Omit<Resident, "id" | "created_at" | "updated_at">,
 ): Promise<Resident | null> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) return null
 
   const normalizedRole = resident.role
@@ -99,18 +125,20 @@ export async function createResident(
 
     // 同步更新 profiles 表的 phone/email/role
     if (
-      resident.phone ||
-      resident.email ||
-      normalizedRole ||
-      resident.emergency_contact_name ||
-      resident.emergency_contact_phone
+      resident.phone !== undefined ||
+      resident.email !== undefined ||
+      normalizedRole !== undefined ||
+      resident.emergency_contact_name !== undefined ||
+      resident.emergency_contact_phone !== undefined
     ) {
       const profileUpdates: Record<string, string> = {}
-      if (resident.phone) profileUpdates.phone = resident.phone
-      if (resident.email) profileUpdates.email = resident.email
-      if (normalizedRole) profileUpdates.role = normalizedRole
-      if (resident.emergency_contact_name) profileUpdates.emergency_contact_name = resident.emergency_contact_name
-      if (resident.emergency_contact_phone) profileUpdates.emergency_contact_phone = resident.emergency_contact_phone
+      if (resident.phone !== undefined) profileUpdates.phone = resident.phone || ""
+      if (resident.email !== undefined) profileUpdates.email = resident.email || ""
+      if (normalizedRole !== undefined) profileUpdates.role = normalizedRole
+      if (resident.emergency_contact_name !== undefined)
+        profileUpdates.emergency_contact_name = resident.emergency_contact_name || ""
+      if (resident.emergency_contact_phone !== undefined)
+        profileUpdates.emergency_contact_phone = resident.emergency_contact_phone || ""
 
       await supabase.from("profiles").update(profileUpdates).eq("id", resident.profile_id)
     }
@@ -127,13 +155,38 @@ export async function createResident(
 
   if (error) {
     console.error("Error creating resident:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_resident",
+        targetType: "user",
+        targetId: resident.profile_id || resident.unit_id || operator.id,
+        reason: error.message,
+        afterState: insertData as Record<string, any>,
+        additionalData: { module: "residents", status: "failed", error_code: error.message },
+      })
+    }
     return null
+  }
+  if (operator.id && data?.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_resident",
+      targetType: "user",
+      targetId: data.id,
+      reason: resident.name,
+      afterState: insertData as Record<string, any>,
+      additionalData: { module: "residents", status: "success" },
+    })
   }
   return data
 }
 
 export async function updateResident(id: string, updates: Partial<Resident>): Promise<Resident | null> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) return null
 
   const normalizedRole = updates.role
@@ -174,18 +227,34 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
 
   if (error) {
     console.error("Error updating resident:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_resident",
+        targetType: "user",
+        targetId: id,
+        reason: error.message,
+        afterState: dbUpdates as Record<string, any>,
+        additionalData: { module: "residents", status: "failed", error_code: error.message },
+      })
+    }
     return null
   }
 
   const targetProfileId = data?.profile_id || profile_id
   if (
     targetProfileId &&
-    (phone || email || normalizedRole || emergency_contact_name !== undefined || emergency_contact_phone !== undefined)
+    (phone !== undefined ||
+      email !== undefined ||
+      normalizedRole !== undefined ||
+      emergency_contact_name !== undefined ||
+      emergency_contact_phone !== undefined)
   ) {
     const profileUpdates: Record<string, string> = {}
-    if (phone) profileUpdates.phone = phone
-    if (email) profileUpdates.email = email
-    if (normalizedRole) profileUpdates.role = normalizedRole
+    if (phone !== undefined) profileUpdates.phone = phone || ""
+    if (email !== undefined) profileUpdates.email = email || ""
+    if (normalizedRole !== undefined) profileUpdates.role = normalizedRole
     if (emergency_contact_name !== undefined) {
       profileUpdates.emergency_contact_name = emergency_contact_name || ""
     }
@@ -196,18 +265,54 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
     await supabase.from("profiles").update(profileUpdates).eq("id", targetProfileId)
   }
 
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_resident",
+      targetType: "user",
+      targetId: id,
+      reason: updates.name || "更新住戶",
+      afterState: { ...dbUpdates, profile_id: targetProfileId || undefined },
+      additionalData: { module: "residents", status: "success" },
+    })
+  }
+
   return data
 }
 
 export async function deleteResident(id: string): Promise<boolean> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) return false
 
   const { error } = await supabase.from("household_members").delete().eq("id", id)
 
   if (error) {
     console.error("Error deleting resident:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_resident",
+        targetType: "user",
+        targetId: id,
+        reason: error.message,
+        additionalData: { module: "residents", status: "failed", error_code: error.message },
+      })
+    }
     return false
+  }
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_resident",
+      targetType: "user",
+      targetId: id,
+      reason: "刪除住戶",
+      additionalData: { module: "residents", status: "success" },
+    })
   }
   return true
 }
@@ -273,7 +378,18 @@ export async function fetchResidentsByRoom(room: string): Promise<Resident[]> {
       .select("id, phone, email, role, emergency_contact_name, emergency_contact_phone")
       .in("id", profileIds)
     if (profiles) {
-      profilesMap = Object.fromEntries(profiles.map((p) => [p.id, { phone: p.phone, email: p.email, role: p.role }]))
+      profilesMap = Object.fromEntries(
+        profiles.map((p) => [
+          p.id,
+          {
+            phone: p.phone,
+            email: p.email,
+            role: p.role,
+            emergency_contact_name: p.emergency_contact_name,
+            emergency_contact_phone: p.emergency_contact_phone,
+          },
+        ]),
+      )
     }
   }
 
@@ -328,7 +444,18 @@ export async function fetchResidentsByUnitId(unitId: string): Promise<Resident[]
       .select("id, phone, email, role, emergency_contact_name, emergency_contact_phone")
       .in("id", profileIds)
     if (profiles) {
-      profilesMap = Object.fromEntries(profiles.map((p) => [p.id, { phone: p.phone, email: p.email, role: p.role }]))
+      profilesMap = Object.fromEntries(
+        profiles.map((p) => [
+          p.id,
+          {
+            phone: p.phone,
+            email: p.email,
+            role: p.role,
+            emergency_contact_name: p.emergency_contact_name,
+            emergency_contact_phone: p.emergency_contact_phone,
+          },
+        ]),
+      )
     }
   }
 
@@ -377,39 +504,112 @@ export async function fetchUnits(): Promise<Unit[]> {
 
 export async function createUnit(unit: Omit<Unit, "id" | "created_at" | "updated_at">): Promise<Unit | null> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) return null
 
   const { data, error } = await supabase.from("units").insert([unit]).select().single()
 
   if (error) {
     console.error("Error creating unit:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_unit",
+        targetType: "system",
+        targetId: unit.unit_code,
+        reason: error.message,
+        afterState: unit as Record<string, any>,
+        additionalData: { module: "residents", status: "failed", error_code: error.message },
+      })
+    }
     return null
+  }
+  if (operator.id && data?.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_unit",
+      targetType: "system",
+      targetId: data.id,
+      reason: unit.unit_code,
+      afterState: unit as Record<string, any>,
+      additionalData: { module: "residents", status: "success" },
+    })
   }
   return data
 }
 
 export async function updateUnit(id: string, updates: Partial<Unit>): Promise<Unit | null> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) return null
 
   const { data, error } = await supabase.from("units").update(updates).eq("id", id).select().single()
 
   if (error) {
     console.error("Error updating unit:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_unit",
+        targetType: "system",
+        targetId: id,
+        reason: error.message,
+        afterState: updates as Record<string, any>,
+        additionalData: { module: "residents", status: "failed", error_code: error.message },
+      })
+    }
     return null
+  }
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_unit",
+      targetType: "system",
+      targetId: id,
+      reason: updates.unit_code || "更新單位",
+      afterState: updates as Record<string, any>,
+      additionalData: { module: "residents", status: "success" },
+    })
   }
   return data
 }
 
 export async function deleteUnit(id: string): Promise<boolean> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) return false
 
   const { error } = await supabase.from("units").delete().eq("id", id)
 
   if (error) {
     console.error("Error deleting unit:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_unit",
+        targetType: "system",
+        targetId: id,
+        reason: error.message,
+        additionalData: { module: "residents", status: "failed", error_code: error.message },
+      })
+    }
     return false
+  }
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_unit",
+      targetType: "system",
+      targetId: id,
+      reason: "刪除單位",
+      additionalData: { module: "residents", status: "success" },
+    })
   }
   return true
 }

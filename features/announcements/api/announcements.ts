@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface Announcement {
   id: string
@@ -9,6 +10,19 @@ export interface Announcement {
   author_name?: string
   created_at: string
   status: string
+}
+
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
 }
 
 export async function fetchAnnouncements() {
@@ -93,7 +107,19 @@ export async function fetchAllAnnouncements() {
 
 export async function createAnnouncement(data: Partial<Announcement>, userId?: string) {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!data?.title || !data?.content) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_announcement",
+        targetType: "announcement",
+        targetId: operator.id,
+        reason: "建立公告缺少必要欄位",
+        additionalData: { module: "announcements", status: "blocked", error_code: "missing_required_fields" },
+      })
+    }
     return { data: null, error: { message: "缺少必要欄位：標題或內容" } }
   }
 
@@ -141,7 +167,31 @@ export async function createAnnouncement(data: Partial<Announcement>, userId?: s
 
   if (error) {
     console.error("[Announce] ❌ 資料庫寫入失敗:", error);
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_announcement",
+        targetType: "announcement",
+        targetId: operator.id,
+        reason: error.message || "建立公告失敗",
+        additionalData: { module: "announcements", status: "failed", error_code: error.message },
+      })
+    }
     return { data: null, error }
+  }
+
+  if (operator.id && result?.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "create_announcement",
+      targetType: "announcement",
+      targetId: result.id,
+      reason: data.title,
+      afterState: { status: "published" },
+      additionalData: { module: "announcements", status: "success" },
+    })
   }
 
   console.log("[Announce] ✅ 公告寫入成功");
@@ -181,6 +231,7 @@ export async function createAnnouncement(data: Partial<Announcement>, userId?: s
 
 export async function updateAnnouncement(id: string, data: Partial<Announcement>) {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) {
     return { data: null, error: { message: "請先登入" } }
   }
@@ -201,6 +252,17 @@ export async function updateAnnouncement(id: string, data: Partial<Announcement>
 
   if (error) {
     console.error("[v0] Error updating announcement:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_announcement",
+        targetType: "announcement",
+        targetId: id,
+        reason: error.message || "更新公告失敗",
+        additionalData: { module: "announcements", status: "failed", error_code: error.message },
+      })
+    }
     return { data: null, error }
   }
 
@@ -236,11 +298,25 @@ export async function updateAnnouncement(id: string, data: Partial<Announcement>
   }
 
   console.log("[v0] Announcement updated successfully:", result)
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: result?.status === "published" && currentAnnouncement?.status !== "published" ? "publish_announcement" : "update_announcement",
+      targetType: "announcement",
+      targetId: id,
+      reason: result?.title || "更新公告",
+      beforeState: { status: currentAnnouncement?.status || null },
+      afterState: { status: result?.status || null },
+      additionalData: { module: "announcements", status: "success" },
+    })
+  }
   return { data: result, error: null }
 }
 
 export async function deleteAnnouncement(id: string) {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   if (!supabase) {
     return { data: null, error: { message: "請先登入" } }
   }
@@ -251,10 +327,33 @@ export async function deleteAnnouncement(id: string) {
 
   if (error) {
     console.error("[v0] Error deleting announcement:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_announcement",
+        targetType: "announcement",
+        targetId: id,
+        reason: error.message || "刪除公告失敗",
+        additionalData: { module: "announcements", status: "failed", error_code: error.message },
+      })
+    }
     return { data: null, error }
   }
 
   console.log("[v0] Announcement deleted successfully")
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_announcement",
+      targetType: "announcement",
+      targetId: id,
+      reason: "刪除公告",
+      afterState: { deleted: true },
+      additionalData: { module: "announcements", status: "success" },
+    })
+  }
   return { data: { id }, error: null }
 }
 

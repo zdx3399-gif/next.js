@@ -1,13 +1,21 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CommunityPostCard } from "./CommunityPostCard"
 import { useCommunityPosts, useInteractions } from "../hooks/useCommunity"
+import {
+  getPostById,
+  getUserModerationAppeals,
+  submitModerationAppeal,
+  type CommunityPost,
+  type ModerationAppeal,
+} from "../api/community"
 import type { User } from "@/features/profile/api/profile"
-import { Search, Plus } from "lucide-react"
+import { Search, Plus, ChevronDown, ChevronUp } from "lucide-react"
 import { HelpHint } from "@/components/ui/help-hint"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 interface CommunityPostListProps {
   currentUser: User | null
@@ -20,6 +28,9 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
   const [searchQuery, setSearchQuery] = useState("")
   const { posts, loading, error, withdrawPost, refresh } = useCommunityPosts({ category: selectedCategory })
   const { likePost, bookmarkPost } = useInteractions(currentUser?.id || "")
+  const [moderatedPosts, setModeratedPosts] = useState<CommunityPost[]>([])
+  const [appealStatusByPostId, setAppealStatusByPostId] = useState<Record<string, ModerationAppeal["status"]>>({})
+  const [appealPanelOpen, setAppealPanelOpen] = useState(false)
 
   const categories = [
     { value: undefined, label: "全部" },
@@ -55,6 +66,63 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
   const handleEdit = (postId: string) => {
     // 這裡可以打開編輯對話框
     alert("編輯功能開發中")
+  }
+
+  const loadAppealContext = async () => {
+    if (!currentUser?.id) {
+      setModeratedPosts([])
+      return
+    }
+
+    try {
+      const appeals = await getUserModerationAppeals(currentUser.id)
+
+      const uniquePostIds = Array.from(new Set(appeals.map((a) => a.post_id)))
+      const posts = await Promise.all(
+        uniquePostIds.map(async (postId) => {
+          try {
+            return await getPostById(postId)
+          } catch {
+            return null
+          }
+        }),
+      )
+
+      setModeratedPosts(posts.filter((p): p is CommunityPost => Boolean(p)))
+
+      const statusMap: Record<string, ModerationAppeal["status"]> = {}
+      for (const appeal of appeals) {
+        if (!statusMap[appeal.post_id]) {
+          statusMap[appeal.post_id] = appeal.status
+        }
+      }
+      setAppealStatusByPostId(statusMap)
+    } catch (e) {
+      console.error("[v0] Error loading appeal context:", e)
+    }
+  }
+
+  useEffect(() => {
+    loadAppealContext()
+  }, [currentUser?.id])
+
+  const handleAppeal = async (postId: string, reason: string) => {
+    if (!currentUser?.id) {
+      alert("請先登入")
+      return
+    }
+
+    try {
+      const result = await submitModerationAppeal({
+        postId,
+        authorId: currentUser.id,
+        reason,
+      })
+      alert(result.message)
+      await loadAppealContext()
+    } catch (err: any) {
+      alert(err?.message || "申訴提交失敗")
+    }
   }
 
   if (loading) {
@@ -98,6 +166,70 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
         )}
       </div>
 
+      {currentUser && (
+        <Collapsible
+          open={appealPanelOpen}
+          onOpenChange={setAppealPanelOpen}
+          className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-secondary)]/40"
+        >
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-[var(--theme-text-primary)]">申訴專區</span>
+              <HelpHint
+                title="住戶端申訴"
+                description="若內容被下架且你認為是誤判，可提交申訴要求管理員人工複審。"
+                workflow={[
+                  "在被處置貼文中點擊『提出申訴』。",
+                  "填寫具體申訴理由後送出。",
+                  "等待管理員複審結果。",
+                ]}
+                logic={[
+                  "同一貼文有處理中案件時不可重複送出。",
+                  "申訴失敗後不可再次申請同一貼文。",
+                ]}
+                align="center"
+              />
+              <span className="text-xs text-[var(--theme-text-secondary)]">共 {moderatedPosts.length} 筆</span>
+            </div>
+
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                {appealPanelOpen ? (
+                  <>
+                    收合
+                    <ChevronUp className="w-4 h-4 ml-1" />
+                  </>
+                ) : (
+                  <>
+                    展開
+                    <ChevronDown className="w-4 h-4 ml-1" />
+                  </>
+                )}
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+
+          <CollapsibleContent className="space-y-3 px-3 pb-3">
+            {moderatedPosts.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-[var(--theme-border)] p-3 text-xs text-[var(--theme-text-secondary)]">
+                目前沒有可申訴的被處置貼文
+              </div>
+            ) : (
+              moderatedPosts.map((post) => (
+                <div key={`moderated-top-${post.id}`} className="cursor-default">
+                  <CommunityPostCard
+                    post={{ ...post, moderation_reason: post.moderation_reason ?? undefined }}
+                    currentUserId={currentUser.id}
+                    onAppeal={handleAppeal}
+                    appealStatus={appealStatusByPostId[post.id]}
+                  />
+                </div>
+              ))
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
       <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-hide">
         <div className="flex items-center gap-2 shrink-0 pr-2">
           <span className="text-xs text-muted-foreground">分類</span>
@@ -132,7 +264,7 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
           filteredPosts.map((post) => (
             <div key={post.id} onClick={() => onSelectPost(post.id)} className="cursor-pointer">
               <CommunityPostCard
-                post={post}
+                post={{ ...post, moderation_reason: post.moderation_reason ?? undefined }}
                 currentUserId={currentUser?.id}
                 onLike={(postId) => {
                   // 阻止事件冒泡，避免觸發 onSelectPost
@@ -143,11 +275,13 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
                 onWithdraw={handleWithdraw}
                 onEdit={handleEdit}
                 onReport={handleReport}
+                onAppeal={handleAppeal}
               />
             </div>
           ))
         )}
       </div>
+
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { Client } from "@line/bot-sdk"
+import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -58,10 +59,40 @@ export async function POST(req: NextRequest) {
 
     const type = String(body?.type || "").trim()
     const note = String(body?.note || "").trim()
+    const location = String(body?.location || "").trim()
+    const description = String(body?.description || "").trim()
     const reportedByIdRaw = body?.reported_by_id ? String(body.reported_by_id).trim() : null
     const reportedByName = String(body?.reported_by_name || "未知").trim()
+    if (!location || !description) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: reportedByIdRaw || undefined,
+        operatorRole: "unknown",
+        actionType: "create_emergency",
+        targetType: "emergency",
+        targetId: "unknown",
+        reason: "缺少 location 或 description",
+        module: "emergency",
+        status: "blocked",
+        errorCode: "missing_location_or_description",
+      })
+      return NextResponse.json({ success: false, error: "請填寫地點與事件描述" }, { status: 400 })
+    }
+
 
     if (!type) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: reportedByIdRaw || undefined,
+        operatorRole: "unknown",
+        actionType: "create_emergency",
+        targetType: "emergency",
+        targetId: "unknown",
+        reason: "缺少 type",
+        module: "emergency",
+        status: "blocked",
+        errorCode: "missing_type",
+      })
       return NextResponse.json({ success: false, error: "缺少 type" }, { status: 400 })
     }
 
@@ -85,9 +116,11 @@ export async function POST(req: NextRequest) {
 
     const nowIso = new Date().toISOString()
 
+    const composedNote = [`${note || "緊急事件通報"}`, `地點：${location}`, `事件：${description}`].join("\n")
+
     const insertPayload: Record<string, unknown> = {
       type,
-      note,
+      note: composedNote,
       time: nowIso,
     }
 
@@ -103,6 +136,18 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (insertError) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: reportedById || undefined,
+        operatorRole: "unknown",
+        actionType: "create_emergency",
+        targetType: "emergency",
+        targetId: "unknown",
+        reason: insertError.message,
+        module: "emergency",
+        status: "failed",
+        errorCode: insertError.message,
+      })
       return NextResponse.json({ success: false, error: insertError.message }, { status: 500 })
     }
 
@@ -140,8 +185,9 @@ export async function POST(req: NextRequest) {
         `🚨 緊急事件通知\n` +
         `類型：${type}\n` +
         `發起人：${resolvedReportedByName || "未知"}\n` +
+        `地點：${location}\n` +
         `時間：${new Date(nowIso).toLocaleString("zh-TW", { hour12: false })}\n` +
-        `備註：${note || "（無）"}`
+        `備註：${description || "（無）"}`
 
       for (const to of lineTargets) {
         try {
@@ -158,6 +204,28 @@ export async function POST(req: NextRequest) {
     const lineDeliveryOk = !lineError && (lineTargetCount === 0 || lineSent > 0)
     const responseStatus = lineDeliveryOk ? 200 : 502
     const lineNotBound = lineTargetCount - lineSent
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: reportedById || undefined,
+      operatorRole: "unknown",
+      actionType: "create_emergency",
+      targetType: "emergency",
+      targetId: insertedEmergency?.id || "unknown",
+      reason: type,
+      module: "emergency",
+      status: lineDeliveryOk ? "success" : "failed",
+      beforeState: null,
+      afterState: { type, note, iotSent, lineSent, lineFailed },
+      additionalData: {
+        reported_by_name: resolvedReportedByName || "未知",
+        location,
+        description,
+        line_error: lineError || undefined,
+        iot_error: iotError || undefined,
+      },
+      errorCode: lineDeliveryOk ? undefined : lineError || iotError || 'notification_failed',
+    })
 
     return NextResponse.json(
       {

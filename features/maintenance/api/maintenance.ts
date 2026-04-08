@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase"
+import { createAuditLog } from "@/lib/audit"
 
 export interface MaintenanceRequest {
   id: string
@@ -24,6 +25,19 @@ export interface MaintenanceFormData {
   location: string
   description: string
   image: File | null
+}
+
+function getCurrentOperator() {
+  if (typeof window === "undefined") return { id: "", role: "unknown" }
+
+  try {
+    const raw = localStorage.getItem("currentUser")
+    if (!raw) return { id: "", role: "unknown" }
+    const parsed = JSON.parse(raw)
+    return { id: parsed?.id || "", role: parsed?.role || "unknown" }
+  } catch {
+    return { id: "", role: "unknown" }
+  }
 }
 
 export async function fetchMaintenanceRequests(): Promise<MaintenanceRequest[]> {
@@ -109,6 +123,7 @@ export async function submitMaintenanceRequest(
   userName: string,
 ): Promise<{ success: boolean; error?: string; data?: MaintenanceRequest }> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
 
   try {
     let imageUrl = ""
@@ -139,12 +154,47 @@ export async function submitMaintenanceRequest(
       .single()
 
     if (error) {
+      if (operator.id) {
+        await createAuditLog({
+          operatorId: operator.id,
+          operatorRole: operator.role,
+          actionType: "create_maintenance_request",
+          targetType: "maintenance",
+          targetId: userId,
+          reason: error.message,
+          additionalData: { module: "maintenance", status: "failed", error_code: error.message },
+        })
+      }
       return { success: false, error: error.message }
+    }
+
+    if (operator.id && data?.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_maintenance_request",
+        targetType: "maintenance",
+        targetId: data.id,
+        reason: formData.description,
+        afterState: { equipment: formData.type, item: formData.location, status: "open" },
+        additionalData: { module: "maintenance", status: "success" },
+      })
     }
 
     return { success: true, data: { ...data, reported_by_name: userName } }
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : "Unknown error"
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "create_maintenance_request",
+        targetType: "maintenance",
+        targetId: userId,
+        reason: errorMessage,
+        additionalData: { module: "maintenance", status: "failed", error_code: errorMessage },
+      })
+    }
     return { success: false, error: errorMessage }
   }
 }
@@ -154,11 +204,37 @@ export async function updateMaintenanceRequest(
   updates: Partial<MaintenanceRequest>,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   const { reported_by_name, handler_name, image_url, ...dbUpdates } = updates as any
   const { error } = await supabase.from("maintenance").update(dbUpdates).eq("id", id)
 
   if (error) {
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "update_maintenance_request",
+        targetType: "maintenance",
+        targetId: id,
+        reason: error.message,
+        afterState: dbUpdates,
+        additionalData: { module: "maintenance", status: "failed", error_code: error.message },
+      })
+    }
     return { success: false, error: error.message }
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "update_maintenance_request",
+      targetType: "maintenance",
+      targetId: id,
+      reason: "更新維修申請",
+      afterState: dbUpdates,
+      additionalData: { module: "maintenance", status: "success" },
+    })
   }
 
   return { success: true }
@@ -166,11 +242,35 @@ export async function updateMaintenanceRequest(
 
 export async function deleteMaintenanceRequest(id: string): Promise<boolean> {
   const supabase = getSupabaseClient()
+  const operator = getCurrentOperator()
   const { error } = await supabase.from("maintenance").delete().eq("id", id)
 
   if (error) {
     console.error("Error deleting maintenance request:", error)
+    if (operator.id) {
+      await createAuditLog({
+        operatorId: operator.id,
+        operatorRole: operator.role,
+        actionType: "delete_maintenance_request",
+        targetType: "maintenance",
+        targetId: id,
+        reason: error.message,
+        additionalData: { module: "maintenance", status: "failed", error_code: error.message },
+      })
+    }
     return false
+  }
+
+  if (operator.id) {
+    await createAuditLog({
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "delete_maintenance_request",
+      targetType: "maintenance",
+      targetId: id,
+      reason: "刪除維修申請",
+      additionalData: { module: "maintenance", status: "success" },
+    })
   }
 
   return true

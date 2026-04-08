@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { writeServerAuditLog } from '@/lib/audit-server';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,6 +13,18 @@ export async function POST(req: NextRequest) {
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
     if (!normalizedEmail || !password) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: normalizedEmail || undefined,
+        operatorRole: role,
+        actionType: 'register_user',
+        targetType: 'user',
+        targetId: normalizedEmail || 'unknown',
+        reason: 'Email 和密碼為必填',
+        module: 'auth',
+        status: 'blocked',
+        errorCode: 'missing_required_fields',
+      });
       return NextResponse.json(
         { success: false, message: 'Email 和密碼為必填' },
         { status: 400 }
@@ -26,6 +39,18 @@ export async function POST(req: NextRequest) {
 
     if (error || !data.user) {
       console.error('❌ 註冊失敗:', error);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: normalizedEmail || undefined,
+        operatorRole: role,
+        actionType: 'register_user',
+        targetType: 'user',
+        targetId: normalizedEmail || 'unknown',
+        reason: error?.message || '註冊失敗',
+        module: 'auth',
+        status: 'failed',
+        errorCode: error?.message || 'auth_signup_failed',
+      });
       return NextResponse.json(
         { success: false, message: error?.message || '註冊失敗' },
         { status: 400 }
@@ -80,6 +105,18 @@ export async function POST(req: NextRequest) {
       console.error('❌ 建立 profile 失敗:', profileError);
       // 刪除已建立的 auth 用戶
       await supabase.auth.admin.deleteUser(data.user.id);
+      await writeServerAuditLog({
+        supabase,
+        operatorId: data.user.id,
+        operatorRole: role,
+        actionType: 'register_user',
+        targetType: 'user',
+        targetId: data.user.id,
+        reason: '建立用戶資訊失敗',
+        module: 'auth',
+        status: 'failed',
+        errorCode: profileError?.message || 'profile_create_failed',
+      });
       return NextResponse.json(
         { success: false, message: '建立用戶資訊失敗' },
         { status: 400 }
@@ -105,6 +142,19 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('✅ 註冊成功:', normalizedEmail);
+
+    await writeServerAuditLog({
+      supabase,
+      operatorId: profile.id,
+      operatorRole: profile.role,
+      actionType: 'register_user',
+      targetType: 'user',
+      targetId: profile.id,
+      reason: normalizedEmail,
+      module: 'auth',
+      status: 'success',
+      afterState: { role: profile.role, status: profile.status, unit_id: profile.unit_id },
+    });
 
     return NextResponse.json({
       success: true,

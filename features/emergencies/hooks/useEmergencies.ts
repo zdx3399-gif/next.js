@@ -14,11 +14,10 @@ export function useEmergencies(isAdmin = false) {
   const [emergencies, setEmergencies] = useState<Emergency[]>([])
   const [loading, setLoading] = useState(false)
 
-  const loadEmergencies = useCallback(async () => {
-    if (!isAdmin) return
+  const loadEmergencies = useCallback(async (reportedById?: string) => {
     setLoading(true)
     try {
-      const data = await fetchEmergencies()
+      const data = await fetchEmergencies(isAdmin ? undefined : reportedById ? { reportedById } : undefined)
       setEmergencies(data)
     } catch (e) {
       console.error("載入緊急事件失敗:", e)
@@ -33,9 +32,16 @@ export function useEmergencies(isAdmin = false) {
     }
   }, [isAdmin, loadEmergencies])
 
-  const triggerEmergency = async (type: string, note: string, userId?: string, userName?: string) => {
+  const triggerEmergency = async (
+    type: string,
+    note: string,
+    userId?: string,
+    userName?: string,
+    location?: string,
+    description?: string,
+  ) => {
     try {
-      const result = await apiTriggerEmergency(type, note, userId, userName)
+      const result = await apiTriggerEmergency(type, note, userId, userName, location, description)
       if (result.iotSent) {
         const lineSummary = result.lineSent > 0 ? `，LINE 已通知 ${result.lineSent} 人` : "，LINE 尚未成功推播"
         alert(`已送出緊急事件：${type}\n系統已通知管理員和相關單位（含 IOT${lineSummary}）。`)
@@ -45,6 +51,8 @@ export function useEmergencies(isAdmin = false) {
       }
       if (isAdmin) {
         loadEmergencies()
+      } else if (userId) {
+        loadEmergencies(userId)
       }
     } catch (e: unknown) {
       console.error("triggerEmergency error:", e)

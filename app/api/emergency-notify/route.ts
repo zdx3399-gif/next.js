@@ -519,8 +519,7 @@ export async function POST(req: NextRequest) {
     }
 
     const lineDeliveryOk = !lineError && (lineTargetCount === 0 || lineSent > 0)
-    // 住戶待審核流程以「事件成功建立」為主，不因 LINE 臨時失敗而回傳整筆失敗。
-    const overallSuccess = requiresCommitteeReview ? true : (lineDeliveryOk || iotSent)
+    const overallSuccess = requiresCommitteeReview ? lineDeliveryOk : (lineDeliveryOk || iotSent)
     const responseStatus = overallSuccess ? 200 : 502
     const lineNotBound = lineTargetCount - lineSent
 

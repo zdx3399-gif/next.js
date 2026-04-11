@@ -15,90 +15,28 @@ interface NotificationRouting {
   title: string
 }
 
-function buildCommitteeReviewFlexMessage(
+function buildCommitteeReviewTextMessage(
   incidentId: string,
   type: string,
   location: string,
   description: string,
   imageUrl?: string,
 ) {
-  const bodyContents: any[] = [
-    {
-      type: "text",
-      text: "⚠️ 緊急事件待審核",
-      weight: "bold",
-      size: "xl",
-      color: "#2F3B52",
-      wrap: true,
-    },
-    {
-      type: "separator",
-      margin: "md",
-    },
-    {
-      type: "text",
-      text: `類型：${type || "未填寫"}`,
-      size: "lg",
-      color: "#2F3B52",
-      wrap: true,
-      margin: "lg",
-    },
-    {
-      type: "text",
-      text: `地點：${location || "未填寫"}`,
-      size: "lg",
-      color: "#2F3B52",
-      wrap: true,
-      margin: "md",
-    },
-    {
-      type: "text",
-      text: `描述：${description || "（無）"}`,
-      size: "lg",
-      color: "#2F3B52",
-      wrap: true,
-      margin: "md",
-    },
-    {
-      type: "text",
-      text: `附圖：${imageUrl ? "有" : "無"}`,
-      size: "lg",
-      color: "#2F3B52",
-      margin: "md",
-    },
-    {
-      type: "text",
-      text: "請確認是否發布通知",
-      size: "md",
-      color: "#5A6780",
-      margin: "xl",
-      wrap: true,
-    },
-  ]
+  const text =
+    `⚠️ 緊急事件待審核\n` +
+    `類型：${type || "未填寫"}\n` +
+    `地點：${location || "未填寫"}\n` +
+    `描述：${description || "（無）"}\n` +
+    `附圖：${imageUrl ? "有" : "無"}\n\n` +
+    `請直接在 LINE 點選下方按鈕審核。`
 
-  const bubble: any = {
-    type: "bubble",
-    size: "mega",
-    body: {
-      type: "box",
-      layout: "vertical",
-      spacing: "sm",
-      backgroundColor: "#F5F5F7",
-      paddingAll: "20px",
-      contents: bodyContents,
-    },
-    footer: {
-      type: "box",
-      layout: "vertical",
-      spacing: "md",
-      backgroundColor: "#F5F5F7",
-      paddingAll: "20px",
-      contents: [
+  return {
+    type: "text",
+    text,
+    quickReply: {
+      items: [
         {
-          type: "button",
-          style: "primary",
-          color: "#2D8CDB",
-          height: "sm",
+          type: "action",
           action: {
             type: "postback",
             label: "確認發布",
@@ -107,9 +45,7 @@ function buildCommitteeReviewFlexMessage(
           },
         },
         {
-          type: "button",
-          style: "secondary",
-          height: "sm",
+          type: "action",
           action: {
             type: "postback",
             label: "駁回",
@@ -119,22 +55,6 @@ function buildCommitteeReviewFlexMessage(
         },
       ],
     },
-  }
-
-  if (imageUrl) {
-    bubble.hero = {
-      type: "image",
-      url: imageUrl,
-      size: "full",
-      aspectRatio: "20:13",
-      aspectMode: "cover",
-    }
-  }
-
-  return {
-    type: "flex",
-    altText: `緊急事件待審核：${type || "未分類"}`,
-    contents: bubble,
   }
 }
 
@@ -566,7 +486,7 @@ export async function POST(req: NextRequest) {
       lineTargetCount = lineTargets.length
 
       const message = requiresCommitteeReview
-        ? buildCommitteeReviewFlexMessage(
+        ? buildCommitteeReviewTextMessage(
             insertedEmergency?.id || "",
             type,
             location,

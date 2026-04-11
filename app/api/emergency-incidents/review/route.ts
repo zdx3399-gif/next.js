@@ -38,6 +38,23 @@ function getLineClient() {
   return new Client({ channelAccessToken, channelSecret: channelSecret || "unused" })
 }
 
+function formatLinePushError(err: unknown): string {
+  const unknownMessage = "unknown_error"
+  if (!err) return unknownMessage
+
+  const anyErr = err as any
+  const statusCode = anyErr?.statusCode || anyErr?.status || anyErr?.originalError?.response?.status
+  const details = anyErr?.originalError?.response?.data?.details
+  const detailText = Array.isArray(details)
+    ? details.map((d: any) => d?.message).filter(Boolean).join("; ")
+    : ""
+  const baseMessage = err instanceof Error ? err.message : String(anyErr?.message || err)
+
+  if (statusCode && detailText) return `[${statusCode}] ${baseMessage} - ${detailText}`
+  if (statusCode) return `[${statusCode}] ${baseMessage}`
+  return baseMessage || unknownMessage
+}
+
 function normalizeRole(value: unknown): string {
   return String(value || "").trim().toLowerCase()
 }
@@ -221,6 +238,7 @@ export async function POST(req: NextRequest) {
     let lineSent = 0
     let lineFailed = 0
     let lineError = ""
+    const lineErrorDetails: string[] = []
     let lineTargetCount = 0
     let lineTargetLabel = "管理端人員"
 
@@ -308,13 +326,16 @@ export async function POST(req: NextRequest) {
           try {
             await lineClient.pushMessage(to, { type: "text", text: message })
             lineSent++
-          } catch {
+          } catch (err) {
             lineFailed++
+            if (lineErrorDetails.length < 3) {
+              lineErrorDetails.push(`${to}: ${formatLinePushError(err)}`)
+            }
           }
         }
 
         if (!lineError && lineTargets.length > 0 && lineSent === 0) {
-          lineError = "LINE 推播嘗試失敗（全部送達失敗）"
+          lineError = `LINE 推播嘗試失敗（全部送達失敗）${lineErrorDetails.length > 0 ? `：${lineErrorDetails.join(" | ")}` : ""}`
         }
 
         await createNotificationEvent(supabase, incident.id, routing.title, message)
@@ -334,6 +355,7 @@ export async function POST(req: NextRequest) {
       lineTargetLabel,
       lineFailed,
       lineError: lineError || undefined,
+      lineErrorDetails: lineErrorDetails.length > 0 ? lineErrorDetails : undefined,
     })
   } catch (error) {
     return NextResponse.json(

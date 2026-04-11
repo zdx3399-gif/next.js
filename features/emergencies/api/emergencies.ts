@@ -245,10 +245,13 @@ export async function reviewEmergency(id: string, action: EmergencyReviewAction,
     const lineInfo = data?.lineError
       ? `LINE 未完成（${data.lineError}）`
       : `LINE 已送 ${Number(data?.lineSent || 0)} 人${Number(data?.lineFailed || 0) > 0 ? `，失敗 ${Number(data?.lineFailed || 0)} 人` : ""}`
+    const lineErrorDetails = Array.isArray(data?.lineErrorDetails) && data.lineErrorDetails.length > 0
+      ? `\n細節：${data.lineErrorDetails.join(" | ")}`
+      : ""
     const lineTargetInfo = Number(data?.lineTargetCount || 0) > 0
       ? `\nLINE 目標：${Number(data?.lineTargetCount || 0)} 人（${data?.lineTargetLabel || "管理端人員"}）`
       : ""
-    alert(`審核通過並已啟動正式通知\n${iotInfo}\n${lineInfo}${lineTargetInfo}`)
+    alert(`審核通過並已啟動正式通知\n${iotInfo}\n${lineInfo}${lineTargetInfo}${lineErrorDetails}`)
   }
 }
 

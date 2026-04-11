@@ -235,6 +235,23 @@ function getLineClient() {
   return new Client({ channelAccessToken, channelSecret: channelSecret || "unused" })
 }
 
+function formatLinePushError(err: unknown): string {
+  const unknownMessage = "unknown_error"
+  if (!err) return unknownMessage
+
+  const anyErr = err as any
+  const statusCode = anyErr?.statusCode || anyErr?.status || anyErr?.originalError?.response?.status
+  const details = anyErr?.originalError?.response?.data?.details
+  const detailText = Array.isArray(details)
+    ? details.map((d: any) => d?.message).filter(Boolean).join("; ")
+    : ""
+  const baseMessage = err instanceof Error ? err.message : String(anyErr?.message || err)
+
+  if (statusCode && detailText) return `[${statusCode}] ${baseMessage} - ${detailText}`
+  if (statusCode) return `[${statusCode}] ${baseMessage}`
+  return baseMessage || unknownMessage
+}
+
 async function getEmergencyLineTargets(supabase: any) {
   return getLineTargetsByRoles(supabase, ["admin", "guard", "committee"])
 }
@@ -506,6 +523,7 @@ export async function POST(req: NextRequest) {
     let lineSent = 0
     let lineFailed = 0
     let lineError = ""
+    const lineErrorDetails: string[] = []
     let lineTargetCount = 0
     let lineTargetLabel = "管理員"
 
@@ -570,9 +588,16 @@ export async function POST(req: NextRequest) {
         try {
           await lineClient.pushMessage(to, message as any)
           lineSent++
-        } catch {
+        } catch (err) {
           lineFailed++
+          if (lineErrorDetails.length < 3) {
+            lineErrorDetails.push(`${to}: ${formatLinePushError(err)}`)
+          }
         }
+      }
+
+      if (!lineError && lineTargets.length > 0 && lineSent === 0) {
+        lineError = `LINE 推播嘗試失敗（全部送達失敗）${lineErrorDetails.length > 0 ? `：${lineErrorDetails.join(" | ")}` : ""}`
       }
     } catch (err: unknown) {
       lineError = err instanceof Error ? err.message : "LINE 通知失敗"
@@ -608,6 +633,7 @@ export async function POST(req: NextRequest) {
         line_target_count: lineTargetCount,
         line_target_label: lineTargetLabel,
         line_error: lineError || undefined,
+        line_error_details: lineErrorDetails.length > 0 ? lineErrorDetails : undefined,
         iot_error: iotError || undefined,
         notification_event_error: notificationEventError || undefined,
       },
@@ -631,6 +657,7 @@ export async function POST(req: NextRequest) {
         lineSent,
         lineSkipped: lineNotBound,
         lineFailed,
+        lineErrorDetails: lineErrorDetails.length > 0 ? lineErrorDetails : undefined,
         lineMessage: lineDeliveryOk && lineSent > 0
           ? requiresCommitteeReview
             ? `✅ 已送交管委會驗證\n已發送給 ${lineSent} 位${lineTargetLabel}${lineNotBound > 0 ? `\n（${lineNotBound} 人 LINE 未綁定，已跳過）` : ""}`

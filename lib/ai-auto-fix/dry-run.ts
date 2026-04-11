@@ -678,8 +678,7 @@ async function loadRecentRows(supabase: any, config: DryRunConfig): Promise<Chat
     .gte("created_at", from)
 
   if (unifiedError) {
-    console.warn("[ai-auto-fix] loadRecentRows unified query failed:", unifiedError)
-    return []
+    throw new Error(`Failed to load chat_events rows: ${unifiedError.message}`)
   }
 
   return (unifiedRows || []).map((row: any) => {
@@ -703,8 +702,7 @@ async function loadAnswerRows(supabase: any): Promise<AnswerRow[]> {
     .eq("source", "chat_history")
 
   if (unifiedError) {
-    console.warn("[ai-auto-fix] loadAnswerRows unified query failed:", unifiedError)
-    return []
+    throw new Error(`Failed to load chat_history answers from chat_events: ${unifiedError.message}`)
   }
   return (unifiedRows || []) as AnswerRow[]
 }

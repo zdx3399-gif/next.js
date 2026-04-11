@@ -27,17 +27,8 @@ const PREVIEW_EMERGENCIES = [
   { id: "preview-2", type: "測試資料", time: new Date(Date.now() - 3600000).toISOString(), by: "測試資料", reported_by_name: "測試資料", note: "測試資料" },
 ]
 
-function getStatusLabel(status?: string) {
-  if (status === "pending") return "待管委會驗證"
-  if (status === "submitted") return "已送出"
-  if (status === "approved") return "已核准"
-  if (status === "rejected") return "已駁回"
-  if (status === "draft") return "草稿"
-  return "未分類"
-}
-
 export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPreviewMode = false }: EmergencyManagementAdminProps) {
-  const { emergencies: realEmergencies, loading, triggerEmergency, editEmergency, deleteEmergency, reviewEmergency, reload } = useEmergencies(true)
+  const { emergencies: realEmergencies, loading, triggerEmergency, editEmergency, deleteEmergency, reload } = useEmergencies(true)
 
   // 預覽模式使用模擬資料
   const emergencies = isPreviewMode ? PREVIEW_EMERGENCIES : realEmergencies
@@ -252,7 +243,6 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
             <thead>
               <tr className="bg-[var(--theme-accent-light)]">
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">類別</th>
-                <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">狀態</th>
                 <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
                   <span className="inline-flex items-center gap-2 whitespace-nowrap">時間<HelpHint title="管理端時間欄" description="顯示事件建立時間，建議搭配監視器時間軸比對。" workflow={["先確認通報時間。","必要時與監視器時間交叉比對。"]} logic={["時間欄是事件還原與調查關鍵。"]} align="center" /></span>
                 </th>
@@ -273,11 +263,6 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
                       {row.type}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
-                      <span className="px-2 py-1 rounded-md text-xs border border-[var(--theme-border)]">
-                        {getStatusLabel(row.status)}
-                      </span>
-                    </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
                       {row.time ? new Date(row.time).toLocaleString("zh-TW") : ""}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)]">
@@ -287,61 +272,26 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
                       {row.note}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)]">
-                      {row.status === "pending" && row.id ? (
-                        <div className="grid grid-cols-2 gap-2 w-[92px]">
-                          <button
-                            onClick={() => reviewEmergency(row.id!, "approve", currentUserId)}
-                            className="p-2 rounded-lg border border-[var(--theme-border)] text-green-700 hover:bg-green-50 transition-all"
-                            title="核准"
-                          >
-                            <span className="material-icons text-lg">check_circle</span>
-                          </button>
-                          <button
-                            onClick={() => reviewEmergency(row.id!, "reject", currentUserId)}
-                            className="p-2 rounded-lg border border-[var(--theme-border)] text-red-700 hover:bg-red-50 transition-all"
-                            title="駁回"
-                          >
-                            <span className="material-icons text-lg">cancel</span>
-                          </button>
-                          <button
-                            onClick={() => openEditForm(row)}
-                            className="p-2 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-accent-light)] transition-all"
-                            title="編輯"
-                          >
-                            <span className="material-icons text-lg">edit</span>
-                          </button>
-                          <button
-                            onClick={() => row.id && deleteEmergency(row.id)}
-                            className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
-                            title="刪除"
-                          >
-                            <span className="material-icons text-lg">delete</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => openEditForm(row)}
-                            className="p-2 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-accent-light)] transition-all"
-                            title="編輯"
-                          >
-                            <span className="material-icons text-lg">edit</span>
-                          </button>
-                          <button
-                            onClick={() => row.id && deleteEmergency(row.id)}
-                            className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
-                            title="刪除"
-                          >
-                            <span className="material-icons text-lg">delete</span>
-                          </button>
-                        </div>
-                      )}
+                      <button
+                        onClick={() => openEditForm(row)}
+                        className="p-2 mr-2 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-accent-light)] transition-all"
+                        title="編輯"
+                      >
+                        <span className="material-icons text-lg">edit</span>
+                      </button>
+                      <button
+                        onClick={() => row.id && deleteEmergency(row.id)}
+                        className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
+                        title="刪除"
+                      >
+                        <span className="material-icons text-lg">delete</span>
+                      </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                  <td colSpan={5} className="p-8 text-center text-[var(--theme-text-secondary)]">
                     {searchTerm ? "沒有符合條件的緊急事件紀錄" : "目前沒有緊急事件紀錄"}
                   </td>
                 </tr>

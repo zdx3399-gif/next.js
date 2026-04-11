@@ -7,9 +7,7 @@ import {
   triggerEmergency as apiTriggerEmergency,
   deleteEmergency as apiDeleteEmergency,
   editEmergency as apiEditEmergency,
-  reviewEmergency as apiReviewEmergency,
   type EmergencyUpdatePayload,
-  type EmergencyReviewAction,
 } from "../api/emergencies"
 
 export function useEmergencies(isAdmin = false) {
@@ -44,9 +42,7 @@ export function useEmergencies(isAdmin = false) {
   ) => {
     try {
       const result = await apiTriggerEmergency(type, note, userId, userName, location, description)
-      if (result.requiresCommitteeReview) {
-        alert(`已送出緊急事件：${type}\n此案件已送交管委會驗證，驗證通過後才會啟動正式警報流程。`)
-      } else if (result.iotSent) {
+      if (result.iotSent) {
         const lineSummary = result.lineSent > 0 ? `，LINE 已通知 ${result.lineSent} 人` : "，LINE 尚未成功推播"
         alert(`已送出緊急事件：${type}\n系統已通知管理員和相關單位（含 IOT${lineSummary}）。`)
       } else {
@@ -101,26 +97,6 @@ export function useEmergencies(isAdmin = false) {
     }
   }
 
-  const reviewEmergency = async (id: string, action: EmergencyReviewAction, reviewerId?: string) => {
-    if (!reviewerId) {
-      alert("缺少審核者資訊")
-      return
-    }
-
-    const actionLabel = action === "approve" ? "核准" : "駁回"
-    if (!confirm(`確定要${actionLabel}這筆住戶通報嗎？`)) return
-
-    try {
-      await apiReviewEmergency(id, action, reviewerId)
-      await loadEmergencies()
-      alert(`已${actionLabel}通報`) 
-    } catch (e: unknown) {
-      console.error("reviewEmergency error:", e)
-      const message = e instanceof Error ? e.message : "未知錯誤"
-      alert(`${actionLabel}失敗：` + message)
-    }
-  }
-
   return {
     emergencies,
     loading,
@@ -128,7 +104,6 @@ export function useEmergencies(isAdmin = false) {
     confirmAndTrigger,
     editEmergency,
     deleteEmergency,
-    reviewEmergency,
     reload: loadEmergencies,
   }
 }

@@ -23,16 +23,12 @@ export interface TriggerEmergencyResult {
   lineFailed: number
   iotError?: string
   lineError?: string
-  requiresCommitteeReview?: boolean
-  incidentStatus?: string
 }
 
 export interface EmergencyUpdatePayload {
   type?: string
   note?: string
 }
-
-export type EmergencyReviewAction = "approve" | "reject"
 
 function getCurrentOperator() {
   if (typeof window === "undefined") return { id: "", role: "unknown" }
@@ -137,8 +133,6 @@ export async function triggerEmergency(
     lineFailed: Number(data?.lineFailed || 0),
     iotError: data?.iotError,
     lineError: data?.lineError,
-    requiresCommitteeReview: !!data?.requiresCommitteeReview,
-    incidentStatus: data?.incidentStatus,
   }
 }
 
@@ -181,7 +175,7 @@ export async function editEmergency(id: string, payload: EmergencyUpdatePayload)
 
   const operator = getCurrentOperator()
 
-  if (!updatePayload.event_type && !updatePayload.description) {
+  if (!updatePayload.type && !updatePayload.note) {
     if (operator.id) {
       await createAuditLog({
         operatorId: operator.id,
@@ -225,25 +219,6 @@ export async function editEmergency(id: string, payload: EmergencyUpdatePayload)
       afterState: updatePayload,
       additionalData: { module: "emergency", status: "success" },
     })
-  }
-}
-
-export async function reviewEmergency(id: string, action: EmergencyReviewAction, reviewerId: string): Promise<void> {
-  const res = await fetch("/api/emergency-incidents/review", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ incidentId: id, action, reviewerId }),
-  })
-
-  const data = await res.json().catch(() => null)
-  if (!res.ok || !data?.success) {
-    throw new Error(data?.error || `審核失敗（${res.status}）`)
-  }
-
-  if (action === "approve") {
-    const iotInfo = data?.iotSent ? "IOT 已觸發" : `IOT 未觸發（${data?.iotError || "未知"}）`
-    const lineInfo = `LINE 已送 ${Number(data?.lineSent || 0)} 人${Number(data?.lineFailed || 0) > 0 ? `，失敗 ${Number(data?.lineFailed || 0)} 人` : ""}`
-    alert(`審核通過並已啟動正式通知\n${iotInfo}\n${lineInfo}`)
   }
 }
 

@@ -308,46 +308,44 @@ export async function POST(req: NextRequest) {
     let iotSent = false
     let iotError = ""
 
-    if (!requiresCommitteeReview) {
-      try {
-        const iotUrl = new URL("/api/iot", req.url)
-        const commandPayload = { cmd: routing.iotCommand, emergencyIncidentId: insertedEmergency?.id, location }
-        const iotRes = await fetch(iotUrl.toString(), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(commandPayload),
-        })
-        const iotData = await iotRes.json().catch(() => null)
-        iotSent = !!(iotRes.ok && iotData?.success)
-        if (!iotSent) {
-          iotError = iotData?.error || `IOT 命令失敗（${iotRes.status}）`
-        }
-
-        await logIotCommand(
-          supabase,
-          insertedEmergency?.id,
-          routing.iotCommand,
-          reportedById,
-          iotDeviceId,
-          iotSent ? "sent" : "failed",
-          commandPayload,
-          iotData,
-        )
-      } catch (err: unknown) {
-        iotSent = false
-        iotError = err instanceof Error ? err.message : "IOT 連線失敗"
-
-        await logIotCommand(
-          supabase,
-          insertedEmergency?.id,
-          routing.iotCommand,
-          reportedById,
-          iotDeviceId,
-          "failed",
-          { cmd: routing.iotCommand, emergencyIncidentId: insertedEmergency?.id, location },
-          { error: iotError },
-        )
+    try {
+      const iotUrl = new URL("/api/iot", req.url)
+      const commandPayload = { cmd: routing.iotCommand, emergencyIncidentId: insertedEmergency?.id, location }
+      const iotRes = await fetch(iotUrl.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(commandPayload),
+      })
+      const iotData = await iotRes.json().catch(() => null)
+      iotSent = !!(iotRes.ok && iotData?.success)
+      if (!iotSent) {
+        iotError = iotData?.error || `IOT 命令失敗（${iotRes.status}）`
       }
+
+      await logIotCommand(
+        supabase,
+        insertedEmergency?.id,
+        routing.iotCommand,
+        reportedById,
+        iotDeviceId,
+        iotSent ? "sent" : "failed",
+        commandPayload,
+        iotData,
+      )
+    } catch (err: unknown) {
+      iotSent = false
+      iotError = err instanceof Error ? err.message : "IOT 連線失敗"
+
+      await logIotCommand(
+        supabase,
+        insertedEmergency?.id,
+        routing.iotCommand,
+        reportedById,
+        iotDeviceId,
+        "failed",
+        { cmd: routing.iotCommand, emergencyIncidentId: insertedEmergency?.id, location },
+        { error: iotError },
+      )
     }
 
     let lineSent = 0
@@ -390,7 +388,7 @@ export async function POST(req: NextRequest) {
     }
 
     const lineDeliveryOk = !lineError && (lineTargetCount === 0 || lineSent > 0)
-    const overallSuccess = requiresCommitteeReview ? lineDeliveryOk : (lineDeliveryOk || iotSent)
+    const overallSuccess = lineDeliveryOk || iotSent
     const responseStatus = overallSuccess ? 200 : 502
     const lineNotBound = lineTargetCount - lineSent
 
@@ -440,9 +438,7 @@ export async function POST(req: NextRequest) {
         lineSkipped: lineNotBound,
         lineFailed,
         lineMessage: lineDeliveryOk && lineSent > 0
-          ? requiresCommitteeReview
-            ? `✅ 已送交管委會驗證\n已發送給 ${lineSent} 位管委會成員${lineNotBound > 0 ? `\n（${lineNotBound} 人 LINE 未綁定，已跳過）` : ""}`
-            : `✅ ${routing.title}已推播\n已發送給 ${lineSent} 位管理員${lineNotBound > 0 ? `\n（${lineNotBound} 人 LINE 未綁定，已跳過）` : ""}`
+          ? `✅ ${routing.title}已推播\n已發送給 ${lineSent} 位管理員${lineNotBound > 0 ? `\n（${lineNotBound} 人 LINE 未綁定，已跳過）` : ""}`
           : `⚠️ LINE 推播未完成\n${lineError || "無可推播對象"}`,
       },
       { status: responseStatus },

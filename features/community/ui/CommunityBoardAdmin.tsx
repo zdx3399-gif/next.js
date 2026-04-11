@@ -238,51 +238,30 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
       return
     }
 
-    const supabase = getSupabaseClient()
-    if (!supabase) {
-      setLoading(false)
-      return
-    }
-
     try {
-      let query = supabase.from("community_posts").select("*").order("created_at", { ascending: false })
-
-      if (selectedCategory !== "all") {
-        query = query.eq("category", selectedCategory)
-      }
-      if (selectedStatus !== "all") {
-        query = query.eq("status", selectedStatus)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error("[v0] Error loading posts:", error)
-        return
-      }
-
-      setPosts(data || [])
-
-      // 計算統計
-      const { data: allPosts } = await supabase.from("community_posts").select("status")
-      const postStats = allPosts || []
-
-      // 載入審核隊列統計
-      const { data: queueData } = await supabase.from("moderation_queue").select("status")
-      const queueStats = queueData || []
-
-      setStats({
-        total: postStats.length,
-        published: postStats.filter((p: any) => p.status === "published").length,
-        pending: postStats.filter((p: any) => p.status === "pending").length,
-        shadow: postStats.filter((p: any) => p.status === "shadow").length,
-        redacted: postStats.filter((p: any) => p.status === "redacted").length,
-        removed: postStats.filter((p: any) => p.status === "removed" || p.status === "deleted").length,
-        queuePending: queueStats.filter((q: any) => q.status === "pending" || q.status === "in_review").length,
-        queueResolved: queueStats.filter((q: any) => q.status === "resolved").length,
+      const params = new URLSearchParams({
+        category: selectedCategory,
+        status: selectedStatus,
+        queueFilter,
       })
-    } catch (e) {
-      console.error("[v0] Error:", e)
+      const res = await fetch(`/api/community/admin-board?${params.toString()}`, { cache: "no-store" })
+      const payload = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(payload?.error || "載入貼文失敗")
+      }
+
+      setPosts(Array.isArray(payload?.posts) ? payload.posts : [])
+      setStats(payload?.stats || {
+        total: 0,
+        published: 0,
+        pending: 0,
+        shadow: 0,
+        redacted: 0,
+        removed: 0,
+        queuePending: 0,
+        queueResolved: 0,
+      })
     } finally {
       setLoading(false)
     }
@@ -295,38 +274,25 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
       return
     }
 
-    const supabase = getSupabaseClient()
-    if (!supabase) return
-
     try {
-      const statusFilter = queueFilter === "pending" ? ["pending", "in_review"] : ["resolved"]
+      const params = new URLSearchParams({
+        category: selectedCategory,
+        status: selectedStatus,
+        queueFilter,
+      })
+      const res = await fetch(`/api/community/admin-board?${params.toString()}`, { cache: "no-store" })
+      const payload = await res.json().catch(() => ({}))
 
-      const { data, error } = await supabase
-        .from("moderation_queue")
-        .select("*")
-        .in("status", statusFilter)
-        .order("priority", { ascending: false })
-        .order("created_at", { ascending: true })
-
-      if (error) {
-        console.error("[v0] Error loading moderation queue:", error)
-        return
+      if (!res.ok) {
+        throw new Error(payload?.error || "載入審核隊列失敗")
       }
 
-      // 載入關聯的貼文資料
-      const queueWithPosts = await Promise.all(
-        (data || []).map(async (item) => {
-          if (item.item_type === "post") {
-            const { data: post } = await supabase.from("community_posts").select("*").eq("id", item.item_id).single()
-            return { ...item, post }
-          }
-          return item
-        }),
-      )
-
-      setModerationQueue(queueWithPosts)
-    } catch (e) {
-      console.error("[v0] Error:", e)
+      setModerationQueue(Array.isArray(payload?.moderationQueue) ? payload.moderationQueue : [])
+      if (payload?.stats) {
+        setStats(payload.stats)
+      }
+    } catch (e: any) {
+      console.error("[v0] Error loading moderation queue:", e?.message || e)
     }
   }
 

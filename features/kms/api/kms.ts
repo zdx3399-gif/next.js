@@ -92,10 +92,32 @@ export async function getPendingKMSPosts() {
   // 過濾出 AI 建議入庫且尚未入庫的貼文
   const pendingPosts = (data || []).filter((post) => {
     const kmsSuggestion = post.structured_data?.kms_suggestion
-    return kmsSuggestion?.suitable === true && !kmsSuggestion?.imported
+    return kmsSuggestion?.suitable === true && !kmsSuggestion?.imported && !kmsSuggestion?.rejected
   })
 
   return pendingPosts
+}
+
+export async function getRejectedKMSPosts() {
+  const supabase = getSupabaseClient()
+  if (!supabase) return []
+
+  const { data, error } = await supabase
+    .from("community_posts")
+    .select("*")
+    .eq("status", "published")
+    .not("structured_data->kms_suggestion", "is", null)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("[v0] Error fetching rejected KMS posts:", error)
+    return []
+  }
+
+  return (data || []).filter((post) => {
+    const kmsSuggestion = post.structured_data?.kms_suggestion
+    return kmsSuggestion?.suitable === true && kmsSuggestion?.rejected === true && !kmsSuggestion?.imported
+  })
 }
 
 // 將貼文轉換成知識卡
@@ -129,9 +151,9 @@ export async function importPostToKMS(
       {
         source_type: "community_post",
         source_id: postId,
-        title: overrides?.title || kmsSuggestion.suggested_title || post.title,
+        title: overrides?.title || kmsSuggestion.suggested_title || kmsSuggestion.title || post.title,
         summary: overrides?.summary || kmsSuggestion.summary || post.content,
-        category: overrides?.category || kmsSuggestion.suggested_category || post.category,
+        category: overrides?.category || kmsSuggestion.suggested_category || kmsSuggestion.category || post.category,
         credibility: "community",
         status: "active",
         version: 1,
@@ -213,16 +235,24 @@ export async function rejectKMSSuggestion(postId: string, userId: string, reason
   })
 }
 
-export async function getKnowledgeCards(filters?: { category?: string; credibility?: string; search?: string }) {
+export async function getKnowledgeCards(filters?: { category?: string; credibility?: string; search?: string; status?: string }) {
   const supabase = getSupabaseClient()
   if (!supabase) return []
   
   let query = supabase
     .from("knowledge_cards")
     .select("*")
-    .eq("status", "active")
     .order("credibility", { ascending: true })
     .order("helpful_count", { ascending: false })
+
+  // 前台預設只看 active；管理端可傳 status=all 或特定狀態
+  if (!filters?.status) {
+    query = query.eq("status", "active")
+  } else if (filters.status === "all") {
+    query = query.in("status", ["active", "unverified", "archived"])
+  } else {
+    query = query.eq("status", filters.status)
+  }
 
   if (filters?.category) {
     query = query.eq("category", filters.category)
@@ -306,6 +336,8 @@ export async function updateKnowledgeCard(
     title?: string
     summary?: string
     category?: string
+    credibility?: string
+    status?: "active" | "unverified" | "archived"
     situation?: string
     steps?: any
     notes?: any

@@ -1,14 +1,11 @@
 import { Client, validateSignature } from '@line/bot-sdk';
-import { createClient } from '@supabase/supabase-js';
 import { chat } from '@/lib/ai-chat';
 import { facilityCarousel, createClarificationQuickReply, createMessageWithFeedback } from '@/utils/lineMessage';
 import { writeServerAuditLog } from '@/lib/audit-server';
+import { lineBotClient, supabaseServer } from '@/lib/server/line-emergency';
 import 'dotenv/config';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
-);
+const supabase = supabaseServer;
 
 export const runtime = 'nodejs';
 
@@ -17,7 +14,7 @@ const lineConfig = {
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 
-const client = new Client(lineConfig);// LINE Bot SDK 客戶端
+const client = lineBotClient;// LINE Bot SDK 客戶端
 
 // 移除圖片關鍵字攔截，讓所有查詢都進入 AI 處理
 // const IMAGE_KEYWORDS = ['圖片', '設施', '游泳池', '健身房', '大廳'];
@@ -177,7 +174,6 @@ export async function POST(req) {
             const { error: voteError } = await supabase.from('vote_records').insert([{
               vote_id,
               user_id,
-              user_name,
               option_selected,
               voted_at: new Date().toISOString()
             }]);

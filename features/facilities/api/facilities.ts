@@ -542,6 +542,7 @@ export async function attemptBooking(
   }
 
   const finalPrice = validation.finalPrice || 10
+  const bookingUserContext = await resolveBookingUserContext(supabase, userId)
 
   // 開始交易：扣點 + 建立預約 + 更新時段狀態
   try {
@@ -571,9 +572,8 @@ export async function attemptBooking(
       .insert({
         facility_id: facilityId,
         user_id: userId,
+        unit_id: bookingUserContext.unit_id,
         time_slot_id: slotId,
-        user_name: userName,
-        user_room: userRoom,
         booking_date: slot.slot_date,
         start_time: slot.start_time,
         end_time: slot.end_time,
@@ -873,62 +873,6 @@ export async function joinLottery(
 
 // ==================== 查詢相關 ====================
 
-export async function getUserBookings(userId: string): Promise<FacilityBooking[]> {
-  const supabase = getSupabaseClient()
-  const { data, error } = await supabase
-    .from("facility_bookings")
-    .select(`
-      *,
-      facilities(name),
-      user:profiles!facility_bookings_user_id_fkey(name),
-      unit:units!facility_bookings_unit_id_fkey(unit_code)
-    `)
-    .eq("user_id", userId)
-    .order("booking_date", { ascending: false })
-
-  if (error) {
-    const { data: fallbackData } = await supabase
-      .from("facility_bookings")
-      .select("*, facilities(name)")
-      .eq("user_id", userId)
-      .order("booking_date", { ascending: false })
-    return fallbackData || []
-  }
-
-  return (data || []).map((item: any) => ({
-    ...item,
-    user_name: item.user?.name || "未知",
-    user_room: item.unit?.unit_code || "未知",
-  }))
-}
-
-export async function getAllBookings(): Promise<FacilityBooking[]> {
-  const supabase = getSupabaseClient()
-  const { data, error } = await supabase
-    .from("facility_bookings")
-    .select(`
-      *,
-      facilities(name),
-      user:profiles!facility_bookings_user_id_fkey(name),
-      unit:units!facility_bookings_unit_id_fkey(unit_code)
-    `)
-    .order("booking_date", { ascending: false })
-
-  if (error) {
-    const { data: fallbackData } = await supabase
-      .from("facility_bookings")
-      .select("*, facilities(name)")
-      .order("booking_date", { ascending: false })
-    return fallbackData || []
-  }
-
-  return (data || []).map((item: any) => ({
-    ...item,
-    user_name: item.user?.name || "未知",
-    user_room: item.unit?.unit_code || "未知",
-  }))
-}
-
 export async function getUserPointsHistory(userId: string): Promise<PointsTransaction[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
@@ -990,9 +934,11 @@ export async function createBooking(booking: {
   notes?: string
 }): Promise<void> {
   const supabase = getSupabaseClient()
+  const bookingUserContext = await resolveBookingUserContext(supabase, booking.user_id)
   const { error } = await supabase.from("facility_bookings").insert([
     {
       ...booking,
+      unit_id: booking.unit_id || bookingUserContext.unit_id,
       status: "confirmed",
     },
   ])
@@ -1090,4 +1036,181 @@ export function getUserName(booking: FacilityBooking): string {
 
 export function getUserRoom(booking: FacilityBooking): string {
   return booking.user_room || "未知"
+}
+
+type BookingUserContext = {
+  user_name?: string
+  unit_id?: string
+  user_room?: string
+}
+
+function isMeaningfulBookingValue(value: unknown): value is string {
+  return typeof value === "string" && value.trim() !== "" && value.trim() !== "-" && value.trim() !== "未知"
+}
+
+async function resolveBookingUserContext(supabase: any, userId: string): Promise<BookingUserContext> {
+  if (!userId) return {}
+
+  const { data: profile } = await supabase.from("profiles").select("id, name, unit_id").eq("id", userId).maybeSingle()
+
+  const { data: membersByProfile } = await supabase
+    .from("household_members")
+    .select("id, name, unit_id, profile_id")
+    .eq("profile_id", userId)
+    .limit(1)
+
+  const { data: membersById } = await supabase
+    .from("household_members")
+    .select("id, name, unit_id, profile_id")
+    .eq("id", userId)
+    .limit(1)
+
+  const householdByProfile = membersByProfile?.[0] || null
+  const householdById = membersById?.[0] || null
+  const resolvedUnitId = profile?.unit_id || householdByProfile?.unit_id || householdById?.unit_id
+
+  let userRoom = ""
+  if (resolvedUnitId) {
+    const { data: unit } = await supabase.from("units").select("unit_code").eq("id", resolvedUnitId).maybeSingle()
+    userRoom = unit?.unit_code || ""
+  }
+
+  return {
+    user_name: profile?.name || householdByProfile?.name || householdById?.name || undefined,
+    unit_id: resolvedUnitId || undefined,
+    user_room: userRoom || undefined,
+  }
+}
+
+async function enrichBookingsWithProfileAndUnit(
+  supabase: any,
+  rows: any[],
+): Promise<FacilityBooking[]> {
+  if (!rows || rows.length === 0) return []
+
+  const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))]
+  const unitIds = [...new Set(rows.map((r) => r.unit_id).filter(Boolean))]
+
+  let profileNameMap: Record<string, string> = {}
+  let profileUnitIdMap: Record<string, string> = {}
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase.from("profiles").select("id, name, unit_id").in("id", userIds)
+    if (profiles) {
+      profileNameMap = Object.fromEntries(profiles.map((p: any) => [p.id, p.name || ""]))
+      profileUnitIdMap = Object.fromEntries(profiles.map((p: any) => [p.id, p.unit_id || ""]))
+    }
+  }
+
+  let householdNameByProfileMap: Record<string, string> = {}
+  let householdUnitByProfileMap: Record<string, string> = {}
+  if (userIds.length > 0) {
+    const { data: membersByProfile } = await supabase
+      .from("household_members")
+      .select("profile_id, name, unit_id")
+      .in("profile_id", userIds)
+    if (membersByProfile) {
+      householdNameByProfileMap = Object.fromEntries(
+        membersByProfile.filter((m: any) => m.profile_id).map((m: any) => [m.profile_id, m.name || ""]),
+      )
+      householdUnitByProfileMap = Object.fromEntries(
+        membersByProfile.filter((m: any) => m.profile_id).map((m: any) => [m.profile_id, m.unit_id || ""]),
+      )
+    }
+  }
+
+  let householdNameByIdMap: Record<string, string> = {}
+  let householdUnitByIdMap: Record<string, string> = {}
+  if (userIds.length > 0) {
+    const { data: membersById } = await supabase.from("household_members").select("id, name, unit_id").in("id", userIds)
+    if (membersById) {
+      householdNameByIdMap = Object.fromEntries(membersById.map((m: any) => [m.id, m.name || ""]))
+      householdUnitByIdMap = Object.fromEntries(membersById.map((m: any) => [m.id, m.unit_id || ""]))
+    }
+  }
+
+  const allUnitIds = [
+    ...new Set([
+      ...unitIds,
+      ...Object.values(profileUnitIdMap),
+      ...Object.values(householdUnitByProfileMap),
+      ...Object.values(householdUnitByIdMap),
+    ].filter(Boolean)),
+  ]
+
+  let unitCodeMap: Record<string, string> = {}
+  if (allUnitIds.length > 0) {
+    const { data: units } = await supabase.from("units").select("id, unit_code").in("id", allUnitIds)
+    if (units) {
+      unitCodeMap = Object.fromEntries(units.map((u: any) => [u.id, u.unit_code || ""]))
+    }
+  }
+
+  return rows.map((item: any) => ({
+    ...item,
+    user_name:
+      (isMeaningfulBookingValue(item.user?.name) ? item.user.name : "") ||
+      (isMeaningfulBookingValue(item.user_name) ? item.user_name : "") ||
+      profileNameMap[item.user_id] ||
+      householdNameByProfileMap[item.user_id] ||
+      householdNameByIdMap[item.user_id] ||
+      "未知",
+    user_room:
+      (isMeaningfulBookingValue(item.unit?.unit_code) ? item.unit.unit_code : "") ||
+      (isMeaningfulBookingValue(item.user_room) ? item.user_room : "") ||
+      unitCodeMap[item.unit_id] ||
+      unitCodeMap[profileUnitIdMap[item.user_id]] ||
+      unitCodeMap[householdUnitByProfileMap[item.user_id]] ||
+      unitCodeMap[householdUnitByIdMap[item.user_id]] ||
+      "未知",
+  }))
+}
+
+export async function getUserBookings(userId: string): Promise<FacilityBooking[]> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return []
+
+  const { data, error } = await supabase
+    .from("facility_bookings")
+    .select(`
+      *,
+      facilities(name),
+      user:profiles!facility_bookings_user_id_fkey(name),
+      unit:units!facility_bookings_unit_id_fkey(unit_code)
+    `)
+    .eq("user_id", userId)
+    .order("booking_date", { ascending: false })
+
+  const rows = !error ? data || [] : (
+    await supabase
+      .from("facility_bookings")
+      .select("*, facilities(name)")
+      .eq("user_id", userId)
+      .order("booking_date", { ascending: false })
+  ).data || []
+
+  return enrichBookingsWithProfileAndUnit(supabase, rows)
+}
+
+export async function getAllBookings(): Promise<FacilityBooking[]> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return []
+
+  const { data, error } = await supabase
+    .from("facility_bookings")
+    .select(`
+      *,
+      facilities(name),
+      user:profiles!facility_bookings_user_id_fkey(name),
+      unit:units!facility_bookings_unit_id_fkey(unit_code)
+    `)
+    .order("booking_date", { ascending: false })
+
+  const rows = !error ? data || [] : (
+    await supabase
+      .from("facility_bookings")
+      .select("*, facilities(name)")
+      .order("booking_date", { ascending: false })
+  ).data || []
+
+  return enrichBookingsWithProfileAndUnit(supabase, rows)
 }

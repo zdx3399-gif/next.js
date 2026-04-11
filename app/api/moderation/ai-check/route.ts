@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { generateGeminiContent } from "@/lib/gemini-client"
 
 export const runtime = "nodejs"
 
@@ -32,64 +33,59 @@ export async function POST(req: NextRequest) {
     try {
       console.log("[v0] 正在呼叫 Gemini API...")
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            contents: [
+      const categoryLabel =
+        category === "alert" ? "警示公告（需特別嚴格審核）" : category === "discussion" ? "一般討論" : "問答"
+
+      const prompt =
+        "你是社區管理委員會的內容審核助理。請分析以下內容是否適合發布在社區討論板上。\n\n" +
+        "內容類別：" +
+        categoryLabel +
+        "\n\n" +
+        "需要檢查的內容：\n" +
+        text +
+        "\n\n" +
+        "請以 JSON 格式回覆，包含以下欄位：\n" +
+        "{\n" +
+        '  "riskLevel": "low/medium/high",\n' +
+        '  "risks": ["風險1", "風險2"] 或 null,\n' +
+        '  "suggestions": ["建議1", "建議2"] 或 null,\n' +
+        '  "reasoning": "簡短說明判斷理由"\n' +
+        "}\n\n" +
+        "審核重點（請嚴格檢查）：\n" +
+        "1. 個人資料洩露：身分證、手機號碼、住址、戶號、門牌號碼（如 A棟101、B棟202 等）\n" +
+        "2. 不當用語或人身攻擊（包含「擾民」、「吵死人」等負面指控）\n" +
+        "3. 虛假資訊或謠言\n" +
+        "4. 商業廣告或詐騙\n" +
+        "5. 如果內容同時包含「具體位置」+「人身攻擊/誹謗指控」，應判定為 high 風險\n" +
+        "6. 純教學/SOP/流程分享（無個資、無指控）應優先判定 low"
+
+      const payload = {
+        contents: [
+          {
+            parts: [
               {
-                parts: [
-                  {
-                    text: `你是社區管理委員會的內容審核助理。請分析以下內容是否適合發布在社區討論板上。
-
-內容類別：${category === "alert" ? "警示公告（需特別嚴格審核）" : category === "discussion" ? "一般討論" : "問答"}
-
-需要檢查的內容：
-${text}
-
-請以 JSON 格式回覆，包含以下欄位：
-{
-  "riskLevel": "low/medium/high",
-  "risks": ["風險1", "風險2"] 或 null,
-  "suggestions": ["建議1", "建議2"] 或 null,
-  "reasoning": "簡短說明判斷理由"
-}
-
-審核重點（請嚴格檢查）：
-1. 個人資料洩露：身分證、手機號碼、住址、戶號、門牌號碼（如 A棟101、B棟202 等）
-2. 不當用語或人身攻擊（包含「擾民」、「吵死人」等負面指控）
-3. 虛假資訊或謠言
-4. 商業廣告或詐騙
-5. 如果內容同時包含「具體位置」+「負面指控」，應判定為 high 風險`,
-                  },
-                ],
+                text: prompt,
               },
             ],
-            generationConfig: {
-              temperature: 0.2,
-              topK: 32,
-              topP: 0.95,
-              maxOutputTokens: 1024,
-            },
-          }),
+          },
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          topK: 32,
+          topP: 0.95,
+          maxOutputTokens: 1024,
         },
-      )
-
-      console.log("[v0] Gemini API 回應狀態:", response.status)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("[v0] Gemini API 錯誤:", errorText)
-        throw new Error(`Gemini API error: ${response.statusText}`)
       }
 
-      const data = await response.json()
+      const { data } = await generateGeminiContent({
+        apiKey,
+        payload,
+        debugLabel: "內容審核",
+      })
+
       const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text
 
+      console.log("[v0] Gemini API 回應狀態:", 200)
       console.log("[v0] Gemini 原始回應:", aiResponse)
 
       if (!aiResponse) {
@@ -127,7 +123,8 @@ ${text}
     } catch (aiError: any) {
       console.error("[v0] Gemini API 呼叫失敗:", aiError.message)
       console.log("[v0] 改用規則檢查...")
-      return fallbackRuleBasedCheck(text, category, checkType)
+      const result = fallbackRuleBasedCheck(text, category, checkType)
+      return result
     }
   } catch (error: any) {
     console.error("[v0] AI check error:", error)
@@ -139,8 +136,9 @@ function fallbackRuleBasedCheck(text: string, category: string, checkType: strin
   console.log("[v0] 執行規則檢查...")
 
   const risks: string[] = []
-  let riskScore = 0 // 使用分數制：0-2 低, 3-5 中, 6+ 高
+  let riskScore = 0 // 使用分數制：0-3 低, 4-6 中, 7+ 高
   const suggestions: string[] = []
+  let hasPii = false
 
   // === 1. 個人資料檢測 (高風險 +3~5 分) ===
   const piiPatterns = [
@@ -152,10 +150,11 @@ function fallbackRuleBasedCheck(text: string, category: string, checkType: strin
 
   for (const pattern of piiPatterns) {
     if (pattern.regex.test(text)) {
-      risks.push(`包含${pattern.type}`)
-      suggestions.push(`請移除或遮蔽${pattern.type}`)
+      risks.push("包含" + pattern.type)
+      suggestions.push("請移除或遮蔽" + pattern.type)
       riskScore += pattern.score
-      console.log(`[v0] 檢測到 ${pattern.type}, +${pattern.score} 分`)
+      hasPii = true
+      console.log("[v0] 檢測到 " + pattern.type + ", +" + pattern.score + " 分")
     }
   }
 
@@ -163,10 +162,7 @@ function fallbackRuleBasedCheck(text: string, category: string, checkType: strin
   // 中文姓名模式：常見姓氏 + 1-2 個字
   const commonSurnames =
     "王李張劉陳楊黃趙周吳徐孫馬朱胡郭何林羅高鄭梁謝宋唐許鄧馮韓曹曾彭蕭蔡潘田董袁于余葉杜戴夏鍾汪田任姜范方石姚譚廖鄒熊金陸郝孔白崔康毛邱秦江史顧侯邵孟龍萬段雷錢湯尹黎易常武喬賀賴龔文"
-  const namePattern = new RegExp(
-    `[${commonSurnames}][\\u4e00-\\u9fa5]{1,2}(?:先生|小姐|太太|老師|醫生|經理|主任)?`,
-    "g",
-  )
+  const namePattern = new RegExp("[" + commonSurnames + "][\\u4e00-\\u9fa5]{1,2}(?:先生|小姐|太太|老師|醫生|經理|主任)?", "g")
   const nameMatches = text.match(namePattern)
   if (nameMatches && nameMatches.length > 0) {
     // 過濾掉常見詞彙
@@ -202,13 +198,19 @@ function fallbackRuleBasedCheck(text: string, category: string, checkType: strin
       "白色",
       "江河",
       "江山",
+      "常見錯",
+      "常見問",
+      "常見問題",
+      "建議流",
+      "流程說",
+      "步驟說",
     ]
     const filteredNames = nameMatches.filter((name) => !commonWords.includes(name))
     if (filteredNames.length > 0) {
-      risks.push(`可能包含人名：${filteredNames.join(", ")}`)
+      risks.push("可能包含人名：" + filteredNames.join(", "))
       suggestions.push("請確認是否需要提及具體人名")
       riskScore += 2
-      console.log(`[v0] 檢測到可能人名: ${filteredNames.join(", ")}, +2 分`)
+      console.log("[v0] 檢測到可能人名: " + filteredNames.join(", ") + ", +2 分")
     }
   }
 
@@ -230,11 +232,11 @@ function fallbackRuleBasedCheck(text: string, category: string, checkType: strin
   let hasLocationInfo = false
   for (const pattern of addressPatterns) {
     if (pattern.regex.test(text)) {
-      risks.push(`包含${pattern.type}`)
+      risks.push("包含" + pattern.type)
       suggestions.push("請以區域方式描述，避免透露精確位置")
       riskScore += pattern.score
       hasLocationInfo = true
-      console.log(`[v0] 檢測到 ${pattern.type}, +${pattern.score} 分`)
+      console.log("[v0] 檢測到 " + pattern.type + ", +" + pattern.score + " 分")
     }
   }
 
@@ -242,7 +244,6 @@ function fallbackRuleBasedCheck(text: string, category: string, checkType: strin
   const sensitiveWords = [
     { words: ["幹", "操", "媽的", "他媽", "去死", "王八"], type: "髒話", score: 3 },
     { words: ["白癡", "智障", "腦殘", "廢物", "垃圾", "北七", "87"], type: "侮辱性用語", score: 3 },
-    { words: ["擾民", "吵死", "很吵", "太吵", "噪音擾人", "半夜吵"], type: "噪音投訴", score: 2 },
     { words: ["騙子", "詐騙", "小偷", "偷東西", "渣男", "渣女"], type: "負面指控", score: 2 },
     { words: ["打他", "揍他", "堵他", "告他", "報警"], type: "威脅性用語", score: 2 },
   ]
@@ -252,12 +253,12 @@ function fallbackRuleBasedCheck(text: string, category: string, checkType: strin
   for (const category of sensitiveWords) {
     for (const word of category.words) {
       if (text.includes(word)) {
-        risks.push(`包含${category.type}：${word}`)
+        risks.push("包含" + category.type + "：" + word)
         suggestions.push("請使用較中性的用詞")
         riskScore += category.score
         hasSensitiveWord = true
         sensitiveWordType = category.type
-        console.log(`[v0] 檢測到 ${category.type}: ${word}, +${category.score} 分`)
+        console.log("[v0] 檢測到 " + category.type + ": " + word + ", +" + category.score + " 分")
         break // 同類別只計算一次
       }
     }
@@ -281,12 +282,18 @@ function fallbackRuleBasedCheck(text: string, category: string, checkType: strin
 
   // === 7. 根據分數決定風險等級 ===
   let riskLevel: "low" | "medium" | "high"
-  if (riskScore >= 5) {
+  if (riskScore >= 7) {
     riskLevel = "high"
-  } else if (riskScore >= 2) {
+  } else if (riskScore >= 4) {
     riskLevel = "medium"
   } else {
     riskLevel = "low"
+  }
+
+  const appearsInstructional = /(SOP|流程|步驟|教學|指南|注意事項|分級|回報|登記|時段|處理方式)/i.test(text)
+  if (appearsInstructional && !hasPii && !hasLocationInfo && !hasSensitiveWord) {
+    riskLevel = "low"
+    riskScore = Math.min(riskScore, 1)
   }
 
   // 長度檢查
@@ -302,14 +309,15 @@ function fallbackRuleBasedCheck(text: string, category: string, checkType: strin
   console.log("[v0] - 建議:", suggestions)
   console.log("========================================")
 
+  const shouldForceReview = hasPii || (hasLocationInfo && hasSensitiveWord)
   const result = {
     riskLevel,
     riskScore,
     risks: risks.length > 0 ? risks : null,
     suggestions: suggestions.length > 0 ? suggestions : null,
     shouldBlock: riskLevel === "high" && checkType === "pre_post",
-    needsReview: riskLevel === "high" || riskLevel === "medium",
-    reasoning: `規則檢查完成，風險分數: ${riskScore}`,
+    needsReview: shouldForceReview || riskLevel === "high",
+    reasoning: "規則檢查完成，風險分數: " + riskScore,
     aiProvider: "fallback_rules",
   }
 

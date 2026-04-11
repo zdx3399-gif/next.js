@@ -87,6 +87,29 @@ function getVisitorOperator(payload = {}) {
   }
 }
 
+async function sendIotCommand(req, cmd) {
+  try {
+    const iotUrl = new URL("/api/iot", req.url)
+    const res = await fetch(iotUrl.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cmd }),
+    })
+
+    const payload = await res.json().catch(() => null)
+    const success = !!(res.ok && payload?.success)
+    return {
+      success,
+      error: success ? undefined : payload?.error || `IOT 命令失敗（${res.status}）`,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "IOT 連線失敗",
+    }
+  }
+}
+
 // POST: 新增訪客預約
 export async function POST(req) {
   try {
@@ -239,10 +262,14 @@ export async function POST(req) {
       }
     }
 
+    const iotResult = await sendIotCommand(req, "V")
+
     return Response.json({ 
       success: true, 
       id: visitor.id,
-      message: "✅ 訪客預約成功"
+      message: iotResult.success ? "✅ 訪客預約成功（IOT 已通知）" : "✅ 訪客預約成功（IOT 通知失敗）",
+      iotSent: iotResult.success,
+      iotError: iotResult.error,
     })
   } catch (err) {
     console.error("[visitor] POST error:", err)
@@ -299,13 +326,16 @@ export async function PATCH(req) {
     }
 
     const updateData = {}
+    let actionText = ""
 
     if (action === "check_in") {
       updateData.status = "checked_in"
       updateData.checked_in_at = new Date().toISOString()
+      actionText = "已簽到"
     } else if (action === "check_out") {
       updateData.status = "checked_out"
       updateData.checked_out_at = new Date().toISOString()
+      actionText = "已簽退"
     } else {
       await writeServerAuditLog({
         supabase,
@@ -358,7 +388,6 @@ export async function PATCH(req) {
       const { lineUserId, lineDisplayName } = await findLineUserByUnit(supabase, visitor.unit_id)
 
       if (lineUserId) {
-        const actionText = action === "check_in" ? "已簽到" : "已簽退"
         const bgColor = action === "check_in" ? "#0084ff" : "#06c755"
         const emoji = action === "check_in" ? "🔔" : "✅"
 
@@ -413,9 +442,15 @@ export async function PATCH(req) {
       }
     }
 
+    const iotResult = await sendIotCommand(req, "V")
+
     return Response.json({ 
       success: true,
-      message: `✅ 訪客${actionText}成功`
+      message: iotResult.success
+        ? `✅ 訪客${actionText}成功（IOT 已通知）`
+        : `✅ 訪客${actionText}成功（IOT 通知失敗）`,
+      iotSent: iotResult.success,
+      iotError: iotResult.error,
     })
   } catch (err) {
     console.error("[visitor] PATCH error:", err)

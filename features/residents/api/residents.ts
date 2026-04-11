@@ -18,6 +18,77 @@ export interface Resident {
   profile_id?: string
 }
 
+type EmergencyContactInfo = {
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+}
+
+async function fetchEmergencyContactMap(supabase: any, profileIds: string[]): Promise<Record<string, EmergencyContactInfo>> {
+  if (!profileIds.length) return {}
+
+  const { data, error } = await supabase
+    .from("emergency_contacts")
+    .select("resident_profile_id, contact_name, contact_phone, created_at")
+    .in("resident_profile_id", profileIds)
+    .order("created_at", { ascending: false })
+
+  if (error || !data) return {}
+
+  const map: Record<string, EmergencyContactInfo> = {}
+  for (const row of data) {
+    const profileId = row.resident_profile_id
+    if (!profileId || map[profileId]) continue
+    map[profileId] = {
+      emergency_contact_name: row.contact_name || "",
+      emergency_contact_phone: row.contact_phone || "",
+    }
+  }
+  return map
+}
+
+async function syncEmergencyContact(
+  supabase: any,
+  profileId: string,
+  name: string | undefined,
+  phone: string | undefined,
+) {
+  if (!profileId) return
+
+  const contactName = (name || "").trim()
+  const contactPhone = (phone || "").trim()
+
+  if (!contactName && !contactPhone) {
+    await supabase.from("emergency_contacts").delete().eq("resident_profile_id", profileId)
+    return
+  }
+
+  const { data: existing } = await supabase
+    .from("emergency_contacts")
+    .select("id")
+    .eq("resident_profile_id", profileId)
+    .limit(1)
+    .maybeSingle()
+
+  if (existing?.id) {
+    await supabase
+      .from("emergency_contacts")
+      .update({
+        contact_name: contactName || "緊急聯絡人",
+        contact_phone: contactPhone || "",
+      })
+      .eq("id", existing.id)
+    return
+  }
+
+  await supabase.from("emergency_contacts").insert([
+    {
+      resident_profile_id: profileId,
+      contact_name: contactName || "緊急聯絡人",
+      contact_phone: contactPhone || "",
+    },
+  ])
+}
+
 function getCurrentOperator() {
   if (typeof window === "undefined") return { id: "", role: "unknown" }
 
@@ -50,15 +121,9 @@ export async function fetchResidents(): Promise<Resident[]> {
   const unitIds = [...new Set(data.filter((r) => r.unit_id).map((r) => r.unit_id))]
 
   // 分開查詢 profiles
-  let profilesMap: Record<
-    string,
-    { phone?: string; email?: string; role?: string; emergency_contact_name?: string; emergency_contact_phone?: string }
-  > = {}
+  let profilesMap: Record<string, { phone?: string; email?: string; role?: string }> = {}
   if (profileIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, phone, email, role, emergency_contact_name, emergency_contact_phone")
-      .in("id", profileIds)
+    const { data: profiles } = await supabase.from("profiles").select("id, phone, email, role").in("id", profileIds)
     if (profiles) {
       profilesMap = Object.fromEntries(
         profiles.map((p) => [
@@ -67,13 +132,13 @@ export async function fetchResidents(): Promise<Resident[]> {
             phone: p.phone,
             email: p.email,
             role: p.role,
-            emergency_contact_name: p.emergency_contact_name,
-            emergency_contact_phone: p.emergency_contact_phone,
           },
         ]),
       )
     }
   }
+
+  const emergencyMap = await fetchEmergencyContactMap(supabase, profileIds)
 
   // 分開查詢 units
   let unitsMap: Record<string, string> = {}
@@ -89,8 +154,8 @@ export async function fetchResidents(): Promise<Resident[]> {
     name: r.name,
     phone: r.profile_id ? profilesMap[r.profile_id]?.phone || "" : "",
     email: r.profile_id ? profilesMap[r.profile_id]?.email || "" : "",
-    emergency_contact_name: r.profile_id ? profilesMap[r.profile_id]?.emergency_contact_name || "" : "",
-    emergency_contact_phone: r.profile_id ? profilesMap[r.profile_id]?.emergency_contact_phone || "" : "",
+    emergency_contact_name: r.profile_id ? emergencyMap[r.profile_id]?.emergency_contact_name || "" : "",
+    emergency_contact_phone: r.profile_id ? emergencyMap[r.profile_id]?.emergency_contact_phone || "" : "",
     role: r.role || (r.profile_id ? (profilesMap[r.profile_id]?.role as any) : undefined),
     relationship: r.relationship,
     created_at: r.created_at,
@@ -135,12 +200,16 @@ export async function createResident(
       if (resident.phone !== undefined) profileUpdates.phone = resident.phone || ""
       if (resident.email !== undefined) profileUpdates.email = resident.email || ""
       if (normalizedRole !== undefined) profileUpdates.role = normalizedRole
-      if (resident.emergency_contact_name !== undefined)
-        profileUpdates.emergency_contact_name = resident.emergency_contact_name || ""
-      if (resident.emergency_contact_phone !== undefined)
-        profileUpdates.emergency_contact_phone = resident.emergency_contact_phone || ""
 
       await supabase.from("profiles").update(profileUpdates).eq("id", resident.profile_id)
+      if (resident.emergency_contact_name !== undefined || resident.emergency_contact_phone !== undefined) {
+        await syncEmergencyContact(
+          supabase,
+          resident.profile_id,
+          resident.emergency_contact_name,
+          resident.emergency_contact_phone,
+        )
+      }
     }
   }
 
@@ -255,14 +324,11 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
     if (phone !== undefined) profileUpdates.phone = phone || ""
     if (email !== undefined) profileUpdates.email = email || ""
     if (normalizedRole !== undefined) profileUpdates.role = normalizedRole
-    if (emergency_contact_name !== undefined) {
-      profileUpdates.emergency_contact_name = emergency_contact_name || ""
-    }
-    if (emergency_contact_phone !== undefined) {
-      profileUpdates.emergency_contact_phone = emergency_contact_phone || ""
-    }
 
     await supabase.from("profiles").update(profileUpdates).eq("id", targetProfileId)
+    if (emergency_contact_name !== undefined || emergency_contact_phone !== undefined) {
+      await syncEmergencyContact(supabase, targetProfileId, emergency_contact_name, emergency_contact_phone)
+    }
   }
 
   if (operator.id) {
@@ -368,15 +434,9 @@ export async function fetchResidentsByRoom(room: string): Promise<Resident[]> {
   // 收集所有 profile_id
   const profileIds = [...new Set(data.filter((r) => r.profile_id).map((r) => r.profile_id))]
 
-  let profilesMap: Record<
-    string,
-    { phone?: string; email?: string; role?: string; emergency_contact_name?: string; emergency_contact_phone?: string }
-  > = {}
+  let profilesMap: Record<string, { phone?: string; email?: string; role?: string }> = {}
   if (profileIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, phone, email, role, emergency_contact_name, emergency_contact_phone")
-      .in("id", profileIds)
+    const { data: profiles } = await supabase.from("profiles").select("id, phone, email, role").in("id", profileIds)
     if (profiles) {
       profilesMap = Object.fromEntries(
         profiles.map((p) => [
@@ -385,21 +445,21 @@ export async function fetchResidentsByRoom(room: string): Promise<Resident[]> {
             phone: p.phone,
             email: p.email,
             role: p.role,
-            emergency_contact_name: p.emergency_contact_name,
-            emergency_contact_phone: p.emergency_contact_phone,
           },
         ]),
       )
     }
   }
 
+  const emergencyMap = await fetchEmergencyContactMap(supabase, profileIds)
+
   return data.map((r: any) => ({
     id: r.id,
     name: r.name,
     phone: r.profile_id ? profilesMap[r.profile_id]?.phone || "" : "",
     email: r.profile_id ? profilesMap[r.profile_id]?.email || "" : "",
-    emergency_contact_name: r.profile_id ? profilesMap[r.profile_id]?.emergency_contact_name || "" : "",
-    emergency_contact_phone: r.profile_id ? profilesMap[r.profile_id]?.emergency_contact_phone || "" : "",
+    emergency_contact_name: r.profile_id ? emergencyMap[r.profile_id]?.emergency_contact_name || "" : "",
+    emergency_contact_phone: r.profile_id ? emergencyMap[r.profile_id]?.emergency_contact_phone || "" : "",
     role: r.role || (r.profile_id ? (profilesMap[r.profile_id]?.role as any) : undefined),
     relationship: r.relationship,
     created_at: r.created_at,
@@ -434,15 +494,9 @@ export async function fetchResidentsByUnitId(unitId: string): Promise<Resident[]
   // 收集所有 profile_id
   const profileIds = [...new Set(data.filter((r) => r.profile_id).map((r) => r.profile_id))]
 
-  let profilesMap: Record<
-    string,
-    { phone?: string; email?: string; role?: string; emergency_contact_name?: string; emergency_contact_phone?: string }
-  > = {}
+  let profilesMap: Record<string, { phone?: string; email?: string; role?: string }> = {}
   if (profileIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, phone, email, role, emergency_contact_name, emergency_contact_phone")
-      .in("id", profileIds)
+    const { data: profiles } = await supabase.from("profiles").select("id, phone, email, role").in("id", profileIds)
     if (profiles) {
       profilesMap = Object.fromEntries(
         profiles.map((p) => [
@@ -451,21 +505,21 @@ export async function fetchResidentsByUnitId(unitId: string): Promise<Resident[]
             phone: p.phone,
             email: p.email,
             role: p.role,
-            emergency_contact_name: p.emergency_contact_name,
-            emergency_contact_phone: p.emergency_contact_phone,
           },
         ]),
       )
     }
   }
 
+  const emergencyMap = await fetchEmergencyContactMap(supabase, profileIds)
+
   return data.map((r: any) => ({
     id: r.id,
     name: r.name,
     phone: r.profile_id ? profilesMap[r.profile_id]?.phone || "" : "",
     email: r.profile_id ? profilesMap[r.profile_id]?.email || "" : "",
-    emergency_contact_name: r.profile_id ? profilesMap[r.profile_id]?.emergency_contact_name || "" : "",
-    emergency_contact_phone: r.profile_id ? profilesMap[r.profile_id]?.emergency_contact_phone || "" : "",
+    emergency_contact_name: r.profile_id ? emergencyMap[r.profile_id]?.emergency_contact_name || "" : "",
+    emergency_contact_phone: r.profile_id ? emergencyMap[r.profile_id]?.emergency_contact_phone || "" : "",
     role: r.role || (r.profile_id ? (profilesMap[r.profile_id]?.role as any) : undefined),
     relationship: r.relationship,
     created_at: r.created_at,

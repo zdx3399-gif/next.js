@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { useFinanceAdmin } from "../hooks/useFinance"
+import { useFinanceAdmin, useFinanceExpenses } from "../hooks/useFinance"
 import { getSupabaseClient } from "@/lib/supabase"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
@@ -42,12 +42,7 @@ interface UnitOption {
 type TabType = "income" | "expense" | "report"
 
 // --- Mock Data for Expenses ---
-const INITIAL_EXPENSES: ExpenseRecord[] = [
-  { id: "1", date: "2025-11-28", item: "大廳燈泡更換", category: "維護費", amount: 12321, vendor: "水电行" },
-  { id: "2", date: "2025-11-28", item: "電梯保養 (11月)", category: "維護費", amount: 9000, vendor: "迅達電梯" },
-  { id: "3", date: "2025-11-27", item: "外牆清洗", category: "清潔費", amount: 10000, vendor: "潔淨公司" },
-  { id: "4", date: "2025-11-26", item: "管理員薪資", category: "人事費", amount: 3000, vendor: "-" },
-]
+const INITIAL_EXPENSES: ExpenseRecord[] = []
 
 // --- Income Modal ---
 interface FinanceFormModalProps {
@@ -371,11 +366,17 @@ interface FinanceManagementAdminProps {
 // --- Main Component ---
 export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagementAdminProps) {
   const { records: realRecords, saveRecord, deleteRecord, updateRecord, loading, refresh } = useFinanceAdmin()
+  const {
+    expenses: sharedExpenses,
+    loading: expensesLoading,
+    saveExpense,
+    deleteExpense,
+  } = useFinanceExpenses()
 
   // 預覽模式使用模擬資料
   const records = isPreviewMode ? PREVIEW_RECORDS : realRecords
   const [activeTab, setActiveTab] = useState<TabType>("income")
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES)
+  const expenses = isPreviewMode ? INITIAL_EXPENSES : (sharedExpenses as ExpenseRecord[])
   const [searchTerm, setSearchTerm] = useState("")
   const [remindingId, setRemindingId] = useState<string | null>(null)
   const [incomeSaving, setIncomeSaving] = useState(false)
@@ -537,25 +538,37 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
   const handleSaveExpense = () => {
     if (expenseSaving) return
     setExpenseSaving(true)
-    try {
-      if (expenseEditingId) {
-        setExpenses((prev) =>
-          prev.map((e) => (e.id === expenseEditingId ? { ...expenseFormData, id: expenseEditingId } : e)),
-        )
-      } else {
-        const newExp = { ...expenseFormData, id: Math.random().toString(36).substr(2, 9) }
-        setExpenses((prev) => [newExp, ...prev])
+    ;(async () => {
+      try {
+        const payload = {
+          id: expenseEditingId || undefined,
+          date: expenseFormData.date,
+          item: expenseFormData.item,
+          category: expenseFormData.category,
+          amount: expenseFormData.amount,
+          vendor: expenseFormData.vendor,
+          note: expenseFormData.note,
+        }
+        const result = await saveExpense(payload)
+        if (!result.success) {
+          alert(`支出儲存失敗：${result.error || "請確認 finance_expenses 資料表"}`)
+          return
+        }
+        setIsExpenseModalOpen(false)
+      } finally {
+        setExpenseSaving(false)
       }
-      setIsExpenseModalOpen(false)
-    } finally {
-      setExpenseSaving(false)
-    }
+    })()
   }
 
   const handleDeleteExpense = (id: string) => {
-    if (confirm("確定要刪除此筆支出記錄嗎？")) {
-      setExpenses((prev) => prev.filter((e) => e.id !== id))
-    }
+    if (!confirm("確定要刪除此筆支出記錄嗎？")) return
+    ;(async () => {
+      const result = await deleteExpense(id)
+      if (!result.success) {
+        alert(`刪除支出失敗：${result.error || "請確認 finance_expenses 資料表"}`)
+      }
+    })()
   }
 
   const renderIncomeTable = () => {
@@ -769,7 +782,7 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
     )
   }
 
-  if (loading) {
+  if (loading || expensesLoading) {
     return (
       <div className="flex justify-center items-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--theme-accent)]"></div>

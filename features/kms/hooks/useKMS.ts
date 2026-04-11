@@ -12,7 +12,7 @@ import {
   type KnowledgeCard,
 } from "../api/kms"
 
-export function useKnowledgeCards(filters?: { category?: string; credibility?: string; search?: string }) {
+export function useKnowledgeCards(filters?: { category?: string; credibility?: string; search?: string; status?: string }) {
   const [cards, setCards] = useState<KnowledgeCard[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +32,7 @@ export function useKnowledgeCards(filters?: { category?: string; credibility?: s
 
   useEffect(() => {
     loadCards()
-  }, [filters?.category, filters?.credibility, filters?.search])
+  }, [filters?.category, filters?.credibility, filters?.search, filters?.status])
 
   const handleCreateCard = async (card: Parameters<typeof createKnowledgeCard>[0]) => {
     try {

@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
+import GlobalButtonSoftLock from "@/components/GlobalButtonSoftLock"
 import "./globals.css"
 
 const geistSans = Geist({ subsets: ["latin"], variable: "--font-sans" })
@@ -25,6 +26,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
       </head>
       <body className={`font-sans ${geistSans.variable} ${geistMono.variable}`}>
+        <GlobalButtonSoftLock />
         <Suspense fallback={null}>{children}</Suspense>
         <Analytics />
       </body>

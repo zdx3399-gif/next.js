@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input"
 import { CommunityPostCard } from "./CommunityPostCard"
 import { useCommunityPosts, useInteractions } from "../hooks/useCommunity"
 import {
-  getPostById,
+  getPostsByIds,
+  getOwnModeratedPosts,
   getUserModerationAppeals,
   submitModerationAppeal,
   type CommunityPost,
@@ -23,12 +24,26 @@ interface CommunityPostListProps {
   onCreatePost: () => void
 }
 
+type AppealBuckets = {
+  beforeAppeal: CommunityPost[]
+  inProgress: CommunityPost[]
+  restored: CommunityPost[]
+  rejected: CommunityPost[]
+}
+
+const EMPTY_APPEAL_BUCKETS: AppealBuckets = {
+  beforeAppeal: [],
+  inProgress: [],
+  restored: [],
+  rejected: [],
+}
+
 export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: CommunityPostListProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>(undefined)
   const [searchQuery, setSearchQuery] = useState("")
   const { posts, loading, error, withdrawPost, refresh } = useCommunityPosts({ category: selectedCategory })
   const { likePost, bookmarkPost } = useInteractions(currentUser?.id || "")
-  const [moderatedPosts, setModeratedPosts] = useState<CommunityPost[]>([])
+  const [appealBuckets, setAppealBuckets] = useState<AppealBuckets>(EMPTY_APPEAL_BUCKETS)
   const [appealStatusByPostId, setAppealStatusByPostId] = useState<Record<string, ModerationAppeal["status"]>>({})
   const [appealPanelOpen, setAppealPanelOpen] = useState(false)
 
@@ -47,6 +62,19 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
       post.content.toLowerCase().includes(searchQuery.toLowerCase())
     return matchesSearch
   })
+
+  const totalAppealPosts =
+    appealBuckets.beforeAppeal.length +
+    appealBuckets.inProgress.length +
+    appealBuckets.restored.length +
+    appealBuckets.rejected.length
+
+  const appealSections = [
+    { key: "beforeAppeal", title: "申訴前", posts: appealBuckets.beforeAppeal },
+    { key: "inProgress", title: "申訴中", posts: appealBuckets.inProgress },
+    { key: "restored", title: "申訴後成功", posts: appealBuckets.restored },
+    { key: "rejected", title: "申訴後失敗", posts: appealBuckets.rejected },
+  ]
 
   const handleWithdraw = async (postId: string) => {
     if (!currentUser) return
@@ -70,32 +98,87 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
 
   const loadAppealContext = async () => {
     if (!currentUser?.id) {
-      setModeratedPosts([])
+      setAppealBuckets(EMPTY_APPEAL_BUCKETS)
+      setAppealStatusByPostId({})
       return
     }
 
     try {
+      const ownModeratedPosts = await getOwnModeratedPosts(currentUser.id)
       const appeals = await getUserModerationAppeals(currentUser.id)
 
-      const uniquePostIds = Array.from(new Set(appeals.map((a) => a.post_id)))
-      const posts = await Promise.all(
-        uniquePostIds.map(async (postId) => {
-          try {
-            return await getPostById(postId)
-          } catch {
-            return null
-          }
-        }),
+      const appealPostIds = Array.from(new Set(appeals.map((a) => a.post_id)))
+      const appealPosts = await getPostsByIds(appealPostIds)
+      const aiAppealPostIds = new Set(
+        appealPosts.filter((post) => post?.id && post.ai_risk_level).map((post) => post.id),
       )
 
-      setModeratedPosts(posts.filter((p): p is CommunityPost => Boolean(p)))
-
+      // appeals 已依 created_at DESC 排序，第一筆即為最新申訴
       const statusMap: Record<string, ModerationAppeal["status"]> = {}
+      const appealUpdatedAt: Record<string, string> = {}
       for (const appeal of appeals) {
+        if (!aiAppealPostIds.has(appeal.post_id)) continue
         if (!statusMap[appeal.post_id]) {
           statusMap[appeal.post_id] = appeal.status
+          appealUpdatedAt[appeal.post_id] = appeal.updated_at
         }
       }
+
+      const moderatedById = new Map<string, CommunityPost>()
+      for (const post of ownModeratedPosts) {
+        if (post?.id) moderatedById.set(post.id, post)
+      }
+      for (const post of appealPosts) {
+        if (post?.id && post.ai_risk_level) moderatedById.set(post.id, post)
+      }
+
+      // 申訴後成功：只顯示 30 天內剛恢復的，避免舊紀錄堆積
+      const RESTORED_SHOW_DAYS = 30
+
+      const unappealedPosts: CommunityPost[] = []
+      const processingPosts: CommunityPost[] = []
+      const restoredPosts: CommunityPost[] = []
+      const rejectedPosts: CommunityPost[] = []
+
+      for (const post of moderatedById.values()) {
+        const isAppealableStatus = post.status === "pending" && !!post.ai_risk_level && !post.moderated_by
+        const appealStatus = statusMap[post.id]
+
+        if (appealStatus === "pending" || appealStatus === "reviewing") {
+          // 申訴進行中，貼文狀態不拘
+          processingPosts.push(post)
+        } else if (appealStatus === "restored") {
+          if (isAppealableStatus) {
+            // 申訴成功後又被二次處置 → 視為未申訴，讓使用者可重新申訴
+            unappealedPosts.push(post)
+          } else {
+            // 已恢復正常 → 僅保留近 30 天的成功紀錄
+            const ts = appealUpdatedAt[post.id]
+            const daysSince = ts ? (Date.now() - new Date(ts).getTime()) / 86_400_000 : Infinity
+            if (daysSince <= RESTORED_SHOW_DAYS) {
+              restoredPosts.push(post)
+            }
+          }
+        } else if (appealStatus === "rejected") {
+          rejectedPosts.push(post)
+        } else {
+          // 無申訴或已撤銷 → 只在可申訴狀態顯示
+          if (isAppealableStatus) {
+            unappealedPosts.push(post)
+          }
+        }
+      }
+
+      // 各群組按 updated_at 新→舊排列
+      const sortByUpdated = (a: CommunityPost, b: CommunityPost) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+
+      setAppealBuckets({
+        beforeAppeal: unappealedPosts.sort(sortByUpdated),
+        inProgress: processingPosts.sort(sortByUpdated),
+        restored: restoredPosts.sort(sortByUpdated),
+        rejected: rejectedPosts.sort(sortByUpdated),
+      })
       setAppealStatusByPostId(statusMap)
     } catch (e) {
       console.error("[v0] Error loading appeal context:", e)
@@ -189,7 +272,9 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
                 ]}
                 align="center"
               />
-              <span className="text-xs text-[var(--theme-text-secondary)]">共 {moderatedPosts.length} 筆</span>
+              <span className="text-xs text-[var(--theme-text-secondary)]">
+                申訴前 {appealBuckets.beforeAppeal.length} 筆 / 申訴中 {appealBuckets.inProgress.length} 筆 / 成功 {appealBuckets.restored.length} 筆 / 失敗 {appealBuckets.rejected.length} 筆
+              </span>
             </div>
 
             <CollapsibleTrigger asChild>
@@ -210,19 +295,34 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
           </div>
 
           <CollapsibleContent className="space-y-3 px-3 pb-3">
-            {moderatedPosts.length === 0 ? (
+            {totalAppealPosts === 0 ? (
               <div className="rounded-lg border border-dashed border-[var(--theme-border)] p-3 text-xs text-[var(--theme-text-secondary)]">
                 目前沒有可申訴的被處置貼文
               </div>
             ) : (
-              moderatedPosts.map((post) => (
-                <div key={`moderated-top-${post.id}`} className="cursor-default">
-                  <CommunityPostCard
-                    post={{ ...post, moderation_reason: post.moderation_reason ?? undefined }}
-                    currentUserId={currentUser.id}
-                    onAppeal={handleAppeal}
-                    appealStatus={appealStatusByPostId[post.id]}
-                  />
+              appealSections.map((section) => (
+                <div key={section.key} className="space-y-3">
+                  <div className="flex items-center justify-between rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-card)]/50 px-3 py-2">
+                    <span className="text-sm font-medium text-[var(--theme-text-primary)]">{section.title}</span>
+                    <span className="text-xs text-[var(--theme-text-secondary)]">{section.posts.length} 筆</span>
+                  </div>
+
+                  {section.posts.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-[var(--theme-border)] p-3 text-xs text-[var(--theme-text-secondary)]">
+                      目前沒有{section.title}案件
+                    </div>
+                  ) : (
+                    section.posts.map((post) => (
+                      <div key={`${section.key}-${post.id}`} className="cursor-default">
+                        <CommunityPostCard
+                          post={{ ...post, moderation_reason: post.moderation_reason ?? undefined }}
+                          currentUserId={currentUser.id}
+                          onAppeal={handleAppeal}
+                          appealStatus={appealStatusByPostId[post.id]}
+                        />
+                      </div>
+                    ))
+                  )}
                 </div>
               ))
             )}

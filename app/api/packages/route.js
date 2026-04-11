@@ -146,11 +146,57 @@ async function resolveUnitByRoom(supabase, recipientRoom) {
   return foundUnit;
 }
 
+async function resolveRecipientProfileId(supabase, unitId, recipientName) {
+  if (!unitId || !recipientName) return null;
+  const normalizedName = String(recipientName).trim();
+  if (!normalizedName) return null;
+
+  try {
+    const { data: directProfiles } = await supabase
+      .from("profiles")
+      .select("id, name")
+      .eq("unit_id", unitId)
+      .eq("name", normalizedName)
+      .limit(1);
+
+    if (directProfiles && directProfiles.length > 0) {
+      return directProfiles[0].id;
+    }
+  } catch (e) {
+    console.warn("[PACKAGE] resolveRecipientProfileId profiles lookup failed:", e);
+  }
+
+  return null;
+}
+
 function getPackageOperator(payload = {}) {
   return {
     id: payload.operatorId || payload.created_by || payload.picked_up_by_id || undefined,
     role: payload.operatorRole || "unknown",
   };
+}
+
+async function sendIotCommand(req, cmd) {
+  try {
+    const iotUrl = new URL("/api/iot", req.url);
+    const res = await fetch(iotUrl.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cmd }),
+    });
+
+    const payload = await res.json().catch(() => null);
+    const success = !!(res.ok && payload?.success);
+    return {
+      success,
+      error: success ? undefined : payload?.error || `IOT 命令失敗（${res.status}）`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "IOT 連線失敗",
+    };
+  }
 }
 
 // 1. ADDING A NEW PACKAGE (POST)
@@ -164,7 +210,7 @@ export async function POST(req) {
     const operator = getPackageOperator(body);
 
     // Validation
-    if (!courier || !recipient_name || !recipient_room || !arrived_at) {
+    if (!courier || !recipient_room || !arrived_at) {
       await writeServerAuditLog({
         supabase,
         operatorId: operator.id,
@@ -183,6 +229,7 @@ export async function POST(req) {
     if (test === true) return Response.json({ message: "Test success" });
 
     const foundUnit = await resolveUnitByRoom(supabase, recipient_room)
+    const recipientProfileId = await resolveRecipientProfileId(supabase, foundUnit?.id, recipient_name)
 
     if (!foundUnit) {
       await writeServerAuditLog({
@@ -205,10 +252,9 @@ export async function POST(req) {
       .from("packages")
       .insert({
         courier,
-        recipient_name,
-        recipient_room,
         tracking_number: tracking_number || null,
         arrived_at,
+        recipient_id: recipientProfileId,
         unit_id: foundUnit.id,
         status: "pending",
       })
@@ -268,15 +314,15 @@ export async function POST(req) {
             layout: "vertical",
             contents: [
               {
-                type: "text",
-                text: `收件人：${recipient_name}`,
+                  type: "text",
+                  text: `收件人：${recipient_name || "住戶"}`,
                 margin: "md",
                 size: "md",
                 weight: "bold",
               },
               {
                 type: "text",
-                text: `房號：${recipient_room}`,
+                  text: `房號：${recipient_room}`,
                 margin: "sm",
                 color: "#666666",
               },
@@ -317,7 +363,7 @@ export async function POST(req) {
 
       try {
         console.log(`[LINE] Attempting to send notification to ${lineDisplayName || lineUserId}`)
-        console.log(`[LINE] Message preview: 收件人=${recipient_name}, 房號=${recipient_room}, 快遞=${courier}`)
+        console.log(`[LINE] Message preview: 收件人=${recipient_name || "住戶"}, 房號=${recipient_room}, 快遞=${courier}`)
         
         await client.pushMessage(lineUserId, flexMessage)
         console.log(`[LINE] ✅ Notification sent successfully to ${lineDisplayName || lineUserId}`)
@@ -335,10 +381,14 @@ export async function POST(req) {
       console.warn(`[LINE] Please ask the resident to bind LINE account via /bind-line page`)
     }
 
+    const iotResult = await sendIotCommand(req, "P");
+
     return Response.json({ 
       success: true, 
       id: insertedPackage?.id,
-      message: "✅ 包裹建立成功"
+      message: iotResult.success ? "✅ 包裹建立成功（IOT 已通知）" : "✅ 包裹建立成功（IOT 通知失敗）",
+      iotSent: iotResult.success,
+      iotError: iotResult.error,
     });
   } catch (err) {
     console.error("[packages] POST error:", err);
@@ -355,7 +405,7 @@ export async function PUT(req) {
     const { id, courier, recipient_name, recipient_room, tracking_number, arrived_at } = body;
     const operator = getPackageOperator(body);
 
-    if (!id || !courier || !recipient_name || !recipient_room || !arrived_at) {
+    if (!id || !courier || !recipient_room || !arrived_at) {
       await writeServerAuditLog({
         supabase,
         operatorId: operator.id,
@@ -410,6 +460,7 @@ export async function PUT(req) {
     }
 
     const foundUnit = await resolveUnitByRoom(supabase, recipient_room);
+    const recipientProfileId = await resolveRecipientProfileId(supabase, foundUnit?.id, recipient_name);
     if (!foundUnit) {
       await writeServerAuditLog({
         supabase,
@@ -430,8 +481,7 @@ export async function PUT(req) {
       .from("packages")
       .update({
         courier,
-        recipient_name,
-        recipient_room,
+        recipient_id: recipientProfileId,
         tracking_number: tracking_number || null,
         arrived_at,
         unit_id: foundUnit.id,
@@ -447,7 +497,7 @@ export async function PUT(req) {
       actionType: "update_package",
       targetType: "system",
       targetId: id,
-      reason: recipient_name,
+      reason: recipient_name || "更新包裹",
       module: "packages",
       status: "success",
       afterState: { courier, recipient_room, tracking_number: tracking_number || null },
@@ -582,7 +632,7 @@ export async function PATCH(req) {
     // 先查詢包裹資訊（需要通知用）
     const { data: packageData, error: fetchError } = await supabase
       .from("packages")
-      .select("id, courier, recipient_name, recipient_room, tracking_number, unit_id, arrived_at")
+      .select("id, courier, tracking_number, recipient_id, unit_id, arrived_at")
       .eq("id", packageId)
       .single();
 
@@ -630,6 +680,25 @@ export async function PATCH(req) {
 
     // 發送「已領取」LINE 通知
     if (packageData.unit_id) {
+      let recipientName = "住戶";
+      let recipientRoom = "";
+
+      if (packageData.recipient_id) {
+        const { data: recipientProfile } = await supabase
+          .from("profiles")
+          .select("name")
+          .eq("id", packageData.recipient_id)
+          .maybeSingle();
+        recipientName = recipientProfile?.name || recipientName;
+      }
+
+      const { data: unitRow } = await supabase
+        .from("units")
+        .select("unit_code")
+        .eq("id", packageData.unit_id)
+        .maybeSingle();
+      recipientRoom = unitRow?.unit_code || "";
+
       const { lineUserId, lineDisplayName } = await findLineUserByUnit(
         supabase,
         packageData.unit_id,
@@ -664,14 +733,14 @@ export async function PATCH(req) {
               contents: [
                 {
                   type: "text",
-                  text: `收件人：${packageData.recipient_name}`,
+                  text: `收件人：${recipientName}`,
                   margin: "md",
                   size: "md",
                   weight: "bold",
                 },
                 {
                   type: "text",
-                  text: `房號：${packageData.recipient_room}`,
+                  text: `房號：${recipientRoom || "未提供"}`,
                   margin: "sm",
                   color: "#666666",
                 },
@@ -722,9 +791,13 @@ export async function PATCH(req) {
       }
     }
 
+    const iotResult = await sendIotCommand(req, "P");
+
     return Response.json({ 
       success: true,
-      message: "✅ 包裹已領取"
+      message: iotResult.success ? "✅ 包裹已領取（IOT 已通知）" : "✅ 包裹已領取（IOT 通知失敗）",
+      iotSent: iotResult.success,
+      iotError: iotResult.error,
     });
   } catch (err) {
     console.error("[packages] PATCH error:", err);

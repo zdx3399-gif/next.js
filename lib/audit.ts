@@ -118,7 +118,7 @@ export interface AuditLogParams {
 export async function createAuditLog(params: AuditLogParams): Promise<boolean> {
   const supabase = getSupabaseClient()
   if (!supabase) {
-    console.error("[v0] Supabase client not available for audit log")
+    console.warn("[v0] Supabase client not available for audit log")
     return false
   }
 
@@ -139,13 +139,13 @@ export async function createAuditLog(params: AuditLogParams): Promise<boolean> {
     ])
 
     if (error) {
-      console.error("[v0] Error creating audit log:", error)
+      console.warn("[v0] Skip audit log:", error)
       return false
     }
 
     return true
   } catch (err) {
-    console.error("[v0] Exception creating audit log:", err)
+    console.warn("[v0] Skip audit log exception:", err)
     return false
   }
 }
@@ -172,13 +172,13 @@ export async function createBulkAuditLogs(logs: AuditLogParams[]): Promise<boole
     const { error } = await supabase.from("audit_logs").insert(insertData)
 
     if (error) {
-      console.error("[v0] Error creating bulk audit logs:", error)
+      console.warn("[v0] Skip bulk audit logs:", error)
       return false
     }
 
     return true
   } catch (err) {
-    console.error("[v0] Exception creating bulk audit logs:", err)
+    console.warn("[v0] Skip bulk audit logs exception:", err)
     return false
   }
 }

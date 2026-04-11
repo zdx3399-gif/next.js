@@ -28,7 +28,7 @@ const PREVIEW_EMERGENCIES = [
 ]
 
 export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPreviewMode = false }: EmergencyManagementAdminProps) {
-  const { emergencies: realEmergencies, loading, confirmAndTrigger, editEmergency, deleteEmergency, reload } = useEmergencies(true)
+  const { emergencies: realEmergencies, loading, triggerEmergency, editEmergency, deleteEmergency, reload } = useEmergencies(true)
 
   // 預覽模式使用模擬資料
   const emergencies = isPreviewMode ? PREVIEW_EMERGENCIES : realEmergencies
@@ -38,6 +38,8 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
   const [draftId, setDraftId] = useState<string>("")
   const [draftType, setDraftType] = useState<string>("")
   const [draftNote, setDraftNote] = useState<string>("")
+  const [draftLocation, setDraftLocation] = useState<string>("")
+  const [draftDescription, setDraftDescription] = useState<string>("")
   const [submitting, setSubmitting] = useState(false)
 
   const openCreateForm = (type: string, note: string) => {
@@ -45,6 +47,8 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
     setDraftId("")
     setDraftType(type)
     setDraftNote(note)
+    setDraftLocation("")
+    setDraftDescription("")
   }
 
   const openEditForm = (row: any) => {
@@ -60,6 +64,8 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
     setDraftId("")
     setDraftType("")
     setDraftNote("")
+    setDraftLocation("")
+    setDraftDescription("")
   }
 
   const submitCreateForm = async () => {
@@ -71,10 +77,21 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
       alert("備註不可為空，請輸入現場狀況")
       return
     }
+    if (!draftLocation.trim() || !draftDescription.trim()) {
+      alert("請填寫地點與事件描述")
+      return
+    }
 
     setSubmitting(true)
     try {
-      await Promise.resolve(confirmAndTrigger(draftType.trim(), draftNote.trim(), currentUserId, currentUserName || "管理員"))
+      await triggerEmergency(
+        draftType.trim(),
+        draftNote.trim(),
+        currentUserId,
+        currentUserName || "管理員",
+        draftLocation.trim(),
+        draftDescription.trim(),
+      )
       resetForm()
       reload()
     } finally {
@@ -101,6 +118,7 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
       setSubmitting(false)
     }
   }
+
 
   const filteredEmergencies = emergencies.filter((emergency) => {
     if (!searchTerm) return true
@@ -161,6 +179,23 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
                 rows={4}
               />
             </div>
+            {formMode === "create" && (
+              <>
+                <div>
+                  <label className="text-sm text-[var(--theme-text-secondary)]">地點（必填）</label>
+                  <Input value={draftLocation} onChange={(e) => setDraftLocation(e.target.value)} placeholder="例如：A 棟 1F 大廳" />
+                </div>
+                <div>
+                  <label className="text-sm text-[var(--theme-text-secondary)]">事件描述（必填）</label>
+                  <Textarea
+                    value={draftDescription}
+                    onChange={(e) => setDraftDescription(e.target.value)}
+                    placeholder="例如：訪客已到管理室，請住戶下樓接待"
+                    rows={3}
+                  />
+                </div>
+              </>
+            )}
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={resetForm} disabled={submitting}>取消</Button>
               {formMode === "create" ? (

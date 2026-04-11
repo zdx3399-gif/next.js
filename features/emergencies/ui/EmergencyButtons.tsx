@@ -76,6 +76,21 @@ export function EmergencyButtons({ userId, userName, onTrigger, variant = "full"
     }
   }
 
+  const quickTrigger = async (type: string, note: string) => {
+    if (!confirm(`確定送出「${type}」通報嗎？`)) return
+
+    setSubmitting(true)
+    try {
+      await triggerEmergency(type, note, userId, userName || "未知", "管理室/社區入口", `${note}（快速通報）`)
+      onTrigger?.()
+      if (userId) {
+        await reload(userId)
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   // Sidebar 版本 - 簡潔的小��鈕
   if (variant === "sidebar") {
     return (
@@ -83,7 +98,7 @@ export function EmergencyButtons({ userId, userName, onTrigger, variant = "full"
         {emergencyTypes.map((emergency) => (
           <div
             key={emergency.type}
-            onClick={() => openForm(emergency.type, emergency.note)}
+            onClick={() => quickTrigger(emergency.type, emergency.note)}
             className="p-2 bg-[var(--theme-bg-secondary)] border border-[#f44336]/30 rounded-lg cursor-pointer hover:bg-[rgba(244,67,54,0.1)] transition-all text-center"
           >
             <div className="material-icons text-[#f44336] text-2xl mb-1">{emergency.icon}</div>
@@ -97,18 +112,34 @@ export function EmergencyButtons({ userId, userName, onTrigger, variant = "full"
   // Dashboard 版本 - AI Chat 內的按鈕
   if (variant === "dashboard") {
     return (
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <button
-          onClick={() => openForm("救護車119", "醫療緊急狀況")}
-          className="flex-1 bg-[#f44336] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#d32f2f] transition-colors"
+          onClick={() => quickTrigger("救護車119", "醫療緊急狀況")}
+          disabled={submitting}
+          className="bg-[#f44336] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#d32f2f] transition-colors disabled:opacity-60"
         >
           緊急救護 (119)
         </button>
         <button
-          onClick={() => openForm("報警110", "治安緊急狀況")}
-          className="flex-1 bg-[#ff9800] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#f57c00] transition-colors"
+          onClick={() => quickTrigger("報警110", "治安緊急狀況")}
+          disabled={submitting}
+          className="bg-[#ff9800] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#f57c00] transition-colors disabled:opacity-60"
         >
           緊急報警 (110)
+        </button>
+        <button
+          onClick={() => quickTrigger("訪客通知", "訪客到達通知")}
+          disabled={submitting}
+          className="bg-[#0284c7] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#0369a1] transition-colors disabled:opacity-60"
+        >
+          訪客通知
+        </button>
+        <button
+          onClick={() => quickTrigger("包裹通知", "包裹到件通知")}
+          disabled={submitting}
+          className="bg-[#0f766e] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#115e59] transition-colors disabled:opacity-60"
+        >
+          包裹通知
         </button>
       </div>
     )

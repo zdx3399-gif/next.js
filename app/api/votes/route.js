@@ -7,12 +7,18 @@ export const dynamic = "force-dynamic";
 
 // ✅ 延後到 request 才建立，避免 build 階段就因 env 缺而爆
 function getSupabase() {
-  const url = process.env.SUPABASE_URL;
+  const url =
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL ||
+    process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const anonKey =
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    throw new Error("supabaseUrl is required. Missing SUPABASE_URL or SUPABASE_ANON_KEY.");
+    throw new Error(
+      "supabaseUrl is required. Missing NEXT_PUBLIC_TENANT_A_SUPABASE_URL / NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY or SUPABASE_URL / SUPABASE_ANON_KEY."
+    );
   }
   return createClient(url, serviceRoleKey || anonKey);
 }
@@ -85,6 +91,39 @@ function parseVoteOptionsObject(raw) {
     return raw;
   }
   return null;
+}
+
+async function insertVoteRecordCompat({ supabase, vote_id, user_id, user_name, option_selected, voted_at }) {
+  const payloadWithName = {
+    vote_id,
+    user_id,
+    user_name: user_name || "住戶",
+    option_selected,
+    voted_at,
+  };
+
+  const firstTry = await supabase.from("vote_records").insert([payloadWithName]);
+  if (!firstTry.error) {
+    return firstTry;
+  }
+
+  const errMsg = String(firstTry.error?.message || "");
+  const missingUserNameColumn =
+    errMsg.includes("user_name") &&
+    (errMsg.includes("schema cache") || errMsg.includes("column"));
+
+  if (!missingUserNameColumn) {
+    return firstTry;
+  }
+
+  const payloadWithoutName = {
+    vote_id,
+    user_id,
+    option_selected,
+    voted_at,
+  };
+
+  return supabase.from("vote_records").insert([payloadWithoutName]);
 }
 
 function isUuid(value) {
@@ -267,15 +306,14 @@ async function handleVoteFromLineMessage({ supabase, body }) {
     return Response.json({ error: "您已經投過票，不能重複投票" }, { status: 400 });
   }
 
-  const { error: recordError } = await supabase.from("vote_records").insert([
-    {
-      vote_id,
-      user_id,
-      user_name,
-      option_selected,
-      voted_at: new Date().toISOString(),
-    },
-  ]);
+  const { error: recordError } = await insertVoteRecordCompat({
+    supabase,
+    vote_id,
+    user_id,
+    user_name,
+    option_selected,
+    voted_at: new Date().toISOString(),
+  });
 
   if (recordError) {
     await writeServerAuditLog({
@@ -411,15 +449,14 @@ async function handleSubmitVote({ supabase, body }) {
     return Response.json({ error: "您已經投過票了" }, { status: 409 });
   }
 
-  const { error: insertError } = await supabase.from("vote_records").insert([
-    {
-      vote_id,
-      user_id,
-      user_name: user_name || "住戶",
-      option_selected,
-      voted_at: now,
-    },
-  ]);
+  const { error: insertError } = await insertVoteRecordCompat({
+    supabase,
+    vote_id,
+    user_id,
+    user_name: user_name || "住戶",
+    option_selected,
+    voted_at: now,
+  });
 
   if (insertError) {
     await writeServerAuditLog({

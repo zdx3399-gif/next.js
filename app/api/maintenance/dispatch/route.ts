@@ -25,6 +25,67 @@ interface DispatchRequest {
   operatorRole?: string
 }
 
+async function updateMaintenanceDispatch(
+  maintenanceId: string,
+  payload: {
+    logs: any[]
+    scheduled_at: string
+    estimated_cost?: number
+    admin_note?: string
+    vendor_name: string
+    worker_name: string
+    worker_phone: string
+  }
+) {
+  const normalizedUpdate = {
+    scheduled_at: payload.scheduled_at,
+    estimated_cost: payload.estimated_cost || null,
+    admin_note: payload.admin_note || null,
+    status: 'progress',
+    dispatched_at: new Date().toISOString(),
+    logs: payload.logs,
+    assignment_snapshot: {
+      vendor_name: payload.vendor_name,
+      worker_name: payload.worker_name,
+      worker_phone: payload.worker_phone,
+      scheduled_at: payload.scheduled_at,
+      estimated_cost: payload.estimated_cost || null,
+      admin_note: payload.admin_note || null,
+      saved_at: new Date().toISOString(),
+    },
+  }
+
+  const normalizedResult = await supabase
+    .from('maintenance')
+    .update(normalizedUpdate)
+    .eq('id', maintenanceId)
+
+  if (!normalizedResult.error) {
+    return normalizedResult
+  }
+
+  const errMsg = String(normalizedResult.error?.message || '')
+  const assignmentSnapshotMissing = errMsg.includes('assignment_snapshot') && errMsg.includes('column')
+  if (!assignmentSnapshotMissing) {
+    return normalizedResult
+  }
+
+  return supabase
+    .from('maintenance')
+    .update({
+      vendor_name: payload.vendor_name,
+      worker_name: payload.worker_name,
+      worker_phone: payload.worker_phone,
+      scheduled_at: payload.scheduled_at,
+      estimated_cost: payload.estimated_cost || null,
+      admin_note: payload.admin_note || null,
+      status: 'progress',
+      dispatched_at: new Date().toISOString(),
+      logs: payload.logs,
+    })
+    .eq('id', maintenanceId)
+}
+
 export async function POST(req: Request) {
   try {
     const body: DispatchRequest = await req.json()
@@ -64,7 +125,7 @@ export async function POST(req: Request) {
     // 1) Get maintenance record with reporter info
     const { data: maintenance, error: maintError } = await supabase
       .from('maintenance')
-      .select('*, reported_by_id, reported_by_name, equipment, item, description')
+      .select('*, reported_by_id, equipment, item, description')
       .eq('id', maintenanceId)
       .single()
 
@@ -102,20 +163,15 @@ export async function POST(req: Request) {
     }
 
     // 2) Update maintenance record with dispatch info
-    const { error: updateError } = await supabase
-      .from('maintenance')
-      .update({
-        vendor_name,
-        worker_name,
-        worker_phone,
-        scheduled_at,
-        estimated_cost: estimated_cost || null,
-        admin_note: admin_note || null,
-        status: 'progress',
-        dispatched_at: new Date().toISOString(),
-        logs: [...existingLogs, dispatchLog]
-      })
-      .eq('id', maintenanceId)
+    const { error: updateError } = await updateMaintenanceDispatch(maintenanceId, {
+      vendor_name,
+      worker_name,
+      worker_phone,
+      scheduled_at,
+      estimated_cost,
+      admin_note,
+      logs: [...existingLogs, dispatchLog],
+    })
 
     if (updateError) {
       console.error('更新維修單失敗:', updateError)
@@ -153,7 +209,7 @@ export async function POST(req: Request) {
 
     // 3) Find reporter's LINE user ID
     let lineUserId: string | null = null
-    let residentName = maintenance.reported_by_name || '住戶'
+    let residentName = '住戶'
 
     if (maintenance.reported_by_id) {
       // First try profiles table
@@ -166,17 +222,6 @@ export async function POST(req: Request) {
       if (profile) {
         residentName = profile.name || residentName
         lineUserId = profile.line_user_id
-
-        // If not in profiles, check line_users table
-        if (!lineUserId) {
-          const { data: lineUser } = await supabase
-            .from('line_users')
-            .select('line_user_id')
-            .eq('profile_id', profile.id)
-            .maybeSingle()
-
-          lineUserId = lineUser?.line_user_id || null
-        }
       }
     }
 
@@ -435,7 +480,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from('maintenance')
-    .select('*, vendor_name, worker_name, worker_phone, scheduled_at, estimated_cost, status')
+    .select('*, assignment_snapshot, scheduled_at, estimated_cost, status')
     .eq('id', maintenanceId)
     .single()
 

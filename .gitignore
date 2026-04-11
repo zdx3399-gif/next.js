@@ -30,3 +30,13 @@ yarn-error.log*
 next-env.d.ts
 .vercel
 .env*.local
+
+# Local documentation and analysis artifacts
+/API_INTEGRATION_GUIDE.md
+/API_INTEGRATION_SUMMARY.md
+/UserStory_修訂稿.md
+/專題.pdf
+/專題_extracted.txt
+/專題_extracted_clean.txt
+/專題_extracted_normalized.txt
+/所有功能清單.txt

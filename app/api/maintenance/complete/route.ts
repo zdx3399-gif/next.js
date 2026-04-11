@@ -172,16 +172,6 @@ export async function POST(req: Request) {
       if (profile) {
         residentName = profile.name || residentName
         lineUserId = profile.line_user_id
-
-        if (!lineUserId) {
-          const { data: lineUser } = await supabase
-            .from('line_users')
-            .select('line_user_id')
-            .eq('profile_id', profile.id)
-            .maybeSingle()
-
-          lineUserId = lineUser?.line_user_id || null
-        }
       }
     }
 

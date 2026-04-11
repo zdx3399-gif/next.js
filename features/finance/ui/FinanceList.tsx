@@ -1,37 +1,21 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useFinance } from "../hooks/useFinance"
+import { useFinance, useFinanceExpenses } from "../hooks/useFinance"
 import { HelpHint } from "@/components/ui/help-hint"
-
-interface ExpenseRecord {
-  id: string
-  date: string
-  item: string
-  category: string
-  amount: number
-  vendor: string
-  note?: string
-}
-
-const INITIAL_EXPENSES: ExpenseRecord[] = [
-  { id: "1", date: "2025-11-28", item: "大廳燈泡更換", category: "維護費", amount: 12321, vendor: "水电行" },
-  { id: "2", date: "2025-11-28", item: "電梯保養 (11月)", category: "維護費", amount: 9000, vendor: "迅達電梯" },
-  { id: "3", date: "2025-11-27", item: "外牆清洗", category: "清潔費", amount: 10000, vendor: "潔淨公司" },
-  { id: "4", date: "2025-11-26", item: "管理員薪資", category: "人事費", amount: 3000, vendor: "-" },
-]
 
 type TabType = "income" | "expense" | "report"
 
 interface FinanceListProps {
   userRoom?: string
+  userUnitId?: string
 }
 
-export function FinanceList({ userRoom }: FinanceListProps) {
-  const { records, loading } = useFinance(userRoom)
+export function FinanceList({ userRoom, userUnitId }: FinanceListProps) {
+  const { records, loading } = useFinance(userRoom, userUnitId)
   const { records: allRecords, loading: allLoading } = useFinance()
+  const { expenses, loading: expensesLoading } = useFinanceExpenses()
   const [activeTab, setActiveTab] = useState<TabType>("income")
-  const [expenses] = useState<ExpenseRecord[]>(INITIAL_EXPENSES)
 
   // 1. Calculate Unpaid Bills for the Reminder UI
   const unpaidRecords = useMemo(() => records.filter(r => !r.paid), [records])
@@ -73,7 +57,7 @@ export function FinanceList({ userRoom }: FinanceListProps) {
     })(),
   }
 
-  const isPageLoading = activeTab === "report" ? loading || allLoading : loading
+  const isPageLoading = activeTab === "report" ? loading || allLoading || expensesLoading : loading || expensesLoading
 
   if (isPageLoading) {
     return (

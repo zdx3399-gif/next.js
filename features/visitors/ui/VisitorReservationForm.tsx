@@ -6,6 +6,23 @@ import { useState } from "react"
 import type { VisitorReservation } from "../api/visitors"
 import { HelpHint } from "@/components/ui/help-hint"
 
+function toLocalDateTimeInputValue(value: string | undefined): string {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  const hh = String(date.getHours()).padStart(2, "0")
+  const mm = String(date.getMinutes()).padStart(2, "0")
+  return `${y}-${m}-${d}T${hh}:${mm}`
+}
+
+function nowLocalDateTimeInputValue(): string {
+  return toLocalDateTimeInputValue(new Date().toISOString())
+}
+
 interface VisitorReservationFormProps {
   onSubmit: (reservation: VisitorReservation) => Promise<boolean>
   onCancel: () => void
@@ -25,7 +42,7 @@ export function VisitorReservationForm({
     name: initialData?.name || "",
     phone: initialData?.phone || "",
     purpose: initialData?.purpose || "",
-    reservation_time: initialData?.reservation_time || "",
+    reservation_time: toLocalDateTimeInputValue(initialData?.reservation_time),
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -127,7 +144,7 @@ export function VisitorReservationForm({
             type="datetime-local"
             value={form.reservation_time}
             onChange={(e) => setForm({ ...form, reservation_time: e.target.value })}
-            min={new Date().toISOString().slice(0, 16)}
+            min={nowLocalDateTimeInputValue()}
             className="theme-input w-full px-4 py-3 rounded-lg"
             required
           />

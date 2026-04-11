@@ -145,7 +145,6 @@ export async function submitMaintenanceRequest(
           description: formData.description,
           status: "open",
           reported_by_id: userId,
-          reported_by_name: userName,
           time: new Date().toISOString(),
           image_url: imageUrl || null,
         },

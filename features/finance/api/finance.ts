@@ -31,6 +31,23 @@ export interface FinanceRecord {
   monthly_fee?: number
 }
 
+export interface ExpenseRecord {
+  id: string
+  date: string
+  item: string
+  category: string
+  amount: number
+  vendor: string
+  note?: string | null
+}
+
+export const DEFAULT_EXPENSES: ExpenseRecord[] = [
+  { id: "seed-1", date: "2025-11-28", item: "大廳燈泡更換", category: "維護費", amount: 12321, vendor: "水电行" },
+  { id: "seed-2", date: "2025-11-28", item: "電梯保養 (11月)", category: "維護費", amount: 9000, vendor: "迅達電梯" },
+  { id: "seed-3", date: "2025-11-27", item: "外牆清洗", category: "清潔費", amount: 10000, vendor: "潔淨公司" },
+  { id: "seed-4", date: "2025-11-26", item: "管理員薪資", category: "人事費", amount: 3000, vendor: "-" },
+]
+
 export async function fetchAllFinanceRecords(): Promise<FinanceRecord[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
@@ -90,6 +107,60 @@ export async function fetchUserFinanceRecords(room: string, userUnitId?: string)
 
 export async function fetchFinanceRecordsByRoom(room: string): Promise<FinanceRecord[]> {
   return fetchUserFinanceRecords(room)
+}
+
+export async function fetchExpenseRecords(): Promise<ExpenseRecord[]> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return DEFAULT_EXPENSES
+
+  const { data, error } = await supabase.from("finance_expenses").select("*").order("date", { ascending: false })
+  if (error) {
+    console.warn("[finance] expense table unavailable, fallback to defaults:", error.message)
+    return DEFAULT_EXPENSES
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    date: row.date,
+    item: row.item,
+    category: row.category,
+    amount: Number(row.amount || 0),
+    vendor: row.vendor || "-",
+    note: row.note || null,
+  }))
+}
+
+export async function saveExpenseRecord(expense: Omit<ExpenseRecord, "id"> & { id?: string }): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return { success: false, error: "Supabase not configured" }
+
+  const payload = {
+    date: expense.date,
+    item: expense.item,
+    category: expense.category,
+    amount: expense.amount,
+    vendor: expense.vendor,
+    note: expense.note || null,
+  }
+
+  if (expense.id) {
+    const { error } = await supabase.from("finance_expenses").update(payload).eq("id", expense.id)
+    if (error) return { success: false, error: error.message }
+    return { success: true }
+  }
+
+  const { error } = await supabase.from("finance_expenses").insert([payload])
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+export async function removeExpenseRecord(id: string): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return { success: false, error: "Supabase not configured" }
+
+  const { error } = await supabase.from("finance_expenses").delete().eq("id", id)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
 }
 
 export async function createFinanceRecord(

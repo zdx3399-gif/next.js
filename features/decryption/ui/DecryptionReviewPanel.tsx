@@ -53,8 +53,8 @@ const PREVIEW_DECRYPTION_REQUESTS = [
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending: { label: "待管委會初審", color: "bg-yellow-500" },
-  committee_approved: { label: "待管理員覆核", color: "bg-blue-500" },
-  admin_approved: { label: "管理員已覆核", color: "bg-purple-500" },
+  committee_approved: { label: "待開發者覆核", color: "bg-blue-500" },
+  admin_approved: { label: "開發者已覆核", color: "bg-purple-500" },
   fully_approved: { label: "已完全核准", color: "bg-green-500" },
   rejected: { label: "已拒絕", color: "bg-red-500" },
 }
@@ -158,16 +158,16 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole, isPreviewMode 
       <div className="bg-card border rounded-lg p-4">
         <h3 className="font-semibold mb-2 flex items-center gap-2">
           <Shield className="w-5 h-5 text-primary" />
-          {reviewerRole === "committee" ? "管委會初審（第一層）" : "系統管理員覆核（第二層）"}
+          {reviewerRole === "committee" ? "管委會初審（第一層）" : "開發者覆核（第二層）"}
           <HelpHint
-            title={reviewerRole === "committee" ? "管委會初審" : "管理員覆核"}
-            description={reviewerRole === "committee" ? "先判斷是否符合解密條件，通過後送管理員。" : "進行最終核准，通過後才能查看作者資訊。"}
+            title={reviewerRole === "committee" ? "管委會初審" : "開發者覆核"}
+            description={reviewerRole === "committee" ? "先判斷是否符合解密條件，通過後送開發者。" : "進行最終核准，通過後才能查看作者資訊。"}
             workflow={
               reviewerRole === "committee"
                 ? [
                     "先閱讀申請原因與觸發條件，確認是否符合初審標準。",
                     "點開始審核，填寫備註後選擇通過或拒絕。",
-                    "初審通過的案件會送交管理員進行第二層覆核。",
+                    "初審通過的案件會送交開發者進行第二層覆核。",
                   ]
                 : [
                     "先查看管委會初審意見與案件內容。",
@@ -179,10 +179,10 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole, isPreviewMode 
               reviewerRole === "committee"
                 ? [
                     "管委會屬第一層把關，避免不必要的個資揭露。",
-                    "僅初審通過案件會進入管理員覆核流程。",
+                    "僅初審通過案件會進入開發者覆核流程。",
                   ]
                 : [
-                    "管理員是最終決策層，決定是否開啟作者資訊存取。",
+                    "開發者是最終決策層，決定是否開啟作者資訊存取。",
                     "雙層審核可降低誤判與濫用解密權限風險。",
                   ]
             }
@@ -191,7 +191,7 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole, isPreviewMode 
         </h3>
         <p className="text-sm text-muted-foreground">
           {reviewerRole === "committee" 
-            ? "審核解密申請是否符合解密條件。核准後將送交系統管理員覆核。"
+            ? "審核解密申請是否符合解密條件。核准後將送交開發者覆核。"
             : "進行最終覆核。核准後將解密作者身份，資訊有效期為7天。"
           }
         </p>

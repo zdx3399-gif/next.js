@@ -51,7 +51,7 @@ function toRepairResponse(row) {
     description: row?.description || '',
     priority: 'medium',
     status,
-    assigned_to: row?.handler_name || row?.assignee_id || row?.handler_id || null,
+    assigned_to: row?.assignee || row?.handler || row?.assignee_id || row?.handler_id || null,
     notes: row?.admin_note || row?.note || row?.completion_note || '',
     created_at: row?.created_at,
     updated_at: row?.updated_at,
@@ -70,15 +70,7 @@ async function findLineUserIdByProfileId(supabase, profileId) {
       .single();
 
     if (profile?.line_user_id) return profile.line_user_id;
-    if (!profile?.id) return null;
-
-    const { data: lineUser } = await supabase
-      .from('line_users')
-      .select('line_user_id')
-      .eq('profile_id', profile.id)
-      .maybeSingle();
-
-    return lineUser?.line_user_id || null;
+    return null;
   } catch (e) {
     console.warn('[repairs] findLineUserIdByProfileId failed:', e);
     return null;
@@ -199,7 +191,7 @@ export async function PATCH(req) {
         updateData.completed_at = new Date().toISOString();
       }
     }
-    if (assigned_to !== undefined) updateData.handler_name = assigned_to;
+    if (assigned_to !== undefined) updateData.assignee = assigned_to;
     if (notes !== undefined) updateData.note = notes;
     if (priority) {
       updateData.admin_note = `priority=${priority}${notes ? `; ${notes}` : ''}`;

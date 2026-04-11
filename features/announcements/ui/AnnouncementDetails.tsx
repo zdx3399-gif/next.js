@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { getSupabaseClient } from "@/lib/supabase"
 import { HelpHint } from "@/components/ui/help-hint"
+import { fetchUserReadAnnouncements, markAnnouncementAsRead } from "../api/announcements"
 
 interface Comment {
   id: string
@@ -77,6 +78,8 @@ export function AnnouncementDetails({ onClose, currentUser, isPreviewMode = fals
   const [newComment, setNewComment] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [readAnnouncements, setReadAnnouncements] = useState<Set<string>>(new Set())
+  const [markingRead, setMarkingRead] = useState(false)
 
   useEffect(() => {
     if (isPreviewMode) {
@@ -108,7 +111,18 @@ export function AnnouncementDetails({ onClose, currentUser, isPreviewMode = fals
     }
 
     loadAnnouncements()
+    loadReadAnnouncements()
   }, [isPreviewMode])
+
+  const loadReadAnnouncements = async () => {
+    if (isPreviewMode || !currentUser?.id) {
+      setReadAnnouncements(new Set())
+      return
+    }
+
+    const readSet = await fetchUserReadAnnouncements(currentUser.id)
+    setReadAnnouncements(readSet)
+  }
 
   useEffect(() => {
     const selectedId = sessionStorage.getItem("selectedAnnouncementId")
@@ -225,6 +239,23 @@ export function AnnouncementDetails({ onClose, currentUser, isPreviewMode = fals
     localStorage.setItem("announcement_likes", JSON.stringify(likesObj))
   }
 
+  const handleMarkAsRead = async () => {
+    if (!selectedAnnouncement || !currentUser?.id || isPreviewMode) return
+
+    if (readAnnouncements.has(selectedAnnouncement.id)) return
+
+    setMarkingRead(true)
+    const { error } = await markAnnouncementAsRead(selectedAnnouncement.id, currentUser.id)
+    setMarkingRead(false)
+
+    if (error) {
+      alert("標記已讀失敗，請稍後再試")
+      return
+    }
+
+    setReadAnnouncements((prev) => new Set([...prev, selectedAnnouncement.id]))
+  }
+
   const currentComments = selectedAnnouncement ? comments.get(selectedAnnouncement.id) || [] : []
   const currentLikes = selectedAnnouncement ? likes.get(selectedAnnouncement.id) || new Set() : new Set()
   const hasLiked = selectedAnnouncement ? currentLikes.has(currentUser?.id) : false
@@ -298,8 +329,21 @@ export function AnnouncementDetails({ onClose, currentUser, isPreviewMode = fals
                 }`}
               >
                 <div className="text-[var(--theme-text-primary)] font-medium line-clamp-2">{announcement.title}</div>
-                <div className="text-[var(--theme-text-muted)] text-xs mt-1">
-                  {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
+                <div className="mt-1 flex items-center justify-between text-xs">
+                  <span className="text-[var(--theme-text-muted)]">
+                    {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
+                  </span>
+                  {!isPreviewMode && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full ${
+                        readAnnouncements.has(announcement.id)
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : "bg-amber-500/15 text-amber-400"
+                      }`}
+                    >
+                      {readAnnouncements.has(announcement.id) ? "已讀" : "未讀"}
+                    </span>
+                  )}
                 </div>
               </button>
             ))
@@ -334,6 +378,7 @@ export function AnnouncementDetails({ onClose, currentUser, isPreviewMode = fals
                   <div>發布者: {selectedAnnouncement.author}</div>
                   <div>{new Date(selectedAnnouncement.created_at).toLocaleDateString("zh-TW")}</div>
                 </div>
+
               </div>
 
               {selectedAnnouncement.image_url && (
@@ -365,18 +410,39 @@ export function AnnouncementDetails({ onClose, currentUser, isPreviewMode = fals
                     ]}
                   />
                 </div>
-                <button
-                  onClick={handleToggleLike}
-                  disabled={!currentUser}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                    hasLiked
-                      ? "bg-[var(--theme-accent)] text-[var(--theme-bg-primary)]"
-                      : "bg-[var(--theme-bg-secondary)] text-[var(--theme-accent)] hover:bg-[var(--theme-accent-light)]"
-                  } ${!currentUser ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  <span className="material-icons">favorite</span>
-                  <span>{currentLikes.size}</span>
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={handleToggleLike}
+                    disabled={!currentUser}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                      hasLiked
+                        ? "bg-[var(--theme-accent)] text-[var(--theme-bg-primary)]"
+                        : "bg-[var(--theme-bg-secondary)] text-[var(--theme-accent)] hover:bg-[var(--theme-accent-light)]"
+                    } ${!currentUser ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    <span className="material-icons">favorite</span>
+                    <span>{currentLikes.size}</span>
+                  </button>
+
+                  {!isPreviewMode && currentUser?.id && (
+                    <button
+                      onClick={handleMarkAsRead}
+                      disabled={markingRead || readAnnouncements.has(selectedAnnouncement.id)}
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
+                        readAnnouncements.has(selectedAnnouncement.id)
+                          ? "bg-emerald-500/15 text-emerald-400 cursor-default"
+                          : "bg-[var(--theme-bg-secondary)] text-emerald-400 hover:bg-emerald-500/10"
+                      } ${markingRead ? "opacity-60 cursor-wait" : ""}`}
+                    >
+                      <span className="material-icons text-base">done</span>
+                      {readAnnouncements.has(selectedAnnouncement.id)
+                        ? "已讀"
+                        : markingRead
+                          ? "標記中..."
+                          : "標記已讀"}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div>

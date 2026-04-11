@@ -99,7 +99,9 @@ export async function submitVote(voteRecord: VoteRecord): Promise<{ success: boo
 
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      return { success: false, error: data.error || "投票失敗" }
+      const msg = data.error || "投票失敗"
+      const detail = data.details ? `（${data.details}）` : ""
+      return { success: false, error: `${msg}${detail}` }
     }
 
     return { success: true }

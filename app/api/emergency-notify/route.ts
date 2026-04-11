@@ -244,34 +244,15 @@ async function getLineTargetsByRoles(supabase: any, roles: string[]) {
   let totalTargets = 0
   let boundTargets = 0
 
-  const normalizeRole = (v: unknown) => String(v || "").trim().toLowerCase()
-  const roleAliasMap: Record<string, string[]> = {
-    committee: ["committee", "committee_member", "member_committee", "管委會", "管委"],
-    admin: ["admin", "administrator", "管理員"],
-    guard: ["guard", "security", "vendor", "警衛"],
-    resident: ["resident", "住戶"],
-  }
-
-  const acceptedRoles = new Set<string>()
-  for (const role of roles) {
-    const key = normalizeRole(role)
-    const aliases = roleAliasMap[key] || [role]
-    for (const alias of aliases) {
-      acceptedRoles.add(normalizeRole(alias))
-    }
-  }
-
-  const { data: profiles } = await supabase
+  const { data: roleProfiles } = await supabase
     .from("profiles")
-    .select("id, role, line_user_id")
+    .select("id, line_user_id")
+    .in("role", roles)
 
-  const matchedProfiles = (profiles || []).filter((p: any) => acceptedRoles.has(normalizeRole(p?.role)))
-
-  totalTargets = matchedProfiles.length
-  matchedProfiles.forEach((p: any) => {
-    const lineUserId = String(p?.line_user_id || "").trim()
-    if (lineUserId) {
-      lineUserIds.add(lineUserId)
+  totalTargets = (roleProfiles || []).length
+  ;(roleProfiles || []).forEach((p: any) => {
+    if (p?.line_user_id) {
+      lineUserIds.add(p.line_user_id)
       boundTargets++
     }
   })
@@ -498,26 +479,12 @@ export async function POST(req: NextRequest) {
     let lineFailed = 0
     let lineError = ""
     let lineTargetCount = 0
-    let lineTargetLabel = "管理員"
 
     try {
       const lineClient = getLineClient()
-      let lineTargets: string[] = []
-      if (requiresCommitteeReview) {
-        const committeeTargets = await getLineTargetsByRoles(supabase, ["committee"])
-        lineTargets = committeeTargets.ids
-        lineTargetLabel = "管委會成員"
-
-        if (lineTargets.length === 0) {
-          const fallbackAdminTargets = await getLineTargetsByRoles(supabase, ["admin"])
-          lineTargets = fallbackAdminTargets.ids
-          lineTargetLabel = "管理員（管委會未綁定，已啟用備援）"
-        }
-      } else {
-        const emergencyTargets = await getEmergencyLineTargets(supabase)
-        lineTargets = emergencyTargets.ids
-        lineTargetLabel = "管理員"
-      }
+      const { ids: lineTargets } = requiresCommitteeReview
+        ? await getLineTargetsByRoles(supabase, ["committee"])
+        : await getEmergencyLineTargets(supabase)
       lineTargetCount = lineTargets.length
 
       const message = requiresCommitteeReview
@@ -578,8 +545,6 @@ export async function POST(req: NextRequest) {
         incident_status: incidentStatus,
         notification_category: routing.category,
         iot_command: routing.iotCommand,
-        line_target_count: lineTargetCount,
-        line_target_label: lineTargetLabel,
         line_error: lineError || undefined,
         iot_error: iotError || undefined,
         notification_event_error: notificationEventError || undefined,
@@ -606,7 +571,7 @@ export async function POST(req: NextRequest) {
         lineFailed,
         lineMessage: lineDeliveryOk && lineSent > 0
           ? requiresCommitteeReview
-            ? `✅ 已送交管委會驗證\n已發送給 ${lineSent} 位${lineTargetLabel}${lineNotBound > 0 ? `\n（${lineNotBound} 人 LINE 未綁定，已跳過）` : ""}`
+            ? `✅ 已送交管委會驗證\n已發送給 ${lineSent} 位管委會成員${lineNotBound > 0 ? `\n（${lineNotBound} 人 LINE 未綁定，已跳過）` : ""}`
             : `✅ ${routing.title}已推播\n已發送給 ${lineSent} 位管理員${lineNotBound > 0 ? `\n（${lineNotBound} 人 LINE 未綁定，已跳過）` : ""}`
           : `⚠️ LINE 推播未完成\n${lineError || "無可推播對象"}`,
       },

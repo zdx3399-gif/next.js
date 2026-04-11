@@ -9,6 +9,7 @@ import { HelpHint } from "@/components/ui/help-hint"
 interface KnowledgeBaseProps {
   currentUser: User | null
 }
+
 export function KnowledgeBase({ currentUser }: KnowledgeBaseProps) {
   const [view, setView] = useState<"list" | "detail">("list")
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null)

@@ -14,7 +14,11 @@ function getSupabase() {
     process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!url || !serviceRoleKey) {
     throw new Error("Missing Supabase env for emergency review API")
@@ -36,18 +40,41 @@ function getLineClient() {
 
 async function getLineTargetsByRoles(supabase: any, roles: string[]) {
   const lineUserIds = new Set<string>()
-  const { data: roleProfiles } = await supabase
-    .from("profiles")
-    .select("id, line_user_id")
-    .in("role", roles)
+  const normalizeRole = (v: unknown) => String(v || "").trim().toLowerCase()
+  const roleAliasMap: Record<string, string[]> = {
+    committee: ["committee", "committee_member", "member_committee", "管委會", "管委"],
+    admin: ["admin", "administrator", "管理員"],
+    guard: ["guard", "security", "vendor", "警衛"],
+    resident: ["resident", "住戶"],
+  }
 
-  ;(roleProfiles || []).forEach((p: any) => {
-    if (p?.line_user_id) {
-      lineUserIds.add(p.line_user_id)
+  const acceptedRoles = new Set<string>()
+  for (const role of roles) {
+    const key = normalizeRole(role)
+    const aliases = roleAliasMap[key] || [role]
+    for (const alias of aliases) {
+      acceptedRoles.add(normalizeRole(alias))
+    }
+  }
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, role, line_user_id")
+
+  const matchedProfiles = (profiles || []).filter((p: any) => acceptedRoles.has(normalizeRole(p?.role)))
+
+  matchedProfiles.forEach((p: any) => {
+    const lineUserId = String(p?.line_user_id || "").trim()
+    if (lineUserId) {
+      lineUserIds.add(lineUserId)
     }
   })
 
-  return [...lineUserIds]
+  return {
+    ids: [...lineUserIds],
+    totalTargets: matchedProfiles.length,
+    boundTargets: lineUserIds.size,
+  }
 }
 
 function resolveNotificationRouting(typeRaw: string, descriptionRaw: string): NotificationRouting {
@@ -185,6 +212,8 @@ export async function POST(req: NextRequest) {
     let lineSent = 0
     let lineFailed = 0
     let lineError = ""
+    let lineTargetCount = 0
+    let lineTargetLabel = "管理端人員"
 
     if (action === "approve") {
       const routing = resolveNotificationRouting(incident.event_type || "", incident.description || "")
@@ -235,7 +264,29 @@ export async function POST(req: NextRequest) {
 
       try {
         const lineClient = getLineClient()
-        const lineTargets = await getLineTargetsByRoles(supabase, ["admin", "guard", "committee"])
+        const targetResult = await getLineTargetsByRoles(supabase, ["admin", "guard", "committee"])
+        let lineTargets = targetResult.ids
+        lineTargetCount = lineTargets.length
+
+        if (lineTargets.length === 0) {
+          const { data: reviewerProfile } = await supabase
+            .from("profiles")
+            .select("line_user_id")
+            .eq("id", reviewerId)
+            .maybeSingle()
+
+          const fallbackLineId = String(reviewerProfile?.line_user_id || "").trim()
+          if (fallbackLineId) {
+            lineTargets = [fallbackLineId]
+            lineTargetCount = 1
+            lineTargetLabel = "審核者本人（備援）"
+          }
+        }
+
+        if (lineTargets.length === 0) {
+          lineError = "無可推播目標（管理端角色未綁定 LINE）"
+        }
+
         const message =
           `🚨 ${routing.title}\n` +
           `類型：${incident.event_type || "未分類"}\n` +
@@ -253,6 +304,10 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        if (!lineError && lineTargets.length > 0 && lineSent === 0) {
+          lineError = "LINE 推播嘗試失敗（全部送達失敗）"
+        }
+
         await createNotificationEvent(supabase, incident.id, routing.title, message)
       } catch (error) {
         lineError = error instanceof Error ? error.message : "LINE 廣播失敗"
@@ -266,6 +321,8 @@ export async function POST(req: NextRequest) {
       iotSent,
       iotError: iotError || undefined,
       lineSent,
+      lineTargetCount,
+      lineTargetLabel,
       lineFailed,
       lineError: lineError || undefined,
     })

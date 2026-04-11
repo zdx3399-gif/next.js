@@ -317,6 +317,15 @@ function resolveNotificationRouting(typeRaw: string, noteRaw: string): Notificat
   }
 }
 
+function normalizeRole(value: unknown): string {
+  return String(value || "").trim().toLowerCase()
+}
+
+function isResidentRole(value: unknown): boolean {
+  const role = normalizeRole(value)
+  return role === "resident" || role === "住戶"
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase()
@@ -396,7 +405,7 @@ export async function POST(req: NextRequest) {
       reporterRole = reporterProfile?.role || "unknown"
     }
 
-    const requiresCommitteeReview = reporterRole === "resident"
+    const requiresCommitteeReview = isResidentRole(reporterRole)
     const incidentStatus = requiresCommitteeReview ? "pending" : "submitted"
 
     const nowIso = new Date().toISOString()
@@ -509,9 +518,27 @@ export async function POST(req: NextRequest) {
         lineTargetLabel = "管委會成員"
 
         if (lineTargets.length === 0) {
-          const fallbackAdminTargets = await getLineTargetsByRoles(supabase, ["admin"])
-          lineTargets = fallbackAdminTargets.ids
-          lineTargetLabel = "管理員（管委會未綁定，已啟用備援）"
+          const fallbackPrivilegedTargets = await getLineTargetsByRoles(supabase, ["admin", "guard", "committee"])
+          lineTargets = fallbackPrivilegedTargets.ids
+          lineTargetLabel = "管理端人員（管委會名單為空，已啟用備援）"
+        }
+
+        if (lineTargets.length === 0) {
+          const { data: allBoundProfiles } = await supabase
+            .from("profiles")
+            .select("line_user_id")
+            .not("line_user_id", "is", null)
+
+          const boundLineIds = new Set<string>()
+          ;(allBoundProfiles || []).forEach((p: any) => {
+            const lineUserId = String(p?.line_user_id || "").trim()
+            if (lineUserId) boundLineIds.add(lineUserId)
+          })
+
+          lineTargets = [...boundLineIds]
+          if (lineTargets.length > 0) {
+            lineTargetLabel = "全體已綁定帳號（最終備援）"
+          }
         }
       } else {
         const emergencyTargets = await getEmergencyLineTargets(supabase)

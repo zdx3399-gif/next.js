@@ -38,6 +38,15 @@ function getLineClient() {
   return new Client({ channelAccessToken, channelSecret: channelSecret || "unused" })
 }
 
+function normalizeRole(value: unknown): string {
+  return String(value || "").trim().toLowerCase()
+}
+
+function canReviewEmergency(value: unknown): boolean {
+  const role = normalizeRole(value)
+  return ["committee", "committee_member", "member_committee", "管委會", "管委", "admin", "administrator", "管理員"].includes(role)
+}
+
 async function getLineTargetsByRoles(supabase: any, roles: string[]) {
   const lineUserIds = new Set<string>()
   const normalizeRole = (v: unknown) => String(v || "").trim().toLowerCase()
@@ -159,7 +168,7 @@ export async function POST(req: NextRequest) {
       .eq("id", reviewerId)
       .maybeSingle()
 
-    if (!reviewer || !["committee", "admin"].includes(String(reviewer.role || ""))) {
+    if (!reviewer || !canReviewEmergency(reviewer.role)) {
       return NextResponse.json(
         { success: false, error: "只有管委會或管理員可審核" },
         { status: 403 },

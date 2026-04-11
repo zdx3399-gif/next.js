@@ -12,22 +12,11 @@ interface EmergencyButtonsProps {
 }
 
 const emergencyTypes = [
-  { type: "火災", note: "現場有火源或濃煙", emoji: "🔥", icon: "local_fire_department" },
-  { type: "水災", note: "漏水、淹水或管線破裂", emoji: "💧", icon: "water_drop" },
-  { type: "停電", note: "區域停電或電力異常", emoji: "⚡", icon: "bolt" },
-  { type: "設備故障", note: "公共設備異常或失效", emoji: "🔧", icon: "build" },
-  { type: "可疑人員", note: "陌生人員闖入警告", emoji: "🕵️", icon: "warning" },
-  { type: "其他", note: "其他需要立即通報的緊急事件", emoji: "⚠️", icon: "report_problem" },
+  { type: "救護車119", note: "醫療緊急狀況", emoji: "🚑", icon: "local_hospital" },
+  { type: "報警110", note: "治安緊急狀況", emoji: "🚨", icon: "report_problem" },
+  { type: "AED", note: "需要AED急救設備", emoji: "❤️", icon: "favorite" },
+  { type: "可疑人員", note: "陌生人員闖入警告", emoji: "⚠️", icon: "warning" },
 ]
-
-function getStatusLabel(status?: string) {
-  if (status === "pending") return "待管委會驗證"
-  if (status === "submitted") return "已送出"
-  if (status === "approved") return "已核准"
-  if (status === "rejected") return "已駁回"
-  if (status === "draft") return "草稿"
-  return "未分類"
-}
 
 export function EmergencyButtons({ userId, userName, onTrigger, variant = "full" }: EmergencyButtonsProps) {
   const { triggerEmergency, emergencies, reload } = useEmergencies(false)
@@ -124,16 +113,34 @@ export function EmergencyButtons({ userId, userName, onTrigger, variant = "full"
   if (variant === "dashboard") {
     return (
       <div className="grid grid-cols-2 gap-2">
-        {emergencyTypes.slice(0, 4).map((item) => (
-          <button
-            key={item.type}
-            onClick={() => quickTrigger(item.type, item.note)}
-            disabled={submitting}
-            className="bg-[#f44336] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#d32f2f] transition-colors disabled:opacity-60"
-          >
-            {item.emoji} {item.type}
-          </button>
-        ))}
+        <button
+          onClick={() => quickTrigger("救護車119", "醫療緊急狀況")}
+          disabled={submitting}
+          className="bg-[#f44336] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#d32f2f] transition-colors disabled:opacity-60"
+        >
+          緊急救護 (119)
+        </button>
+        <button
+          onClick={() => quickTrigger("報警110", "治安緊急狀況")}
+          disabled={submitting}
+          className="bg-[#ff9800] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#f57c00] transition-colors disabled:opacity-60"
+        >
+          緊急報警 (110)
+        </button>
+        <button
+          onClick={() => quickTrigger("訪客通知", "訪客到達通知")}
+          disabled={submitting}
+          className="bg-[#0284c7] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#0369a1] transition-colors disabled:opacity-60"
+        >
+          訪客通知
+        </button>
+        <button
+          onClick={() => quickTrigger("包裹通知", "包裹到件通知")}
+          disabled={submitting}
+          className="bg-[#0f766e] text-white py-2 px-3 rounded-lg font-bold hover:bg-[#115e59] transition-colors disabled:opacity-60"
+        >
+          包裹通知
+        </button>
       </div>
     )
   }
@@ -216,19 +223,14 @@ export function EmergencyButtons({ userId, userName, onTrigger, variant = "full"
       )}
 
       <div className="mt-5 border-t border-[var(--theme-border)] pt-4">
-        <h3 className="font-bold text-[var(--theme-accent)] mb-2">我的通報紀錄</h3>
+        <h3 className="font-bold text-[var(--theme-accent)] mb-2">我的報緊紀錄</h3>
         <div className="space-y-2 max-h-72 overflow-auto">
           {myRecords.length === 0 ? (
             <div className="text-sm text-[var(--theme-text-muted)]">目前沒有通報紀錄</div>
           ) : (
             myRecords.map((item) => (
               <div key={item.id} className="p-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-card)]">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-semibold text-[var(--theme-text-primary)]">{item.type}</div>
-                  <span className="px-2 py-1 text-xs rounded-md border border-[var(--theme-border)] text-[var(--theme-text-secondary)]">
-                    {getStatusLabel(item.status)}
-                  </span>
-                </div>
+                <div className="font-semibold text-[var(--theme-text-primary)]">{item.type}</div>
                 <div className="text-sm text-[var(--theme-text-muted)] whitespace-pre-line">{item.note}</div>
                 <div className="text-xs text-[var(--theme-text-muted)] mt-1">
                   {item.created_at ? new Date(item.created_at).toLocaleString("zh-TW", { hour12: false }) : ""}
@@ -240,7 +242,7 @@ export function EmergencyButtons({ userId, userName, onTrigger, variant = "full"
       </div>
 
       <div className="text-[var(--theme-text-muted)] text-sm text-center flex items-center justify-center gap-2">
-        住戶通報會先送交管委會驗證，核准後才啟動正式通知
+        點擊上方按鈕可立即通知管理員和相關單位
         <HelpHint title="住戶端通報提醒" description="系統會保留通報時間與發起人。若為誤觸，請盡快聯繫管理室說明。" workflow={["送出後先確認是否為正確通報。","若誤觸請立即聯繫管理室更正。"]} logic={["通報紀錄屬安全事件資料，需保留可追溯性。"]} align="center" />
       </div>
     </div>

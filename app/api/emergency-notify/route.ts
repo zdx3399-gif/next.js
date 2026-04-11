@@ -15,129 +15,6 @@ interface NotificationRouting {
   title: string
 }
 
-function buildCommitteeReviewFlexMessage(
-  incidentId: string,
-  type: string,
-  location: string,
-  description: string,
-  imageUrl?: string,
-) {
-  const bodyContents: any[] = [
-    {
-      type: "text",
-      text: "⚠️ 緊急事件待審核",
-      weight: "bold",
-      size: "xl",
-      color: "#2F3B52",
-      wrap: true,
-    },
-    {
-      type: "separator",
-      margin: "md",
-    },
-    {
-      type: "text",
-      text: `類型：${type || "未填寫"}`,
-      size: "lg",
-      color: "#2F3B52",
-      wrap: true,
-      margin: "lg",
-    },
-    {
-      type: "text",
-      text: `地點：${location || "未填寫"}`,
-      size: "lg",
-      color: "#2F3B52",
-      wrap: true,
-      margin: "md",
-    },
-    {
-      type: "text",
-      text: `描述：${description || "（無）"}`,
-      size: "lg",
-      color: "#2F3B52",
-      wrap: true,
-      margin: "md",
-    },
-    {
-      type: "text",
-      text: `附圖：${imageUrl ? "有" : "無"}`,
-      size: "lg",
-      color: "#2F3B52",
-      margin: "md",
-    },
-    {
-      type: "text",
-      text: "請確認是否發布通知",
-      size: "md",
-      color: "#5A6780",
-      margin: "xl",
-      wrap: true,
-    },
-  ]
-
-  const bubble: any = {
-    type: "bubble",
-    size: "mega",
-    body: {
-      type: "box",
-      layout: "vertical",
-      spacing: "sm",
-      backgroundColor: "#F5F5F7",
-      paddingAll: "20px",
-      contents: bodyContents,
-    },
-    footer: {
-      type: "box",
-      layout: "vertical",
-      spacing: "md",
-      backgroundColor: "#F5F5F7",
-      paddingAll: "20px",
-      contents: [
-        {
-          type: "button",
-          style: "primary",
-          color: "#2D8CDB",
-          height: "sm",
-          action: {
-            type: "postback",
-            label: "確認發布",
-            data: `action=emergency_review&decision=approve&incidentId=${incidentId}`,
-            displayText: "確認發布",
-          },
-        },
-        {
-          type: "button",
-          style: "secondary",
-          height: "sm",
-          action: {
-            type: "postback",
-            label: "駁回",
-            data: `action=emergency_review&decision=reject&incidentId=${incidentId}`,
-            displayText: "駁回",
-          },
-        },
-      ],
-    },
-  }
-
-  if (imageUrl) {
-    bubble.hero = {
-      type: "image",
-      url: imageUrl,
-      size: "full",
-      aspectRatio: "20:13",
-      aspectMode: "cover",
-    }
-  }
-
-  return {
-    type: "flex",
-    altText: `緊急事件待審核：${type || "未分類"}`,
-    contents: bubble,
-  }
-}
-
 function composeIncidentDescription(note: string, description: string) {
   const sections = []
 
@@ -307,7 +184,6 @@ export async function POST(req: NextRequest) {
     const note = String(body?.note || "").trim()
     const rawLocation = String(body?.location || "").trim()
     const rawDescription = String(body?.description || "").trim()
-    const rawImageUrl = String(body?.image_url || "").trim()
     const iotDeviceId = String(body?.iot_device_id || "emergency-broadcast").trim() || "emergency-broadcast"
     const reportedByIdRaw = body?.reported_by_id ? String(body.reported_by_id).trim() : null
     const reportedByName = String(body?.reported_by_name || "未知").trim()
@@ -388,7 +264,6 @@ export async function POST(req: NextRequest) {
       event_type: type,
       location,
       description: incidentDescription,
-      image_url: rawImageUrl || null,
       status: incidentStatus,
       created_at: nowIso,
       updated_at: nowIso,
@@ -397,7 +272,7 @@ export async function POST(req: NextRequest) {
     const { data: insertedEmergency, error: insertError } = await supabase
       .from("emergency_incidents")
       .insert([insertPayload])
-      .select("id, event_type, location, description, image_url, status, created_at")
+      .select("id, event_type, location, description, status, created_at")
       .single()
 
     if (insertError) {
@@ -488,27 +363,23 @@ export async function POST(req: NextRequest) {
       lineTargetCount = lineTargets.length
 
       const message = requiresCommitteeReview
-        ? buildCommitteeReviewFlexMessage(
-            insertedEmergency?.id || "",
-            type,
-            location,
-            incidentDescription || "（無）",
-            insertedEmergency?.image_url || undefined,
-          )
-        : {
-            type: "text",
-            text:
-              `${routing.category === "emergency" ? "🚨" : routing.category === "package" ? "📦" : "👤"} ${routing.title}\n` +
-              `類型：${type}\n` +
-              `發起人：${resolvedReportedByName || "未知"}\n` +
-              `地點：${location}\n` +
-              `時間：${new Date(nowIso).toLocaleString("zh-TW", { hour12: false })}\n` +
-              `備註：${incidentDescription || "（無）"}`,
-          }
+        ? `📝 住戶緊急通報待管委會驗證\n` +
+          `類型：${type}\n` +
+          `發起人：${resolvedReportedByName || "未知"}\n` +
+          `地點：${location}\n` +
+          `時間：${new Date(nowIso).toLocaleString("zh-TW", { hour12: false })}\n` +
+          `內容：${incidentDescription || "（無）"}\n\n` +
+          `請至後台緊急事件管理進行審核。`
+        : `${routing.category === "emergency" ? "🚨" : routing.category === "package" ? "📦" : "👤"} ${routing.title}\n` +
+          `類型：${type}\n` +
+          `發起人：${resolvedReportedByName || "未知"}\n` +
+          `地點：${location}\n` +
+          `時間：${new Date(nowIso).toLocaleString("zh-TW", { hour12: false })}\n` +
+          `備註：${incidentDescription || "（無）"}`
 
       for (const to of lineTargets) {
         try {
-          await lineClient.pushMessage(to, message as any)
+          await lineClient.pushMessage(to, { type: "text", text: message })
           lineSent++
         } catch {
           lineFailed++

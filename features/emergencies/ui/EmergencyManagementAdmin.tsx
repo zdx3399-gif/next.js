@@ -15,12 +15,10 @@ interface EmergencyManagementAdminProps {
 }
 
 const emergencyTypes = [
-  { icon: "local_fire_department", title: "火災", type: "火災", note: "現場有火源或濃煙" },
-  { icon: "water_drop", title: "水災", type: "水災", note: "漏水、淹水或管線破裂" },
-  { icon: "bolt", title: "停電", type: "停電", note: "區域停電或電力異常" },
-  { icon: "build", title: "設備故障", type: "設備故障", note: "公共設備異常或失效" },
+  { icon: "local_hospital", title: "救護車 119", type: "救護車119", note: "醫療緊急狀況" },
+  { icon: "report_problem", title: "報警 110", type: "報警110", note: "治安緊急狀況" },
+  { icon: "favorite", title: "AED", type: "AED", note: "需要AED急救設備" },
   { icon: "warning", title: "可疑人員", type: "可疑人員", note: "陌生人員闖入警告" },
-  { icon: "report_problem", title: "其他", type: "其他", note: "其他需要立即處理的緊急事件" },
 ]
 
 // 預覽模式的模擬資料
@@ -290,7 +288,7 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)]">
                       {row.status === "pending" && row.id ? (
-                        <div className="flex gap-2">
+                        <div className="grid grid-cols-2 gap-2 w-[92px]">
                           <button
                             onClick={() => reviewEmergency(row.id!, "approve", currentUserId)}
                             className="p-2 rounded-lg border border-[var(--theme-border)] text-green-700 hover:bg-green-50 transition-all"
@@ -304,6 +302,20 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
                             title="駁回"
                           >
                             <span className="material-icons text-lg">cancel</span>
+                          </button>
+                          <button
+                            onClick={() => openEditForm(row)}
+                            className="p-2 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-primary)] hover:bg-[var(--theme-accent-light)] transition-all"
+                            title="編輯"
+                          >
+                            <span className="material-icons text-lg">edit</span>
+                          </button>
+                          <button
+                            onClick={() => row.id && deleteEmergency(row.id)}
+                            className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
+                            title="刪除"
+                          >
+                            <span className="material-icons text-lg">delete</span>
                           </button>
                         </div>
                       ) : (

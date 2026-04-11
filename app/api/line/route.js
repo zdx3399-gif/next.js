@@ -848,17 +848,12 @@ export async function POST(req) {
               ? `\nIOT：${reviewData?.iotSent ? '已觸發' : '未觸發'}`
               : '';
             const lineSummary = decision === 'approve'
-              ? reviewData?.lineError
-                ? `\nLINE：未完成（${reviewData.lineError}）`
-                : `\nLINE：已通知 ${Number(reviewData?.lineSent || 0)} 人`
-              : '';
-            const lineTargetSummary = decision === 'approve' && Number(reviewData?.lineTargetCount || 0) > 0
-              ? `\nLINE 目標：${Number(reviewData?.lineTargetCount || 0)} 人（${reviewData?.lineTargetLabel || '管理端人員'}）`
+              ? `\nLINE：已通知 ${Number(reviewData?.lineSent || 0)} 人`
               : '';
 
             await client.replyMessage(replyToken, {
               type: 'text',
-              text: `已${actionLabel}此緊急通報。${iotSummary}${lineSummary}${lineTargetSummary}`,
+              text: `已${actionLabel}此緊急通報。${iotSummary}${lineSummary}`,
             });
           } catch (reviewErr) {
             console.error('[Postback Emergency Review Error]', reviewErr);

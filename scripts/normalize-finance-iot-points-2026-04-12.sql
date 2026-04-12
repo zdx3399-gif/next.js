@@ -365,4 +365,89 @@ begin
 end
 $$;
 
+-- -----------------------------------------------------------------------------
+-- D. Cleanup: remove unused dictionaries (expense_categories / iot_locations)
+-- -----------------------------------------------------------------------------
+
+do $$
+begin
+  -- Finance cleanup dependencies.
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'finance_expenses'
+  ) then
+    drop trigger if exists trg_finance_expenses_category_consistency on public.finance_expenses;
+
+    if exists (
+      select 1
+      from information_schema.table_constraints
+      where table_schema = 'public'
+        and table_name = 'finance_expenses'
+        and constraint_name = 'finance_expenses_category_id_fkey'
+    ) then
+      alter table public.finance_expenses
+        drop constraint finance_expenses_category_id_fkey;
+    end if;
+
+    if exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'finance_expenses'
+        and column_name = 'category_id'
+    ) then
+      alter table public.finance_expenses
+        drop column category_id;
+    end if;
+  end if;
+
+  drop function if exists public.set_expense_category_consistency();
+  drop index if exists idx_finance_expenses_category_id;
+  drop index if exists ux_expense_categories_name_ci;
+  drop table if exists public.expense_categories;
+end
+$$;
+
+do $$
+begin
+  -- IoT cleanup dependencies.
+  drop view if exists public.v_iot_devices_with_location;
+
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'iot_devices'
+  ) then
+    if exists (
+      select 1
+      from information_schema.table_constraints
+      where table_schema = 'public'
+        and table_name = 'iot_devices'
+        and constraint_name = 'iot_devices_location_id_fkey'
+    ) then
+      alter table public.iot_devices
+        drop constraint iot_devices_location_id_fkey;
+    end if;
+
+    if exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'iot_devices'
+        and column_name = 'location_id'
+    ) then
+      alter table public.iot_devices
+        drop column location_id;
+    end if;
+  end if;
+
+  drop index if exists idx_iot_devices_location_id;
+  drop index if exists ux_iot_locations_name_ci;
+  drop table if exists public.iot_locations;
+end
+$$;
+
 commit;

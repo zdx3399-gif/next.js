@@ -14,7 +14,8 @@ const supabase = createClient(
     }
   }
 );
-import { chat } from '@/lib/ai-chat';
+import { chat } from '../../../grokmain.js';
+import 'dotenv/config';
 
 export const runtime = 'nodejs';
 

@@ -211,33 +211,33 @@ export async function deductPoints(
     return false
   }
 
-  // 更新餘額
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ points_balance: profile.points_balance - amount })
-    .eq("id", userId)
-
-  if (updateError) {
-    console.error("Error deducting points:", updateError)
-    await logFacilityAudit({
-      action: "deduct_points",
-      targetId: userId,
-      reason: updateError.message,
-      status: "failed",
-      afterState: { amount, transactionType },
-      errorCode: updateError.message,
-    })
-    return false
-  }
-
-  // 記錄交易
-  await supabase.from("points_transactions").insert({
+  // 寫入交易明細
+  const { error: txError } = await supabase.from("points_transactions").insert({
     user_id: userId,
     amount: -amount,
     transaction_type: transactionType,
     reference_id: referenceId,
     description,
   })
+
+  if (txError) {
+    console.error("Error deducting points:", txError)
+    await logFacilityAudit({
+      action: "deduct_points",
+      targetId: userId,
+      reason: txError.message,
+      status: "failed",
+      afterState: { amount, transactionType },
+      errorCode: txError.message,
+    })
+    return false
+  }
+
+  // 直接更新餘額（delta 方式，相容於無觸發器的環境）
+  await supabase
+    .from("profiles")
+    .update({ points_balance: profile.points_balance - amount })
+    .eq("id", userId)
 
   await logFacilityAudit({
     action: "deduct_points",
@@ -260,33 +260,41 @@ export async function refundPoints(
   const supabase = getSupabaseClient()
   if (!supabase) return false
 
-  const { data: profile } = await supabase.from("profiles").select("points_balance").eq("id", userId).single()
-
-  const { error: updateError } = await supabase
+  // 取得當前餘額供直接更新用
+  const { data: profileForRefund } = await supabase
     .from("profiles")
-    .update({ points_balance: (profile?.points_balance || 0) + amount })
+    .select("points_balance")
     .eq("id", userId)
+    .single()
 
-  if (updateError) {
-    console.error("Error refunding points:", updateError)
-    await logFacilityAudit({
-      action: "refund_points",
-      targetId: userId,
-      reason: updateError.message,
-      status: "failed",
-      afterState: { amount, transactionType },
-      errorCode: updateError.message,
-    })
-    return false
-  }
-
-  await supabase.from("points_transactions").insert({
+  const { error: txError } = await supabase.from("points_transactions").insert({
     user_id: userId,
     amount: amount,
     transaction_type: transactionType,
     reference_id: referenceId,
     description,
   })
+
+  if (txError) {
+    console.error("Error refunding points:", txError)
+    await logFacilityAudit({
+      action: "refund_points",
+      targetId: userId,
+      reason: txError.message,
+      status: "failed",
+      afterState: { amount, transactionType },
+      errorCode: txError.message,
+    })
+    return false
+  }
+
+  // 直接更新餘額（delta 方式）
+  if (profileForRefund) {
+    await supabase
+      .from("profiles")
+      .update({ points_balance: (profileForRefund.points_balance ?? 0) + amount })
+      .eq("id", userId)
+  }
 
   await logFacilityAudit({
     action: "refund_points",
@@ -901,6 +909,7 @@ export async function checkBookingConflicts(
   endTime: string,
 ): Promise<boolean> {
   const supabase = getSupabaseClient()
+  if (!supabase) return false
   const { data: conflicts } = await supabase
     .from("facility_bookings")
     .select("*")
@@ -934,6 +943,7 @@ export async function createBooking(booking: {
   notes?: string
 }): Promise<void> {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
   const bookingUserContext = await resolveBookingUserContext(supabase, booking.user_id)
   const { error } = await supabase.from("facility_bookings").insert([
     {
@@ -953,6 +963,7 @@ export async function createBooking(booking: {
 
 export async function cancelBooking(bookingId: string): Promise<void> {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
   const { error } = await supabase.from("facility_bookings").update({ status: "cancelled" }).eq("id", bookingId)
 
   if (error) {
@@ -965,6 +976,7 @@ export async function cancelBooking(bookingId: string): Promise<void> {
 
 export async function createFacility(facility: Omit<Facility, "id" | "created_at">): Promise<void> {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
   const { error } = await supabase.from("facilities").insert([facility])
   if (error) {
     await logFacilityAudit({ action: "create_facility", targetId: facility.name, reason: error.message, status: "failed", errorCode: error.message })
@@ -975,6 +987,7 @@ export async function createFacility(facility: Omit<Facility, "id" | "created_at
 
 export async function updateFacility(id: string, facility: Partial<Facility>): Promise<void> {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
   const { error } = await supabase.from("facilities").update(facility).eq("id", id)
   if (error) {
     await logFacilityAudit({ action: "update_facility", targetId: id, reason: error.message, status: "failed", errorCode: error.message })
@@ -985,6 +998,7 @@ export async function updateFacility(id: string, facility: Partial<Facility>): P
 
 export async function deleteFacility(id: string): Promise<void> {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
   const { error } = await supabase.from("facilities").delete().eq("id", id)
   if (error) {
     await logFacilityAudit({ action: "delete_facility", targetId: id, reason: error.message, status: "failed", errorCode: error.message })

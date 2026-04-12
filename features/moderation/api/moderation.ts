@@ -21,6 +21,7 @@ export interface ModerationQueueItem {
 
 export async function getModerationQueue(filters?: { status?: string; priority?: string; assignedTo?: string }) {
   const supabase = getSupabaseClient()
+  if (!supabase) return []
   let query = supabase
     .from("moderation_queue")
     .select("*")
@@ -49,6 +50,7 @@ export async function getModerationQueue(filters?: { status?: string; priority?:
 
 export async function getModerationItemDetail(itemId: string) {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
   const { data: queueItem, error } = await supabase.from("moderation_queue").select("*").eq("id", itemId).single()
 
   if (error) throw error
@@ -71,6 +73,7 @@ export async function getModerationItemDetail(itemId: string) {
 
 export async function assignModerationItem(itemId: string, userId: string) {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
 
   const { data, error } = await supabase
     .from("moderation_queue")
@@ -96,6 +99,7 @@ export async function resolveModerationItem(
   userId: string,
 ) {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
 
   // 獲取審核項目
   const { data: queueItem } = await supabase.from("moderation_queue").select("*").eq("id", itemId).single()
@@ -191,6 +195,7 @@ export async function resolveModerationItem(
 
 export async function getReportsForTarget(targetType: string, targetId: string) {
   const supabase = getSupabaseClient()
+  if (!supabase) return []
   const { data, error } = await supabase
     .from("reports")
     .select("*")

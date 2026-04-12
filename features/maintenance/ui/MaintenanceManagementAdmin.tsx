@@ -520,16 +520,17 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
           equipment: formData.equipment,
           item: formData.item,
           description: formData.description,
-          reported_by: formData.reported_by_name,
           reported_by_id: formData.reported_by_id,
+          assignment_snapshot: formData.handler
+            ? { assignee_name: formData.handler, saved_at: new Date().toISOString() }
+            : null,
           ...sharedSaveData,
         }
 
         const createVariants: Array<Record<string, any>> = [
           { assignee: formData.handler },
           { handler: formData.handler },
-          { handler_name: formData.handler },
-          { worker_name: formData.handler },
+          {}, // fallback: assignment_snapshot already stores handler info
         ]
 
         let createError: any = null

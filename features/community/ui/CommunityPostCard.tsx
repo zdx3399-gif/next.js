@@ -59,6 +59,8 @@ interface PostCardProps {
     display_mode?: string
     display_name?: string | null
     moderation_reason?: string
+    ai_risk_level?: "low" | "medium" | "high" | null
+    moderated_by?: string | null
   }
   currentUserId?: string
   isAdmin?: boolean

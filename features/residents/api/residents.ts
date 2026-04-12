@@ -267,8 +267,10 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
     role,
     emergency_contact_name,
     emergency_contact_phone,
-    ...dbUpdates
+    ...restDbUpdates
   } = updates
+
+  const dbUpdates: Record<string, any> = { ...restDbUpdates }
 
   if (normalizedRole !== undefined) {
     dbUpdates.role = normalizedRole

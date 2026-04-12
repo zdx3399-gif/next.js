@@ -73,7 +73,7 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
   }
 
   const handleExportPDFViaAPI = async () => {
-    if (!meeting) return
+    if (!meeting?.id) return
     setExporting(true)
     setExportMessage("正在生成 PDF...")
     try {

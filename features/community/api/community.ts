@@ -33,6 +33,7 @@ export interface CommunityPost {
   post_type?: string
   likes_count?: number
   comments_count?: number
+  tags?: string[]
 }
 
 export interface PostComment {

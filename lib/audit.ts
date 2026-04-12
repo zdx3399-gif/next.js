@@ -269,6 +269,8 @@ export const TARGET_TYPE_LABELS: Record<AuditTargetType, string> = {
   announcement: "公告",
   vote: "投票",
   report: "檢舉",
+  emergency: "緊急事件",
+  maintenance: "維修",
   decryption_request: "解密申請",
   system: "系統",
 }

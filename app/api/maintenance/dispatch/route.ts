@@ -39,7 +39,8 @@ async function updateMaintenanceDispatch(
 ) {
   const normalizedUpdate = {
     scheduled_at: payload.scheduled_at,
-    estimated_cost: payload.estimated_cost || null,
+    estimated_cost: payload.estimated_cost ?? null,
+    cost: payload.estimated_cost ?? null,
     admin_note: payload.admin_note || null,
     status: 'progress',
     dispatched_at: new Date().toISOString(),
@@ -49,7 +50,7 @@ async function updateMaintenanceDispatch(
       worker_name: payload.worker_name,
       worker_phone: payload.worker_phone,
       scheduled_at: payload.scheduled_at,
-      estimated_cost: payload.estimated_cost || null,
+      estimated_cost: payload.estimated_cost ?? null,
       admin_note: payload.admin_note || null,
       saved_at: new Date().toISOString(),
     },
@@ -77,7 +78,8 @@ async function updateMaintenanceDispatch(
       worker_name: payload.worker_name,
       worker_phone: payload.worker_phone,
       scheduled_at: payload.scheduled_at,
-      estimated_cost: payload.estimated_cost || null,
+      estimated_cost: payload.estimated_cost ?? null,
+      cost: payload.estimated_cost ?? null,
       admin_note: payload.admin_note || null,
       status: 'progress',
       dispatched_at: new Date().toISOString(),
@@ -204,7 +206,7 @@ export async function POST(req: Request) {
       module: 'maintenance',
       status: 'success',
       beforeState: { status: maintenance.status || 'open' },
-      afterState: { status: 'progress', vendor_name, worker_name, scheduled_at, estimated_cost: estimated_cost || null },
+      afterState: { status: 'progress', vendor_name, worker_name, scheduled_at, estimated_cost: estimated_cost ?? null },
     })
 
     // 3) Find reporter's LINE user ID

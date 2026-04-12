@@ -47,6 +47,7 @@ async function notifyMeetingLine(meeting: Meeting, notificationType?: "pdf_added
 
 export async function getMeetingById(id: string): Promise<Meeting | null> {
   const supabase = getSupabaseClient()
+  if (!supabase) return null
   const { data, error } = await supabase.from("meetings").select("*").eq("id", id).single()
 
   if (error) {
@@ -58,6 +59,7 @@ export async function getMeetingById(id: string): Promise<Meeting | null> {
 
 export async function getMeetings(): Promise<Meeting[]> {
   const supabase = getSupabaseClient()
+  if (!supabase) return []
   const { data, error } = await supabase.from("meetings").select("*").order("time", { ascending: false })
 
   if (error) {
@@ -72,6 +74,7 @@ export async function createMeeting(
   userId?: string,
 ): Promise<Meeting | null> {
   const supabase = getSupabaseClient()
+  if (!supabase) return null
   const operator = getCurrentOperator()
   // 先保存會議到資料庫
   const { data, error } = await supabase
@@ -119,6 +122,7 @@ export async function createMeeting(
 
 export async function updateMeeting(id: string, meeting: Partial<Meeting>): Promise<Meeting | null> {
   const supabase = getSupabaseClient()
+  if (!supabase) return null
   const operator = getCurrentOperator()
   const { data, error } = await supabase.from("meetings").update(meeting).eq("id", id).select().single()
 
@@ -162,6 +166,7 @@ export async function updateMeeting(id: string, meeting: Partial<Meeting>): Prom
 
 export async function deleteMeeting(id: string): Promise<boolean> {
   const supabase = getSupabaseClient()
+  if (!supabase) return false
   const operator = getCurrentOperator()
   const { error } = await supabase.from("meetings").delete().eq("id", id)
 

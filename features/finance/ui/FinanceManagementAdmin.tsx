@@ -501,10 +501,10 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
 
       const payload = await res.json().catch(() => null)
       if (!res.ok) {
-        throw new Error(payload?.error || "催繳通知發送失敗")
+        throw new Error(payload?.message || payload?.error || "催繳通知發送失敗")
       }
 
-      alert("催繳通知已送出")
+      alert(payload?.message || "催繳通知已送出")
     } catch (error: any) {
       alert(error?.message || "催繳通知發送失敗")
     } finally {

@@ -193,6 +193,8 @@ export async function markPackageAsPickedUp(
     arrived_at: new Date().toISOString(),
     status: "picked_up",
     picked_up_by: pickedUpBy,
+    recipient_name: "",
+    recipient_room: "",
   }
 }
 

@@ -227,7 +227,7 @@ export function DispatchModal({ isOpen, onClose, maintenanceId, onSuccess }: Dis
                 onChange={(e) => handleChange("vendor_name", e.target.value)}
                 required
                 disabled={isLoading || loadingVendors}
-                className="w-full p-3 rounded-xl theme-input outline-none focus:ring-2 focus:ring-blue-500/50 transition-all disabled:opacity-50"
+                className="w-full p-3 rounded-xl theme-select text-[var(--theme-text-primary)] outline-none focus:ring-2 focus:ring-blue-500/50 transition-all disabled:opacity-50"
               >
                 <option value="">
                   {loadingVendors ? "載入中..." : vendors.length === 0 ? "-- 尚無廠商資料 --" : "-- 請選擇廠商 --"}
@@ -255,7 +255,7 @@ export function DispatchModal({ isOpen, onClose, maintenanceId, onSuccess }: Dis
                 onChange={(e) => handleChange("worker_name", e.target.value)}
                 required
                 disabled={isLoading || !formData.vendor_name}
-                className="w-full p-3 rounded-xl theme-input outline-none focus:ring-2 focus:ring-blue-500/50 transition-all disabled:opacity-50"
+                className="w-full p-3 rounded-xl theme-select text-[var(--theme-text-primary)] outline-none focus:ring-2 focus:ring-blue-500/50 transition-all disabled:opacity-50"
               >
                 <option value="">
                   {!formData.vendor_name 

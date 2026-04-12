@@ -123,6 +123,7 @@ export async function submitMaintenanceRequest(
   userName: string,
 ): Promise<{ success: boolean; error?: string; data?: MaintenanceRequest }> {
   const supabase = getSupabaseClient()
+  if (!supabase) return { success: false, error: "Supabase client unavailable" }
   const operator = getCurrentOperator()
 
   try {
@@ -203,6 +204,7 @@ export async function updateMaintenanceRequest(
   updates: Partial<MaintenanceRequest>,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = getSupabaseClient()
+  if (!supabase) return { success: false, error: "Supabase client unavailable" }
   const operator = getCurrentOperator()
   const { reported_by_name, handler_name, image_url, ...dbUpdates } = updates as any
   const { error } = await supabase.from("maintenance").update(dbUpdates).eq("id", id)
@@ -241,6 +243,7 @@ export async function updateMaintenanceRequest(
 
 export async function deleteMaintenanceRequest(id: string): Promise<boolean> {
   const supabase = getSupabaseClient()
+  if (!supabase) return false
   const operator = getCurrentOperator()
   const { error } = await supabase.from("maintenance").delete().eq("id", id)
 

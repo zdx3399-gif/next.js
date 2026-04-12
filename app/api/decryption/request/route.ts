@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await createDecryptionRequest({
-      lineUserId,
+      requestedBy: lineUserId,
       targetType,
       targetId,
       reason,

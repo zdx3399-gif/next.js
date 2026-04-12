@@ -45,6 +45,7 @@ function getCurrentOperator() {
 
 export async function fetchEmergencies(filters?: { reportedById?: string }): Promise<Emergency[]> {
   const supabase = getSupabaseClient()
+  if (!supabase) return []
   let query = supabase
     .from("emergency_incidents")
     .select(`
@@ -138,6 +139,7 @@ export async function triggerEmergency(
 
 export async function deleteEmergency(id: string): Promise<void> {
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
   const operator = getCurrentOperator()
   const { error } = await supabase.from("emergency_incidents").delete().eq("id", id)
   if (error) {
@@ -191,6 +193,7 @@ export async function editEmergency(id: string, payload: EmergencyUpdatePayload)
   }
 
   const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
   const { error } = await supabase.from("emergency_incidents").update(updatePayload).eq("id", id)
   if (error) {
     if (operator.id) {

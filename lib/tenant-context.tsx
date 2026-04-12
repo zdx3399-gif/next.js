@@ -14,17 +14,17 @@ const TenantContext = createContext<TenantContextType | undefined>(undefined)
 
 export function TenantProvider({ children }: { children: ReactNode }) {
   const [tenantId, setTenantId] = useState<TenantId>(getCurrentTenant())
-  const [supabase, setSupabase] = useState<SupabaseClient>(createTenantClient(tenantId))
+  const [supabase, setSupabase] = useState<SupabaseClient>(createTenantClient())
 
   const switchTenant = (newTenantId: TenantId) => {
     setCurrentTenant(newTenantId)
     setTenantId(newTenantId)
-    setSupabase(createTenantClient(newTenantId))
+    setSupabase(createTenantClient())
   }
 
   useEffect(() => {
     // Update client when tenant changes
-    setSupabase(createTenantClient(tenantId))
+    setSupabase(createTenantClient())
   }, [tenantId])
 
   return <TenantContext.Provider value={{ tenantId, supabase, switchTenant }}>{children}</TenantContext.Provider>

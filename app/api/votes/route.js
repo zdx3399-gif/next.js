@@ -130,6 +130,48 @@ function isUuid(value) {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+async function resolveVoteOptionId({ supabase, voteId, selected }) {
+  const raw = String(selected || "").trim();
+  if (!voteId || !raw) {
+    return { optionId: null, optionLabel: "" };
+  }
+
+  if (isUuid(raw)) {
+    const { data: directOption, error: directErr } = await supabase
+      .from("vote_options")
+      .select("id, option_label")
+      .eq("vote_id", voteId)
+      .eq("id", raw)
+      .maybeSingle();
+
+    if (!directErr && directOption) {
+      return { optionId: directOption.id, optionLabel: directOption.option_label || raw };
+    }
+  }
+
+  const { data: options, error } = await supabase
+    .from("vote_options")
+    .select("id, option_label, option_key")
+    .eq("vote_id", voteId);
+
+  if (error || !options || options.length === 0) {
+    return { optionId: null, optionLabel: raw };
+  }
+
+  const matched =
+    options.find((item) => String(item.option_label || "").trim() === raw) ||
+    options.find((item) => String(item.option_key || "").trim() === raw);
+
+  if (!matched) {
+    return { optionId: null, optionLabel: raw };
+  }
+
+  return {
+    optionId: matched.id,
+    optionLabel: matched.option_label || raw,
+  };
+}
+
 function formatLineDateTime(value) {
   if (!value) return "未設定";
   const date = new Date(value);
@@ -166,14 +208,15 @@ function getOperator(body, fallback = {}) {
 
 function mapVoteRow(row) {
   const rawOptions = row?.options;
-  const options = normalizeOptions(rawOptions);
+  const normalizedOptions = normalizeOptions(row?.normalized_options);
+  const options = normalizedOptions.length > 0 ? normalizedOptions : normalizeOptions(rawOptions);
   const parsedObject = parseVoteOptionsObject(rawOptions);
 
   const fallbackUrlFromDescription = typeof row?.description === "string" ? row.description.match(/https?:\/\/[^\s]+/)?.[0] : "";
   const externalUrl = parsedObject?.external_url || "";
   const finalExternalUrl = externalUrl || row?.vote_url || row?.form_url || fallbackUrlFromDescription || "";
-  const resultFileUrl = parsedObject?.result_file_url || "";
-  const resultFileName = parsedObject?.result_file_name || "";
+  const resultFileUrl = row?.result_file_url || parsedObject?.result_file_url || "";
+  const resultFileName = row?.result_file_name || parsedObject?.result_file_name || "";
 
   const mode = finalExternalUrl || parsedObject?.type === "external" ? "external" : "internal";
 
@@ -192,6 +235,54 @@ function mapVoteRow(row) {
     result_file_name: resultFileName || undefined,
     options: options.length > 0 ? options : ["同意", "反對", "棄權"],
   };
+}
+
+function isVoteOptionsTableUnavailable(error) {
+  if (!error) return false;
+  const message = String(error.message || "").toLowerCase();
+  return (
+    message.includes("vote_options") &&
+    (message.includes("does not exist") || message.includes("schema cache") || message.includes("not found"))
+  );
+}
+
+async function syncVoteOptionsBestEffort({ supabase, voteId, options }) {
+  if (!voteId) {
+    return { ok: false, skipped: true, reason: "missing_vote_id" };
+  }
+
+  const deleteResult = await supabase.from("vote_options").delete().eq("vote_id", voteId);
+  if (deleteResult.error) {
+    if (isVoteOptionsTableUnavailable(deleteResult.error)) {
+      return { ok: false, skipped: true, reason: "vote_options_unavailable" };
+    }
+    return { ok: false, skipped: false, reason: deleteResult.error.message || "delete_vote_options_failed" };
+  }
+
+  const normalized = normalizeOptions(options);
+  if (normalized.length === 0) {
+    return { ok: true, skipped: false, reason: "cleared_vote_options" };
+  }
+
+  const rows = normalized.map((label, index) => ({
+    vote_id: voteId,
+    option_key: `option_${index + 1}`,
+    option_label: label,
+    display_order: index,
+  }));
+
+  const upsertResult = await supabase
+    .from("vote_options")
+    .upsert(rows, { onConflict: "vote_id,option_key" });
+
+  if (upsertResult.error) {
+    if (isVoteOptionsTableUnavailable(upsertResult.error)) {
+      return { ok: false, skipped: true, reason: "vote_options_unavailable" };
+    }
+    return { ok: false, skipped: false, reason: upsertResult.error.message || "upsert_vote_options_failed" };
+  }
+
+  return { ok: true, skipped: false, reason: "synced_vote_options" };
 }
 
 async function handleVoteFromLineMessage({ supabase, body }) {
@@ -216,7 +307,7 @@ async function handleVoteFromLineMessage({ supabase, body }) {
   }
 
   const voteIdFromMsg = parts[1].trim();
-  const option_selected = parts[2].replace("🗳️", "").trim();
+  const optionSelectedRaw = parts[2].replace("🗳️", "").trim();
 
   const { data: voteExists, error: voteExistsErr } = await supabase
     .from("votes")
@@ -241,6 +332,28 @@ async function handleVoteFromLineMessage({ supabase, body }) {
   }
 
   const vote_id = voteExists.id;
+
+  const { optionId, optionLabel } = await resolveVoteOptionId({
+    supabase,
+    voteId: vote_id,
+    selected: optionSelectedRaw,
+  });
+
+  if (!optionId) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: operator.id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: `無效投票選項: ${optionSelectedRaw}`,
+      module: "votes",
+      status: "blocked",
+      errorCode: "invalid_vote_option",
+    });
+    return Response.json({ error: "投票選項無效，請使用最新投票訊息" }, { status: 400 });
+  }
 
   const { data: userProfile, error: userError } = await supabase
     .from("profiles")
@@ -311,7 +424,7 @@ async function handleVoteFromLineMessage({ supabase, body }) {
     vote_id,
     user_id,
     user_name,
-    option_selected,
+    option_selected: optionId,
     voted_at: new Date().toISOString(),
   });
 
@@ -338,17 +451,17 @@ async function handleVoteFromLineMessage({ supabase, body }) {
     actionType: "submit_vote",
     targetType: "vote",
     targetId: vote_id,
-    reason: option_selected,
+    reason: optionLabel,
     module: "votes",
     status: "success",
-    afterState: { option_selected, channel: "line" },
+    afterState: { option_selected: optionLabel, option_selected_id: optionId, channel: "line" },
   });
 
   return Response.json({ 
     success: true, 
     sent: 1,
     skipped: 0,
-    message: `✅ 投票成功\n您的投票結果為「${option_selected}」`
+    message: `✅ 投票成功\n您的投票結果為「${optionLabel}」`
   });
 }
 
@@ -411,6 +524,28 @@ async function handleSubmitVote({ supabase, body }) {
     return Response.json({ error: "投票已截止" }, { status: 400 });
   }
 
+  const { optionId, optionLabel } = await resolveVoteOptionId({
+    supabase,
+    voteId: vote_id,
+    selected: option_selected,
+  });
+
+  if (!optionId) {
+    await writeServerAuditLog({
+      supabase,
+      operatorId: user_id,
+      operatorRole: operator.role,
+      actionType: "submit_vote",
+      targetType: "vote",
+      targetId: vote_id,
+      reason: `無效投票選項: ${String(option_selected || "")}`,
+      module: "votes",
+      status: "blocked",
+      errorCode: "invalid_vote_option",
+    });
+    return Response.json({ error: "投票選項無效" }, { status: 400 });
+  }
+
   const { data: existingVote, error: existingVoteErr } = await supabase
     .from("vote_records")
     .select("id")
@@ -454,7 +589,7 @@ async function handleSubmitVote({ supabase, body }) {
     vote_id,
     user_id,
     user_name: user_name || "住戶",
-    option_selected,
+    option_selected: optionId,
     voted_at: now,
   });
 
@@ -484,10 +619,15 @@ async function handleSubmitVote({ supabase, body }) {
     actionType: "submit_vote",
     targetType: "vote",
     targetId: vote_id,
-    reason: option_selected,
+    reason: optionLabel,
     module: "votes",
     status: "success",
-    afterState: { option_selected, user_name: user_name || "住戶", channel: "app" },
+    afterState: {
+      option_selected: optionLabel,
+      option_selected_id: optionId,
+      user_name: user_name || "住戶",
+      channel: "app",
+    },
   });
 
   return Response.json({ 
@@ -634,6 +774,16 @@ async function handleCreateVote({ supabase, body }) {
       errorCode: insertError.message || "create_vote_failed",
     });
     return Response.json({ error: "投票儲存失敗", details: insertError.message }, { status: 500 });
+  }
+
+  const syncResult = await syncVoteOptionsBestEffort({
+    supabase,
+    voteId: inserted?.id,
+    options: finalMode === "external" ? [] : normalizedOptions,
+  });
+
+  if (!syncResult?.ok && !syncResult?.skipped) {
+    console.warn("[Votes] dual-write vote_options failed on create:", syncResult?.reason);
   }
 
   if (test === true) {
@@ -960,7 +1110,7 @@ async function handleAttachExternalResult({ supabase, body }) {
 
   const { data: currentVote, error: queryError } = await supabase
     .from("votes")
-    .select("id, options")
+    .select("*")
     .eq("id", vote_id)
     .single();
 
@@ -992,20 +1142,54 @@ async function handleAttachExternalResult({ supabase, body }) {
     result_uploaded_at: new Date().toISOString(),
   };
 
-  const { data: updated, error: updateError } = await supabase
-    .from("votes")
-    .update({ options: nextOptions })
-    .eq("id", vote_id)
-    .select("*")
-    .single();
+  const updatePayload = {
+    result_file_url,
+    result_file_name: result_file_name || "",
+    result_uploaded_at: new Date().toISOString(),
+  };
 
-  if (updateError) {
-    const fallback = await supabase
+  if (Object.prototype.hasOwnProperty.call(currentVote, "options")) {
+    updatePayload.options = nextOptions;
+  }
+
+  const updateWithMissingColumnRetry = async (payload, maxRetry = 4) => {
+    let nextPayload = { ...payload };
+    let result = await supabase
       .from("votes")
-      .update({ options: JSON.stringify(nextOptions) })
+      .update(nextPayload)
       .eq("id", vote_id)
       .select("*")
       .single();
+
+    for (let i = 0; i < maxRetry && result.error; i++) {
+      const message = String(result.error.message || "");
+      const missingColumnMatch = message.match(/Could not find the '([^']+)' column/i);
+      if (!missingColumnMatch) break;
+
+      const missingColumn = missingColumnMatch[1];
+      if (!(missingColumn in nextPayload)) break;
+
+      delete nextPayload[missingColumn];
+      result = await supabase
+        .from("votes")
+        .update(nextPayload)
+        .eq("id", vote_id)
+        .select("*")
+        .single();
+    }
+
+    return result;
+  };
+
+  const { data: updated, error: updateError } = await updateWithMissingColumnRetry(updatePayload);
+
+  if (updateError) {
+    const legacyFallbackPayload = {
+      ...updatePayload,
+      options: JSON.stringify(nextOptions),
+    };
+
+    const fallback = await updateWithMissingColumnRetry(legacyFallbackPayload);
 
     if (fallback.error) {
       await writeServerAuditLog({
@@ -1036,7 +1220,27 @@ async function handleAttachExternalResult({ supabase, body }) {
       afterState: { result_file_url, result_file_name: result_file_name || "" },
     });
 
+    const syncResult = await syncVoteOptionsBestEffort({
+      supabase,
+      voteId: vote_id,
+      options: currentOptionsArray,
+    });
+
+    if (!syncResult?.ok && !syncResult?.skipped) {
+      console.warn("[Votes] dual-write vote_options failed on attach fallback:", syncResult?.reason);
+    }
+
     return Response.json({ success: true, vote: mapVoteRow(fallback.data) });
+  }
+
+  const syncResult = await syncVoteOptionsBestEffort({
+    supabase,
+    voteId: vote_id,
+    options: currentOptionsArray,
+  });
+
+  if (!syncResult?.ok && !syncResult?.skipped) {
+    console.warn("[Votes] dual-write vote_options failed on attach:", syncResult?.reason);
   }
 
   await writeServerAuditLog({
@@ -1105,13 +1309,26 @@ export async function GET(req) {
     const userId = searchParams.get("userId");
     const withResults = searchParams.get("withResults") === "1";
 
-    let query = supabase.from("votes").select("*").order("created_at", { ascending: false });
+    let query = supabase.from("v_votes_with_options").select("*").order("created_at", { ascending: false });
 
     if (scope === "active") {
       query = query.eq("status", "active").gt("ends_at", new Date().toISOString());
     }
 
-    const { data: votesData, error: votesError } = await query;
+    let { data: votesData, error: votesError } = await query;
+
+    if (votesError) {
+      const fallbackQuery = supabase.from("votes").select("*").order("created_at", { ascending: false });
+      const withScopeFallback =
+        scope === "active"
+          ? fallbackQuery.eq("status", "active").gt("ends_at", new Date().toISOString())
+          : fallbackQuery;
+
+      const fallbackResult = await withScopeFallback;
+      votesData = fallbackResult.data;
+      votesError = fallbackResult.error;
+    }
+
     if (votesError) {
       return Response.json({ error: "讀取投票失敗", details: votesError.message }, { status: 500 });
     }
@@ -1138,11 +1355,27 @@ export async function GET(req) {
         .in("vote_id", voteIds);
 
       if (!resultErr && records) {
+        const optionIds = [...new Set(records.map((record) => record.option_selected).filter(Boolean))];
+        let optionLabelById = new Map();
+
+        if (optionIds.length > 0) {
+          const { data: optionRows, error: optionErr } = await supabase
+            .from("vote_options")
+            .select("id, option_label")
+            .in("id", optionIds);
+
+          if (!optionErr && optionRows) {
+            optionLabelById = new Map(optionRows.map((row) => [row.id, row.option_label || row.id]));
+          }
+        }
+
         const resultMap = new Map();
         for (const record of records) {
+          const selectedId = record.option_selected;
+          const selectedLabel = optionLabelById.get(selectedId) || selectedId;
           const current = resultMap.get(record.vote_id) || { total: 0, counts: {} };
           current.total += 1;
-          current.counts[record.option_selected] = (current.counts[record.option_selected] || 0) + 1;
+          current.counts[selectedLabel] = (current.counts[selectedLabel] || 0) + 1;
           resultMap.set(record.vote_id, current);
         }
 

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import {
@@ -127,7 +127,7 @@ const PREVIEW_POSTS: CommunityPost[] = [
     comment_count: 12,
     ai_risk_level: "low",
     ai_risk_reason: "測試資料",
-  } as CommunityPost,
+  } as unknown as CommunityPost,
   {
     id: "preview-post-2",
     author_id: "preview-author-2",
@@ -147,7 +147,7 @@ const PREVIEW_POSTS: CommunityPost[] = [
     comment_count: 4,
     ai_risk_level: "medium",
     ai_risk_reason: "測試資料",
-  } as CommunityPost,
+  } as unknown as CommunityPost,
 ]
 
 const PREVIEW_QUEUE: ModerationQueueItem[] = [
@@ -1073,3 +1073,4 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
     </div>
   )
 }
+

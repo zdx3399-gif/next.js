@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+﻿import { createClient } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 import { writeServerAuditLog } from "@/lib/audit-server"
 
@@ -18,10 +18,10 @@ function getSupabase() {
 }
 
 // GET: 獲取單一知識卡詳情
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<any> }) {
   try {
     const supabase = getSupabase();
-    const { id } = params;
+    const { id } = await params;
 
     const { data, error } = await supabase.from("knowledge_cards").select("*").eq("id", id).single();
     if (error) throw error;
@@ -40,10 +40,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // PATCH: 更新知識卡（建立新版本）
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<any> }) {
   try {
     const supabase = getSupabase();
-    const { id } = params;
+    const { id } = await params;
 
     const body = await req.json();
     const { user_id, changelog, ...updates } = body;
@@ -150,10 +150,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE: 刪除知識卡
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<any> }) {
   try {
     const supabase = getSupabase();
-    const { id } = params;
+    const { id } = await params;
 
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("userId");
@@ -209,3 +209,5 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ error: error?.message ?? "Unknown error" }, { status: 500 });
   }
 }
+
+

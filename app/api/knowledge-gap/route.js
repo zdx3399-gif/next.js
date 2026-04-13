@@ -1,20 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
-
 export async function GET(req) {
   try {
+    const supabase = createClient(
+      process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
+      process.env.SUPABASE_ANON_KEY || 'placeholder'
+    );
     const { searchParams } = new URL(req.url);
     const days = parseInt(searchParams.get('days') || '7');
     const limit = parseInt(searchParams.get('limit') || '20');
 
     // 1. 知識缺口排行榜（answered = false 的問題）
     const { data: knowledgeGap, error: gapError } = await supabase
-      .from('chat_log')
+      .from('chat_events')
       .select('normalized_question, raw_question, intent, created_at')
+      .eq('source', 'chat_log')
       .eq('answered', false)
       .gte('created_at', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
       .order('created_at', { ascending: false });
@@ -60,8 +60,9 @@ export async function GET(req) {
 
     // 3. 總體統計
     const { data: totalStats, error: statsError } = await supabase
-      .from('chat_log')
+      .from('chat_events')
       .select('answered')
+      .eq('source', 'chat_log')
       .gte('created_at', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString());
 
     if (statsError) {

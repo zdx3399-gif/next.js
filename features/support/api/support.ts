@@ -37,7 +37,14 @@ export async function saveChatHistory(chat: Omit<ChatMessage, "id" | "created_at
     console.error("Supabase client not available")
     return false
   }
-  const { error } = await supabase.from("chat_history").insert([chat])
+  const eventLog = {
+    source: 'support_chat',
+    source_pk: `support_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    user_id: chat.user_id,
+    question: chat.message,
+    answer: chat.response
+  }
+  const { error } = await supabase.from("chat_events").insert([eventLog])
 
   if (error) {
     console.error("Error saving chat history:", error)
@@ -80,8 +87,9 @@ export async function fetchUserChatHistory(userId: string): Promise<ChatMessage[
     return []
   }
   const { data, error } = await supabase
-    .from("chat_history")
-    .select("*")
+    .from("chat_events")
+    .select("id, user_id, question, answer, created_at")
+    .eq("source", "support_chat")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(50)
@@ -91,7 +99,14 @@ export async function fetchUserChatHistory(userId: string): Promise<ChatMessage[
     return []
   }
 
-  return data || []
+  return (data || []).map(d => ({
+    id: d.id,
+    user_id: d.user_id,
+    user_name: '使用者',
+    message: d.question,
+    response: d.answer,
+    created_at: d.created_at
+  }));
 }
 
 // AI 回應邏輯 - 呼叫後端 RAG API

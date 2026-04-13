@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase"
+﻿import { getSupabaseClient } from "@/lib/supabase"
 import { createAuditLog } from "@/lib/audit"
 
 export interface MaintenanceRequest {
@@ -41,7 +41,7 @@ function getCurrentOperator() {
 }
 
 export async function fetchMaintenanceRequests(): Promise<MaintenanceRequest[]> {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!
   if (!supabase) return []
 
   const { data, error } = await supabase.from("maintenance").select("*").order("created_at", { ascending: false })
@@ -78,7 +78,7 @@ export async function fetchMaintenanceRequests(): Promise<MaintenanceRequest[]> 
 }
 
 export async function fetchUserMaintenanceRequests(userId: string): Promise<MaintenanceRequest[]> {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!
   if (!supabase) return []
 
   const { data, error } = await supabase
@@ -122,7 +122,7 @@ export async function submitMaintenanceRequest(
   userId: string,
   userName: string,
 ): Promise<{ success: boolean; error?: string; data?: MaintenanceRequest }> {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!
   const operator = getCurrentOperator()
 
   try {
@@ -203,7 +203,7 @@ export async function updateMaintenanceRequest(
   id: string,
   updates: Partial<MaintenanceRequest>,
 ): Promise<{ success: boolean; error?: string }> {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!
   const operator = getCurrentOperator()
   const { reported_by_name, handler_name, image_url, ...dbUpdates } = updates as any
   const { error } = await supabase.from("maintenance").update(dbUpdates).eq("id", id)
@@ -241,7 +241,7 @@ export async function updateMaintenanceRequest(
 }
 
 export async function deleteMaintenanceRequest(id: string): Promise<boolean> {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!
   const operator = getCurrentOperator()
   const { error } = await supabase.from("maintenance").delete().eq("id", id)
 
@@ -283,3 +283,4 @@ export function getReportedByName(request: MaintenanceRequest): string {
 export function getHandlerName(request: MaintenanceRequest): string {
   return request.handler_name || "未指派"
 }
+

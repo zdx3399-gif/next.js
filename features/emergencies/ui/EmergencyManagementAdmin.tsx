@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEmergencies } from "../hooks/useEmergencies"
 import { useState } from "react"
@@ -181,7 +181,7 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
             緊急事件紀錄
             <HelpHint title="管理端紀錄" description="查看通報歷史、發起人與備註，供事後追蹤與稽核。" workflow={["先用搜尋定位事件。","查看時間、發起人與備註完成追蹤。"]} logic={["事件紀錄是檢討與稽核基礎資料。"]} />
           </h2>
-          <Button variant="outline" onClick={reload} disabled={loading || isPreviewMode}>
+          <Button variant="outline" onClick={() => reload()} disabled={loading || isPreviewMode}>
             <RefreshCw className="w-4 h-4 mr-2" />
             重新整理
           </Button>
@@ -268,3 +268,5 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
     </div>
   )
 }
+
+

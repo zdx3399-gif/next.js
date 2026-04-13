@@ -61,8 +61,14 @@ function normalizeOptions(raw) {
     }
   }
   if (Array.isArray(raw)) {
-    return raw.map((item) => String(item).trim()).filter(Boolean);
+    return raw.map((item) => {
+      // If the array contains objects, might need special handling
+      // but in JSONB our pure array options are strings.
+      if (typeof item === 'string') return item.trim();
+      return String(item).trim();
+    }).filter(Boolean);
   }
+  // Because options can be stored as JSONB object { type: 'external', options: [...] }
   if (raw && typeof raw === "object" && Array.isArray(raw.options)) {
     return raw.options.map((item) => String(item).trim()).filter(Boolean);
   }
@@ -542,46 +548,11 @@ async function handleCreateVote({ supabase, body }) {
     created_by: safeCreatedBy,
   };
 
-  const tryInsertVote = async (payload) => {
-    return supabase.from("votes").insert([payload]).select("*").single();
-  };
-
-  const pruneMissingColumnAndRetry = async (payload, maxRetry = 4) => {
-    let nextPayload = { ...payload };
-    let result = await tryInsertVote(nextPayload);
-
-    for (let i = 0; i < maxRetry && result.error; i++) {
-      const message = String(result.error.message || "");
-      const missingColumnMatch = message.match(/Could not find the '([^']+)' column/i);
-      if (!missingColumnMatch) break;
-
-      const missingColumn = missingColumnMatch[1];
-      if (!(missingColumn in nextPayload)) break;
-
-      delete nextPayload[missingColumn];
-      result = await tryInsertVote(nextPayload);
-    }
-
-    return result;
-  };
-
-  let { data: inserted, error: insertError } = await pruneMissingColumnAndRetry(insertPayload);
-
-  if (insertError) {
-    const message = String(insertError.message || "");
-    const maybeOptionsTypeIssue = /type text|character varying|varchar/i.test(message);
-
-    if (maybeOptionsTypeIssue) {
-      const fallbackPayload = {
-        ...insertPayload,
-        options: JSON.stringify(dbOptions),
-      };
-
-      const retry = await supabase.from("votes").insert([fallbackPayload]).select("*").single();
-      inserted = retry.data;
-      insertError = retry.error;
-    }
-  }
+  let { data: inserted, error: insertError } = await supabase
+    .from("votes")
+    .insert([insertPayload])
+    .select("*")
+    .single();
 
   if (insertError) {
     await writeServerAuditLog({
@@ -963,29 +934,6 @@ async function handleAttachExternalResult({ supabase, body }) {
     .single();
 
   if (updateError) {
-    const fallback = await supabase
-      .from("votes")
-      .update({ options: JSON.stringify(nextOptions) })
-      .eq("id", vote_id)
-      .select("*")
-      .single();
-
-    if (fallback.error) {
-      await writeServerAuditLog({
-        supabase,
-        operatorId: operator.id,
-        operatorRole: operator.role,
-        actionType: "attach_vote_result",
-        targetType: "vote",
-        targetId: vote_id,
-        reason: fallback.error.message || "更新外部結果檔失敗",
-        module: "votes",
-        status: "failed",
-        errorCode: fallback.error.message || "attach_vote_result_failed",
-      });
-      return Response.json({ error: "更新外部結果檔失敗", details: fallback.error.message }, { status: 500 });
-    }
-
     await writeServerAuditLog({
       supabase,
       operatorId: operator.id,
@@ -993,13 +941,12 @@ async function handleAttachExternalResult({ supabase, body }) {
       actionType: "attach_vote_result",
       targetType: "vote",
       targetId: vote_id,
-      reason: result_file_name || "上傳外部投票結果",
+      reason: updateError.message || "更新外部結果檔失敗",
       module: "votes",
-      status: "success",
-      afterState: { result_file_url, result_file_name: result_file_name || "" },
+      status: "failed",
+      errorCode: updateError.message || "attach_vote_result_failed",
     });
-
-    return Response.json({ success: true, vote: mapVoteRow(fallback.data) });
+    return Response.json({ error: "更新外部結果檔失敗", details: updateError.message }, { status: 500 });
   }
 
   await writeServerAuditLog({

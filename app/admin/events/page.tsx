@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 
 export default function AdminPage() {
-  const [events, setEvents] = useState([]);
+  const [events, setEvents] = useState<any[]>([]);
 
   async function loadEvents() {
     const res = await fetch("/api/events/list");
@@ -17,9 +17,9 @@ export default function AdminPage() {
   }, []);
 
   // 依類型分組
-  const visitorEvents = events.filter(e => e.event_type === "visitor");
-  const packageEvents = events.filter(e => e.event_type === "package");
-  const emergencyEvents = events.filter(e => e.event_type === "emergency");
+  const visitorEvents = events.filter((e: any) => e.event_type === "visitor");
+  const packageEvents = events.filter((e: any) => e.event_type === "package");
+  const emergencyEvents = events.filter((e: any) => e.event_type === "emergency");
 
   // 取最大長度，讓表格對齊
   const maxRows = Math.max(visitorEvents.length, packageEvents.length, emergencyEvents.length);
@@ -27,7 +27,7 @@ export default function AdminPage() {
   return (
     <div style={{ padding: "20px" }}>
       <h1>事件管理後台（分類表格）</h1>
-      <table width="100%" border="1" style={{ marginTop: "20px", borderCollapse: "collapse", textAlign: "center" }}>
+      <table width="100%" border={1} style={{ marginTop: "20px", borderCollapse: "collapse", textAlign: "center" }}>
         <thead>
           <tr style={{ background: "#f5f5f5" }}>
             <th style={{ width: "33%" }}>

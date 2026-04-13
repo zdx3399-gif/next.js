@@ -6,15 +6,15 @@ import { writeServerAuditLog } from '@/lib/audit-server';
 import 'dotenv/config';
 
 const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'placeholder-key'
 );
 
 export const runtime = 'nodejs';
 
 const lineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || 'placeholder-token',
+  channelSecret: process.env.LINE_CHANNEL_SECRET || 'placeholder-secret',
 };
 
 const client = new Client(lineConfig);// LINE Bot SDK 客戶端
@@ -279,7 +279,7 @@ export async function POST(req) {
               console.log('[追問] chatLogId 已記錄:', chatLogId);
               // 記錄澄清選項到 clarification_options 表
               const clarificationRecords = result.clarificationOptions.map((opt, index) => ({
-                chat_log_id: chatLogId,
+                chat_event_id: chatLogId,
                 option_label: opt.label,
                 option_value: opt.value,
                 display_order: index
@@ -350,13 +350,13 @@ export async function POST(req) {
               await supabase
                 .from('clarification_options')
                 .update({ selected: true, selected_at: new Date().toISOString() })
-                .eq('chat_log_id', clarificationParentId)
+                .eq('chat_event_id', clarificationParentId)
                 .eq('option_value', userText);
             }
           }
 
           
-          // 寫入 chat_log
+          // 寫入 chat_events 的額外欄位
           const logData = {
             raw_question: userText,
             normalized_question: result.normalized_question || userText,
@@ -504,36 +504,46 @@ export async function POST(req) {
           console.log('[DEBUG Postback] chatLogIdInt:', chatLogIdInt);
           
           try {
-            // 記錄回饋到 chat_feedback
-            // 讀取 chat_events 目前 feedback_events
+            // 寫入獨立回饋表 chat_event_feedback
+            const { error: insertFeedbackError } = await supabase
+              .from('chat_event_feedback')
+              .insert([{
+                chat_event_id: chatLogId,
+                source: 'chat_log',
+                user_id: userId || null,
+                feedback_type: feedbackType,
+                clarification_choice: null,
+                comment: null
+              }]);
+              
+            if (insertFeedbackError) {
+              console.error('[Feedback Insert Error]', insertFeedbackError);
+            }
+
+            // 更新 chat_events 的統計欄位
             const { data: chatLog, error: chatLogError } = await supabase
               .from('chat_events')
-              .select('id, feedback, success_count, unclear_count, fail_count, feedback_events')
+              .select('id, feedback, success_count, unclear_count, fail_count')
               .eq('id', chatLogId)
               .eq('source', 'chat_log')
               .single();
+
             if (chatLogError) {
-              console.error('[Chat Log Query Error]', chatLogError);
+              console.error('[Chat Event Query Error]', chatLogError);
             }
+
             const feedbackField = feedbackType === 'helpful' ? 'success_count' :
                                  feedbackType === 'unclear' ? 'unclear_count' : 'fail_count';
-            const feedbackEvents = Array.isArray(chatLog?.feedback_events) ? chatLog.feedback_events : [];
-            const feedbackRecord = {
-              id: `fb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              user_id: userId || null,
-              feedback_type: feedbackType,
-              clarification_choice: null,
-              comment: null,
-              created_at: new Date().toISOString(),
-            };
+
             const updateData = {
               feedback: feedbackType,
               [feedbackField]: (chatLog?.[feedbackField] || 0) + 1,
-              feedback_events: [...feedbackEvents, feedbackRecord],
             };
+
             if (feedbackType === 'not_helpful') {
               updateData.answered = false;
             }
+
             const { error: feedbackUpdateError } = await supabase
               .from('chat_events')
               .update(updateData)

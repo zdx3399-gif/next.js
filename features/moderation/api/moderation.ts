@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase"
+﻿import { getSupabaseClient } from "@/lib/supabase"
 import { createAuditLog } from "@/lib/audit"
 
 export interface ModerationQueueItem {
@@ -20,7 +20,7 @@ export interface ModerationQueueItem {
 }
 
 export async function getModerationQueue(filters?: { status?: string; priority?: string; assignedTo?: string }) {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!!
   let query = supabase
     .from("moderation_queue")
     .select("*")
@@ -48,7 +48,7 @@ export async function getModerationQueue(filters?: { status?: string; priority?:
 }
 
 export async function getModerationItemDetail(itemId: string) {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!!
   const { data: queueItem, error } = await supabase.from("moderation_queue").select("*").eq("id", itemId).single()
 
   if (error) throw error
@@ -70,7 +70,7 @@ export async function getModerationItemDetail(itemId: string) {
 }
 
 export async function assignModerationItem(itemId: string, userId: string) {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!!
 
   const { data, error } = await supabase
     .from("moderation_queue")
@@ -95,7 +95,7 @@ export async function resolveModerationItem(
   },
   userId: string,
 ) {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!!
 
   // 獲取審核項目
   const { data: queueItem } = await supabase.from("moderation_queue").select("*").eq("id", itemId).single()
@@ -190,7 +190,7 @@ export async function resolveModerationItem(
 }
 
 export async function getReportsForTarget(targetType: string, targetId: string) {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!!
   const { data, error } = await supabase
     .from("reports")
     .select("*")
@@ -201,3 +201,5 @@ export async function getReportsForTarget(targetType: string, targetId: string) 
   if (error) throw error
   return data
 }
+
+

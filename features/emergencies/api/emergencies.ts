@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase"
+﻿import { getSupabaseClient } from "@/lib/supabase"
 import { createAuditLog } from "@/lib/audit"
 
 export interface Emergency {
@@ -42,7 +42,7 @@ function getCurrentOperator() {
 }
 
 export async function fetchEmergencies(filters?: { reportedById?: string }): Promise<Emergency[]> {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!
   let query = supabase
     .from("emergencies")
     .select(`
@@ -116,7 +116,7 @@ export async function triggerEmergency(
 }
 
 export async function deleteEmergency(id: string): Promise<void> {
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!
   const operator = getCurrentOperator()
   const { error } = await supabase.from("emergencies").delete().eq("id", id)
   if (error) {
@@ -169,7 +169,7 @@ export async function editEmergency(id: string, payload: EmergencyUpdatePayload)
     return
   }
 
-  const supabase = getSupabaseClient()
+  const supabase = getSupabaseClient()!
   const { error } = await supabase.from("emergencies").update(updatePayload).eq("id", id)
   if (error) {
     if (operator.id) {
@@ -204,3 +204,4 @@ export async function editEmergency(id: string, payload: EmergencyUpdatePayload)
 export function getReportedByName(emergency: Emergency): string {
   return emergency.reported_by_name || "未知"
 }
+

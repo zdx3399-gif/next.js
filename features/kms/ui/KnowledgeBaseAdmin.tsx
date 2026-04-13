@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useCallback } from "react"
 import { Search, Plus, Edit, Trash2, CheckCircle, XCircle, Shield, Users, Building, MoreVertical, Inbox, FileText, ArrowRight, RefreshCw } from "lucide-react"
@@ -84,7 +84,7 @@ const PREVIEW_PENDING_POSTS: CommunityPost[] = [
         suggested_category: "visitor",
       },
     },
-  } as CommunityPost,
+  } as unknown as CommunityPost,
 ]
 
 export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: KnowledgeBaseAdminProps) {
@@ -920,3 +920,4 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
     </div>
   )
 }
+

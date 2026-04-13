@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+﻿import { createClient } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
 import { writeServerAuditLog } from "@/lib/audit-server"
 
@@ -18,10 +18,10 @@ function getSupabase() {
 }
 
 // GET: 獲取單一貼文詳情
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = getSupabase();
-    const { id } = params;
+    const { id } = await params;
 
     const { data, error } = await supabase.from("community_posts").select("*").eq("id", id).single();
     if (error) throw error;
@@ -40,10 +40,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // PATCH: 更新貼文
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = getSupabase();
-    const { id } = params;
+    const { id } = await params;
 
     const body = await req.json();
     const { user_id, ...updates } = body;
@@ -138,10 +138,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE: 刪除貼文（實際上是更新狀態為 deleted）
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = getSupabase();
-    const { id } = params;
+    const { id } = await params;
 
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get("userId");
@@ -209,3 +209,5 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ error: error?.message ?? "Unknown error" }, { status: 500 });
   }
 }
+
+

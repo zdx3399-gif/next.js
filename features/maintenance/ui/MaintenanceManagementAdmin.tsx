@@ -86,6 +86,7 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
               value={formData.equipment || ""}
               onChange={(e) => onChange("equipment", e.target.value)}
               placeholder="例：電梯、空調"
+              disabled={isEditing}
               className="w-full p-3 rounded-xl theme-input outline-none"
             />
           </div>
@@ -110,6 +111,7 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
               value={formData.item || ""}
               onChange={(e) => onChange("item", e.target.value)}
               placeholder="例：馬達、面板"
+              disabled={isEditing}
               className="w-full p-3 rounded-xl theme-input outline-none"
             />
           </div>
@@ -135,6 +137,7 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
               onChange={(e) => onChange("description", e.target.value)}
               placeholder="請詳細描述問題狀況"
               rows={3}
+              disabled={isEditing}
               className="w-full p-3 rounded-xl theme-input outline-none resize-none"
             />
           </div>
@@ -159,6 +162,7 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
               value={formData.reported_by_name || ""}
               onChange={(e) => onChange("reported_by_name", e.target.value)}
               placeholder="報修人姓名"
+              disabled={isEditing}
               className="w-full p-3 rounded-xl theme-input outline-none"
             />
           </div>
@@ -387,12 +391,21 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
         equipment: row.equipment || "",
         item: row.item || "",
         description: row.description || "",
-        reported_by_name: row.reported_by_name || (row.reported_by_id ? profilesMap[row.reported_by_id] : "") || "",
+        reported_by_name:
+          row.reported_by_name || row.reported_by || (row.reported_by_id ? profilesMap[row.reported_by_id] : "") || "",
         reported_by_id: row.reported_by_id || null,
         photo_url: row.photo_url || row.image_url || row.completion_photo_url || null,
         completion_photo_url: row.completion_photo_url || null,
         status: row.status || "open",
-        handler: row.handler || row.handler_name || (row.handler_id ? profilesMap[row.handler_id] || "" : ""),
+        handler:
+          row.assignee ||
+          row.handler ||
+          row.handler_name ||
+          row.worker_name ||
+          row.assignment_snapshot?.assignee_name ||
+          row.assignment_snapshot?.handler_name ||
+          row.assignment_snapshot?.worker_name ||
+          (row.handler_id ? profilesMap[row.handler_id] || "" : ""),
         cost: row.cost || 0,
         note: row.note || row.admin_note || "",
       })),
@@ -447,24 +460,94 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
         setIsSaving(false)
         return
       }
-      const saveData = {
-        equipment: formData.equipment,
-        item: formData.item,
-        description: formData.description,
-        reported_by_name: formData.reported_by_name,
-        reported_by_id: formData.reported_by_id,
+      const sharedSaveData = {
         status: formData.status,
-        handler_name: formData.handler,
         cost: formData.cost,
         note: formData.note,
       }
 
+      const applyCompatibleAssigneeField = async (baseData: Record<string, any>) => {
+        const variants: Array<Record<string, any>> = [
+          { assignee: formData.handler },
+          { handler: formData.handler },
+          { handler_name: formData.handler },
+          { worker_name: formData.handler },
+        ]
+
+        let lastError: any = null
+        for (const variant of variants) {
+          const payload = { ...baseData, ...variant }
+          const { error } = await supabase.from("maintenance").update(payload).eq("id", formData.id)
+          if (!error) return null
+
+          lastError = error
+          const msg = String(error.message || "")
+          const isUnknownColumn = msg.includes("column") && msg.includes("maintenance")
+          if (!isUnknownColumn) return error
+        }
+
+        // Fallback: some normalized schemas keep assignment details in JSON snapshot.
+        const { data: current, error: fetchError } = await supabase
+          .from("maintenance")
+          .select("assignment_snapshot")
+          .eq("id", formData.id)
+          .single()
+
+        if (fetchError) return lastError || fetchError
+
+        const mergedSnapshot = {
+          ...(current?.assignment_snapshot || {}),
+          assignee_name: formData.handler,
+          handler_name: formData.handler,
+          worker_name: formData.handler,
+          updated_at: new Date().toISOString(),
+        }
+
+        const { error: snapshotError } = await supabase
+          .from("maintenance")
+          .update({ ...baseData, assignment_snapshot: mergedSnapshot })
+          .eq("id", formData.id)
+
+        if (!snapshotError) return null
+        return lastError || snapshotError
+      }
+
       if (formData.id) {
-        const { error } = await supabase.from("maintenance").update(saveData).eq("id", formData.id)
+        const error = await applyCompatibleAssigneeField(sharedSaveData)
         if (error) throw error
       } else {
-        const { error } = await supabase.from("maintenance").insert([saveData])
-        if (error) throw error
+        const createBaseData = {
+          equipment: formData.equipment,
+          item: formData.item,
+          description: formData.description,
+          reported_by_id: formData.reported_by_id,
+          assignment_snapshot: formData.handler
+            ? { assignee_name: formData.handler, saved_at: new Date().toISOString() }
+            : null,
+          ...sharedSaveData,
+        }
+
+        const createVariants: Array<Record<string, any>> = [
+          { assignee: formData.handler },
+          { handler: formData.handler },
+          {}, // fallback: assignment_snapshot already stores handler info
+        ]
+
+        let createError: any = null
+        for (const variant of createVariants) {
+          const { error } = await supabase.from("maintenance").insert([{ ...createBaseData, ...variant }])
+          if (!error) {
+            createError = null
+            break
+          }
+
+          createError = error
+          const msg = String(error.message || "")
+          const isUnknownColumn = msg.includes("column") && msg.includes("maintenance")
+          if (!isUnknownColumn) break
+        }
+
+        if (createError) throw createError
       }
 
       alert("儲存成功！")

@@ -3,29 +3,73 @@
 import { useState, useEffect, useCallback } from "react"
 import {
   type FinanceRecord,
+  type ExpenseRecord,
   fetchAllFinanceRecords,
   fetchUserFinanceRecords,
   createFinanceRecord,
   updateFinanceRecord,
   deleteFinanceRecord,
+  fetchExpenseRecords,
+  saveExpenseRecord,
+  removeExpenseRecord,
 } from "../api/finance"
 
-export function useFinance(userRoom?: string) {
+export function useFinance(userRoom?: string, userUnitId?: string) {
   const [records, setRecords] = useState<FinanceRecord[]>([])
   const [loading, setLoading] = useState(true)
 
   const loadRecords = useCallback(async () => {
     setLoading(true)
-    const data = userRoom ? await fetchUserFinanceRecords(userRoom) : await fetchAllFinanceRecords()
+    const data = userRoom || userUnitId ? await fetchUserFinanceRecords(userRoom || "", userUnitId) : await fetchAllFinanceRecords()
     setRecords(data)
     setLoading(false)
-  }, [userRoom])
+  }, [userRoom, userUnitId])
 
   useEffect(() => {
     loadRecords()
   }, [loadRecords])
 
   return { records, loading, refresh: loadRecords }
+}
+
+export function useFinanceExpenses() {
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const loadExpenses = useCallback(async () => {
+    setLoading(true)
+    const data = await fetchExpenseRecords()
+    setExpenses(data)
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    loadExpenses()
+  }, [loadExpenses])
+
+  const saveExpense = async (expense: Omit<ExpenseRecord, "id"> & { id?: string }) => {
+    const result = await saveExpenseRecord(expense)
+    if (result.success) {
+      await loadExpenses()
+    }
+    return result
+  }
+
+  const deleteExpense = async (id: string) => {
+    const result = await removeExpenseRecord(id)
+    if (result.success) {
+      await loadExpenses()
+    }
+    return result
+  }
+
+  return {
+    expenses,
+    loading,
+    refresh: loadExpenses,
+    saveExpense,
+    deleteExpense,
+  }
 }
 
 export function useFinanceAdmin() {

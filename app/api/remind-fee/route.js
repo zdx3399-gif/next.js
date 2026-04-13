@@ -15,13 +15,15 @@ function getSupabase() {
     process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL ||
     ""
 
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+  const anonKey =
     process.env.SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.TENANT_A_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY ||
     ""
+
+  const key = serviceRoleKey || anonKey
 
   if (!url || !key) {
     throw new Error("Missing Supabase env")
@@ -93,6 +95,8 @@ export async function POST(req) {
       .from("profiles")
       .select("id, name, unit_id, line_user_id")
       .eq("unit_id", fee.unit_id)
+      .not("line_user_id", "is", null)
+      .limit(1)
       .maybeSingle()
 
     if (pErr) {
@@ -127,8 +131,7 @@ export async function POST(req) {
       return NextResponse.json({ error: `未找到單位 ID ${fee.unit_id} 的住戶` }, { status: 404 })
     }
 
-    let lineUserId = profile.line_user_id
-
+    const lineUserId = String(profile.line_user_id || "").trim()
 
     if (!lineUserId) {
       await writeServerAuditLog({

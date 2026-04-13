@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner";
 
 export function ArduinoConsole() {
@@ -64,8 +64,40 @@ export function ArduinoConsole() {
     setLog((prev) => prev + msg + "\n")
   }
 
+  async function disconnectSerial() {
+    try {
+      if (readerRef.current) {
+        try {
+          await readerRef.current.cancel()
+        } catch {
+          // ignore cancel errors when reader already closed
+        }
+        readerRef.current.releaseLock?.()
+        readerRef.current = null
+      }
+
+      if (writerRef.current) {
+        writerRef.current.releaseLock?.()
+        writerRef.current = null
+      }
+
+      if (portRef.current) {
+        await portRef.current.close()
+        portRef.current = null
+      }
+    } catch {
+      // ignore close errors to avoid blocking next connect
+    } finally {
+      pendingAckQueueRef.current = []
+      setIsConnected(false)
+    }
+  }
+
   function handleModeChange(mode: "serial" | "wifi") {
     if (mode === connectionMode) return
+    if (connectionMode === "serial") {
+      void disconnectSerial()
+    }
     setConnectionMode(mode)
     setIsConnected(false)
     appendLog(`🔄 已切換模式：${mode === "serial" ? "USB Serial" : "Wi-Fi"}`)
@@ -73,6 +105,8 @@ export function ArduinoConsole() {
 
   async function connectSerial() {
     try {
+      await disconnectSerial()
+
       if (!("serial" in navigator)) {
         throw new Error("目前瀏覽器不支援 Web Serial")
       }
@@ -137,6 +171,7 @@ export function ArduinoConsole() {
       try {
         const data = new TextEncoder().encode(cmd + "\n")
         await writerRef.current.write(data)
+        appendLog(`✅ 已送出指令：${cmd}`)
         const expectedAck = expectedAckByCommand[cmd]
         if (expectedAck) {
           pendingAckQueueRef.current.push(expectedAck)
@@ -158,10 +193,17 @@ export function ArduinoConsole() {
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || "傳送指令失敗")
       }
+      appendLog(`✅ 已送出指令：${cmd}`)
     } catch (err) {
       appendLog("❌ Send error: " + (err instanceof Error ? err.message : String(err)))
     }
   }
+
+  useEffect(() => {
+    return () => {
+      void disconnectSerial()
+    }
+  }, [])
 
   function shouldSuppressDeviceLog(rawText: string) {
     const expectedAck = pendingAckQueueRef.current[0]

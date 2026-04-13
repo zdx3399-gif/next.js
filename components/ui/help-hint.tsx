@@ -134,13 +134,14 @@ export function HelpHint({ title, description, workflow, logic, align = "start",
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <span
+          role="button"
+          tabIndex={0}
           className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-[var(--theme-border)] bg-[var(--theme-accent-light)] text-[var(--theme-accent)] text-xs font-semibold leading-none hover:border-[var(--theme-border-accent)] hover:opacity-90 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-border-accent)]"
           aria-label={`${title}說明`}
         >
           ?
-        </button>
+        </span>
       </PopoverTrigger>
       <PopoverContent align={align} className={`z-[1300] w-96 max-w-[90vw] text-sm ${className}`}>
         <div className="text-[var(--theme-text-primary)] font-semibold mb-2">操作流程</div>

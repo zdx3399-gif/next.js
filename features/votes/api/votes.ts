@@ -14,6 +14,7 @@ export interface Vote {
   created_at?: string
   results?: Record<string, number>
   total_votes?: number
+  normalized_options?: string[]
 }
 
 export interface VoteRecord {
@@ -29,6 +30,45 @@ interface FetchVotesOptions {
   scope?: "all" | "active"
   userId?: string
   withResults?: boolean
+}
+
+function normalizeOptionsCompat(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((item) => String(item).trim()).filter(Boolean)
+  }
+
+  if (typeof raw === "string") {
+    const trimmed = raw.trim()
+    if (!trimmed) return []
+    try {
+      const parsed = JSON.parse(trimmed)
+      return normalizeOptionsCompat(parsed)
+    } catch {
+      return []
+    }
+  }
+
+  if (raw && typeof raw === "object") {
+    const maybeObj = raw as { options?: unknown }
+    if (Array.isArray(maybeObj.options)) {
+      return maybeObj.options.map((item) => String(item).trim()).filter(Boolean)
+    }
+  }
+
+  return []
+}
+
+function normalizeVotePayload(raw: any): Vote {
+  const normalizedFromField = normalizeOptionsCompat(raw?.normalized_options)
+  const normalizedFromOptions = normalizeOptionsCompat(raw?.options)
+  const finalOptions = normalizedFromField.length > 0 ? normalizedFromField : normalizedFromOptions
+
+  return {
+    ...raw,
+    mode: raw?.mode === "external" ? "external" : "internal",
+    status: raw?.status === "closed" ? "closed" : "active",
+    options: finalOptions.length > 0 ? finalOptions : ["同意", "反對", "棄權"],
+  }
 }
 
 function getCurrentOperator() {
@@ -66,7 +106,7 @@ export async function fetchVotes(options?: FetchVotesOptions): Promise<{ votes: 
     }
 
     const payload = await res.json()
-    const votes: Vote[] = Array.isArray(payload.votes) ? payload.votes : []
+    const votes: Vote[] = Array.isArray(payload.votes) ? payload.votes.map(normalizeVotePayload) : []
     const votedVoteIds = new Set<string>(Array.isArray(payload.votedVoteIds) ? payload.votedVoteIds : [])
     return { votes, votedVoteIds }
   } catch (error) {
@@ -99,7 +139,9 @@ export async function submitVote(voteRecord: VoteRecord): Promise<{ success: boo
 
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      return { success: false, error: data.error || "投票失敗" }
+      const msg = data.error || "投票失敗"
+      const detail = data.details ? `（${data.details}）` : ""
+      return { success: false, error: `${msg}${detail}` }
     }
 
     return { success: true }
@@ -145,7 +187,7 @@ export async function createVote(vote: {
       throw new Error(data.details ? `${data.error || "建立投票失敗"}: ${data.details}` : data.error || "建立投票失敗")
     }
 
-    return data.vote || null
+    return data.vote ? normalizeVotePayload(data.vote) : null
   } catch (error) {
     console.error("Error creating vote:", error)
     return null
@@ -278,7 +320,7 @@ export async function attachExternalResultFile(params: {
       return { success: false, error: data.error || "更新外部結果檔失敗" }
     }
 
-    return { success: true, vote: data.vote }
+    return { success: true, vote: data.vote ? normalizeVotePayload(data.vote) : undefined }
   } catch (error: any) {
     return { success: false, error: error?.message || "更新外部結果檔失敗" }
   }

@@ -36,6 +36,7 @@ type Cluster = {
 type DryRunConfig = {
   forceManualReview: boolean
   windowDays: number
+  fallbackWindowDays: number
   repeatThreshold: number
   autoApplyConfidenceThreshold: number
   aiChatEndpoint: string
@@ -119,6 +120,7 @@ function getConfig(): DryRunConfig {
   return {
     forceManualReview: boolEnv(process.env.AI_AUTO_FIX_FORCE_MANUAL_REVIEW, true),
     windowDays: numEnv(process.env.AI_AUTO_FIX_WINDOW_DAYS, 7),
+    fallbackWindowDays: numEnv(process.env.AI_AUTO_FIX_FALLBACK_WINDOW_DAYS, 90),
     repeatThreshold: numEnv(process.env.AI_AUTO_FIX_REPEAT_THRESHOLD, 3),
     autoApplyConfidenceThreshold: numEnv(process.env.AI_AUTO_FIX_AUTO_APPLY_CONFIDENCE, 0.9),
     aiChatEndpoint: process.env.AI_CHAT_ENDPOINT || "",
@@ -669,20 +671,26 @@ function createSupabaseClient(tenantId: "tenant_a" | "tenant_b") {
 }
 
 async function loadRecentRows(supabase: any, config: DryRunConfig): Promise<ChatHistoryRow[]> {
-  const from = new Date(Date.now() - config.windowDays * 24 * 60 * 60 * 1000).toISOString()
+  async function fetchRows(windowDays: number) {
+    const from = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString()
+    const { data, error } = await supabase
+      .from("chat_events")
+      .select("source, source_pk, created_at, question, answer, feedback, needs_review, issue_type, user_id")
+      .gte("created_at", from)
 
-  // Unified source table for all chat events.
-  const { data: unifiedRows, error: unifiedError } = await supabase
-    .from("chat_events")
-    .select("source, source_pk, created_at, question, answer, feedback, needs_review, issue_type, user_id")
-    .gte("created_at", from)
+    if (error) {
+      throw new Error(`Failed to load chat_events rows: ${error.message}`)
+    }
 
-  if (unifiedError) {
-    console.warn("[ai-auto-fix] loadRecentRows unified query failed:", unifiedError)
-    return []
+    return data || []
   }
 
-  return (unifiedRows || []).map((row: any) => {
+  let unifiedRows = await fetchRows(config.windowDays)
+  if (unifiedRows.length === 0 && config.fallbackWindowDays > config.windowDays) {
+    unifiedRows = await fetchRows(config.fallbackWindowDays)
+  }
+
+  return unifiedRows.map((row: any) => {
     return {
       id: String(row.source_pk || row.id || ""),
       created_at: row.created_at,
@@ -703,8 +711,7 @@ async function loadAnswerRows(supabase: any): Promise<AnswerRow[]> {
     .eq("source", "chat_history")
 
   if (unifiedError) {
-    console.warn("[ai-auto-fix] loadAnswerRows unified query failed:", unifiedError)
-    return []
+    throw new Error(`Failed to load chat_history answers from chat_events: ${unifiedError.message}`)
   }
   return (unifiedRows || []) as AnswerRow[]
 }

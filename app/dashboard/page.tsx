@@ -376,13 +376,6 @@ export default function DashboardPage() {
                 </section>
               )}
 
-              <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-xl p-3">
-                <h3 className="flex items-center gap-1 text-[var(--theme-text-primary)]/90 text-sm font-bold mb-2">
-                  <span className="material-icons">emergency</span>
-                  <span className="text-[var(--theme-danger)] font-bold">緊急事件</span>
-                </h3>
-                <EmergencyButtons userId={currentUser?.id} userName={getNameString(currentUser?.name)} onTrigger={() => {}} variant="sidebar" />
-              </div>
             </section>
           )}
           {currentSection === "packages" && (
@@ -404,7 +397,7 @@ export default function DashboardPage() {
             </div>
           )}
           {currentSection === "maintenance" && <MaintenanceList userId={currentUser?.id} userName={getNameString(currentUser?.name)} />}
-          {currentSection === "finance" && <FinanceList userRoom={currentUser?.room} />}
+          {currentSection === "finance" && <FinanceList userRoom={currentUser?.room} userUnitId={currentUser?.unit_id} />}
           {currentSection === "visitors" && <VisitorList userRoom={currentUser?.room} currentUser={currentUser} />}
           {currentSection === "meetings" && <MeetingList />}
           {currentSection === "emergencies" && (

@@ -22,12 +22,19 @@ const PREVIEW_REQUESTS = [
     id: "dec-preview-2",
     target_type: "comment",
     reason: "留言涉及人身攻擊，需進一步處理",
-    status: "approved",
+    status: "fully_approved",
     created_at: new Date(Date.now() - 86400000).toISOString(),
     reviewed_at: new Date(Date.now() - 43200000).toISOString(),
     review_note: "已完成覆核，進入追蹤流程",
   },
 ]
+
+const STATUS_FILTERS: Record<string, string[]> = {
+  all: [],
+  pending: ["pending", "committee_approved"],
+  approved: ["admin_approved", "fully_approved"],
+  rejected: ["rejected"],
+}
 
 interface DecryptionRequestListProps {
   isPreviewMode?: boolean
@@ -35,8 +42,9 @@ interface DecryptionRequestListProps {
 
 export function DecryptionRequestList({ isPreviewMode = false }: DecryptionRequestListProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const { requests, isLoading } = useDecryptionRequests(statusFilter === "all" ? {} : { status: statusFilter })
-  const previewFiltered = PREVIEW_REQUESTS.filter((r) => statusFilter === "all" || r.status === statusFilter)
+  const selectedStatuses = STATUS_FILTERS[statusFilter] || []
+  const { requests, isLoading } = useDecryptionRequests(selectedStatuses.length === 0 ? {} : { status: selectedStatuses })
+  const previewFiltered = PREVIEW_REQUESTS.filter((r) => selectedStatuses.length === 0 || selectedStatuses.includes(r.status))
   const displayedRequests = isPreviewMode ? previewFiltered : requests
 
   const getStatusBadge = (status: string) => {
@@ -48,7 +56,15 @@ export function DecryptionRequestList({ isPreviewMode = false }: DecryptionReque
             待審核
           </Badge>
         )
-      case "approved":
+      case "committee_approved":
+        return (
+          <Badge variant="outline" className="gap-1 border-blue-500 text-blue-500">
+            <Clock className="w-3 h-3" />
+            待開發者覆核
+          </Badge>
+        )
+      case "admin_approved":
+      case "fully_approved":
         return (
           <Badge variant="default" className="gap-1 bg-green-500">
             <CheckCircle className="w-3 h-3" />

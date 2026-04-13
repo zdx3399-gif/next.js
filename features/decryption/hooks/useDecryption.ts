@@ -37,7 +37,7 @@ export function useDecryptionRequests(filters?: {
 
   useEffect(() => {
     loadRequests()
-  }, [loadRequests])
+  }, [loadRequests, filters?.requestedBy, JSON.stringify(filters?.status)])
 
   return {
     requests,

@@ -63,13 +63,10 @@ async function countPendingFees(supabase: any): Promise<number> {
 }
 
 async function countEmergenciesPending(supabase: any): Promise<number> {
-  const byStatus = await countEqAny(supabase, "emergencies", "status", ["pending", "open"])
+  const byStatus = await countEqAny(supabase, "emergency_incidents", "status", ["draft", "pending", "submitted"])
   if (byStatus > 0) return byStatus
 
-  const unresolved = await supabase.from("emergencies").select("id", { count: "exact", head: true }).is("resolved_at", null)
-  if (!unresolved.error && typeof unresolved.count === "number") return unresolved.count
-
-  const fallback = await supabase.from("emergencies").select("id", { count: "exact", head: true })
+  const fallback = await supabase.from("emergency_incidents").select("id", { count: "exact", head: true })
   if (!fallback.error && typeof fallback.count === "number") return fallback.count
 
   return 0

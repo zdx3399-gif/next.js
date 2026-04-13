@@ -28,6 +28,12 @@ export interface UpdateVisitorReservation extends VisitorReservation {
   id: string
 }
 
+function toIsoFromLocalDateTime(value: string): string {
+  if (!value) return value
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString()
+}
+
 export async function fetchVisitors(room?: string | null, isAdmin?: boolean, userUnitId?: string): Promise<Visitor[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
@@ -89,7 +95,7 @@ export async function createVisitorReservation(
       name: reservation.name,
       phone: reservation.phone,
       purpose: reservation.purpose,
-      reservation_time: reservation.reservation_time,
+      reservation_time: toIsoFromLocalDateTime(reservation.reservation_time),
       unit_id: unitId,
       reserved_by: reservedBy,
       reserved_by_id: reservedById,
@@ -150,7 +156,7 @@ export async function updateVisitorReservation(
       name: reservation.name,
       phone: reservation.phone,
       purpose: reservation.purpose,
-      reservation_time: reservation.reservation_time,
+      reservation_time: toIsoFromLocalDateTime(reservation.reservation_time),
       actor_id: actorId,
       actor_role: actorRole,
     }),

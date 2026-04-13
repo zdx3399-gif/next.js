@@ -16,6 +16,7 @@ import {
   Key,
 } from "lucide-react"
 import { useState } from "react"
+import type { MouseEvent } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +59,8 @@ interface PostCardProps {
     display_mode?: string
     display_name?: string | null
     moderation_reason?: string
+    ai_risk_level?: "low" | "medium" | "high" | null
+    moderated_by?: string | null
   }
   currentUserId?: string
   isAdmin?: boolean
@@ -105,22 +108,31 @@ export function CommunityPostCard({
   const isRedacted = post.status === "redacted"
   const isShadow = post.status === "shadow"
   const isRemoved = post.status === "removed"
+  const isAiPreScreened = post.status === "pending" && !!post.ai_risk_level && !post.moderated_by
   const canRequestDecryption = isAdmin && (isRedacted || isShadow || isRemoved)
   const hasOpenAppeal = appealStatus === "pending" || appealStatus === "reviewing"
   const isAppealRejected = appealStatus === "rejected"
-  const canAppeal = isAuthor && !isAdmin && isRemoved && !hasOpenAppeal && !isAppealRejected
+  const canAppeal = isAuthor && !isAdmin && isAiPreScreened && !hasOpenAppeal && !isAppealRejected
 
-  const handleLike = () => {
+  const stopCardClick = (event: MouseEvent<HTMLElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  const handleLike = (event?: MouseEvent<HTMLElement>) => {
+    if (event) stopCardClick(event)
     setLiked(!liked)
     onLike?.(post.id)
   }
 
-  const handleBookmark = () => {
+  const handleBookmark = (event?: MouseEvent<HTMLElement>) => {
+    if (event) stopCardClick(event)
     setBookmarked(!bookmarked)
     onBookmark?.(post.id)
   }
 
-  const handleWithdraw = () => {
+  const handleWithdraw = (event?: MouseEvent<HTMLElement>) => {
+    if (event) stopCardClick(event)
     if (confirm("確定要收回這篇貼文嗎？收回後將無法復原。")) {
       onWithdraw?.(post.id)
     }
@@ -178,8 +190,9 @@ export function CommunityPostCard({
   const likesCount = post.likes_count ?? post.like_count ?? 0
   const commentsCount = post.comments_count ?? post.comment_count ?? 0
 
-  const displayTitle = isRedacted && post.redacted_title ? post.redacted_title : post.title
-  const displayContent = isRedacted && post.redacted_content ? post.redacted_content : post.content
+  const displayTitle = post.title
+  const displayContent = post.content
+  const spoilerMaskClass = isRedacted && !isAdmin ? "blur-[5px] select-none" : ""
 
   const getAppealBadge = (status?: PostCardProps["appealStatus"]) => {
     if (status === "pending" || status === "reviewing") {
@@ -212,7 +225,10 @@ export function CommunityPostCard({
                   variant="outline"
                   size="sm"
                   className="ml-auto h-6 text-xs border-amber-500/50 text-amber-500 hover:bg-amber-500/10 bg-transparent"
-                  onClick={() => setShowDecryptionDialog(true)}
+                  onClick={(event) => {
+                    stopCardClick(event)
+                    setShowDecryptionDialog(true)
+                  }}
                 >
                   <Key className="w-3 h-3 mr-1" />
                   申請解密
@@ -229,7 +245,10 @@ export function CommunityPostCard({
                   variant="outline"
                   size="sm"
                   className="ml-auto h-6 text-xs border-purple-500/50 text-purple-500 hover:bg-purple-500/10 bg-transparent"
-                  onClick={() => setShowDecryptionDialog(true)}
+                  onClick={(event) => {
+                    stopCardClick(event)
+                    setShowDecryptionDialog(true)
+                  }}
                 >
                   <Key className="w-3 h-3 mr-1" />
                   申請解密
@@ -246,7 +265,10 @@ export function CommunityPostCard({
                   variant="outline"
                   size="sm"
                   className="ml-auto h-6 text-xs border-red-500/50 text-red-500 hover:bg-red-500/10 bg-transparent"
-                  onClick={() => setShowDecryptionDialog(true)}
+                  onClick={(event) => {
+                    stopCardClick(event)
+                    setShowDecryptionDialog(true)
+                  }}
                 >
                   <Key className="w-3 h-3 mr-1" />
                   申請解密
@@ -254,27 +276,32 @@ export function CommunityPostCard({
               )}
             </div>
           )}
-          {isRemoved && canAppeal && (
+          {canAppeal && (
             <div className="flex items-center gap-2 mb-3 p-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
               <ShieldAlert className="w-4 h-4 text-blue-500" />
-              <span className="text-xs text-blue-500">此貼文已下架，可提出申訴要求人工複審</span>
+              <span className="text-xs text-blue-500">
+                此貼文為 AI 初篩待審，可提出申訴進入管理員人工複審
+              </span>
               <Button
                 variant="outline"
                 size="sm"
                 className="ml-auto h-6 text-xs border-blue-500/50 text-blue-500 hover:bg-blue-500/10 bg-transparent"
-                onClick={() => setShowAppealDialog(true)}
+                onClick={(event) => {
+                  stopCardClick(event)
+                  setShowAppealDialog(true)
+                }}
               >
                 提出申訴
               </Button>
             </div>
           )}
-          {isRemoved && hasOpenAppeal && (
+          {isAiPreScreened && hasOpenAppeal && (
             <div className="flex items-center gap-2 mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
               <ShieldAlert className="w-4 h-4 text-amber-500" />
               <span className="text-xs font-medium text-amber-500">此貼文已有處理中的申訴案件</span>
             </div>
           )}
-          {isRemoved && isAppealRejected && (
+          {isAiPreScreened && isAppealRejected && (
             <div className="flex items-center gap-2 mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded-lg">
               <ShieldAlert className="w-4 h-4 text-red-500" />
               <span className="text-xs font-medium text-red-500">此貼文申訴已駁回，無法再次申請</span>
@@ -304,7 +331,7 @@ export function CommunityPostCard({
                 )}
                 {isShadow && isAdmin && (
                   <Badge variant="outline" className="text-xs px-2 py-0 border-purple-500/50 text-purple-500">
-                    影子封禁
+                    {isAiPreScreened ? "AI 初篩" : "影子封禁"}
                   </Badge>
                 )}
                 {isRemoved && isAdmin && (
@@ -330,7 +357,12 @@ export function CommunityPostCard({
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-muted-foreground"
+                  onClick={stopCardClick}
+                >
                   <MoreHorizontal className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -375,10 +407,12 @@ export function CommunityPostCard({
           </div>
 
           <div className="space-y-2 mb-4">
-            <h3 className="font-semibold text-base md:text-lg leading-snug text-balance line-clamp-2">
+            <h3 className={`font-semibold text-base md:text-lg leading-snug text-balance line-clamp-2 ${spoilerMaskClass}`}>
               {displayTitle}
             </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{displayContent}</p>
+            <p className={`text-sm text-muted-foreground leading-relaxed line-clamp-3 ${spoilerMaskClass}`}>
+              {displayContent}
+            </p>
           </div>
 
           {post.tags && post.tags.length > 0 && (
@@ -412,7 +446,10 @@ export function CommunityPostCard({
                 variant="ghost"
                 size="sm"
                 className="gap-1.5 h-8 px-2 text-muted-foreground hover:text-foreground"
-                onClick={() => onComment?.(post.id)}
+                onClick={(event) => {
+                  stopCardClick(event)
+                  onComment?.(post.id)
+                }}
               >
                 <MessageCircle className="w-4 h-4" />
                 <span className="text-xs">{commentsCount}</span>
@@ -433,7 +470,10 @@ export function CommunityPostCard({
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                onClick={() => onShare?.(post.id)}
+                onClick={(event) => {
+                  stopCardClick(event)
+                  onShare?.(post.id)
+                }}
               >
                 <Share2 className="w-4 h-4" />
               </Button>

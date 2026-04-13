@@ -54,8 +54,6 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     name: data.name,
     phone: data.phone,
     email: data.email,
-    emergency_contact_name: data.emergency_contact_name,
-    emergency_contact_phone: data.emergency_contact_phone,
   }
 
   if (data.line_avatar_url !== undefined) {
@@ -88,6 +86,37 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     throw error
   }
 
+  const emergencyContactName = (data.emergency_contact_name || "").trim()
+  const emergencyContactPhone = (data.emergency_contact_phone || "").trim()
+
+  if (emergencyContactName || emergencyContactPhone) {
+    const { data: existingContact } = await supabase
+      .from("emergency_contacts")
+      .select("id")
+      .eq("resident_profile_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingContact?.id) {
+      await supabase
+        .from("emergency_contacts")
+        .update({
+          contact_name: emergencyContactName || "緊急聯絡人",
+          contact_phone: emergencyContactPhone || "",
+        })
+        .eq("id", existingContact.id)
+    } else {
+      await supabase.from("emergency_contacts").insert({
+        resident_profile_id: userId,
+        contact_name: emergencyContactName || "緊急聯絡人",
+        contact_phone: emergencyContactPhone || "",
+      })
+    }
+  } else {
+    await supabase.from("emergency_contacts").delete().eq("resident_profile_id", userId)
+  }
+
   const { data: profile, error: fetchError } = await supabase
     .from("profiles")
     .select(`
@@ -98,6 +127,14 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     .single()
 
   if (fetchError) throw fetchError
+
+  const { data: emergencyContact } = await supabase
+    .from("emergency_contacts")
+    .select("contact_name, contact_phone")
+    .eq("resident_profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   if (operator.id) {
     await createAuditLog({
@@ -126,8 +163,8 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
     car_spots: profile.units?.car_spots,
     moto_spots: profile.units?.moto_spots,
     monthly_fee: profile.units?.monthly_fee,
-    emergency_contact_name: profile.emergency_contact_name || undefined,
-    emergency_contact_phone: profile.emergency_contact_phone || undefined,
+    emergency_contact_name: emergencyContact?.contact_name || undefined,
+    emergency_contact_phone: emergencyContact?.contact_phone || undefined,
     line_avatar_url: profile.line_avatar_url || undefined,
   }
 }
@@ -147,6 +184,14 @@ export async function getProfile(userId: string): Promise<User | null> {
 
   if (error || !data) return null
 
+  const { data: emergencyContact } = await supabase
+    .from("emergency_contacts")
+    .select("contact_name, contact_phone")
+    .eq("resident_profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
   return {
     id: data.id,
     name: data.name,
@@ -161,8 +206,8 @@ export async function getProfile(userId: string): Promise<User | null> {
     car_spots: data.units?.car_spots,
     moto_spots: data.units?.moto_spots,
     monthly_fee: data.units?.monthly_fee,
-    emergency_contact_name: data.emergency_contact_name || undefined,
-    emergency_contact_phone: data.emergency_contact_phone || undefined,
+    emergency_contact_name: emergencyContact?.contact_name || undefined,
+    emergency_contact_phone: emergencyContact?.contact_phone || undefined,
     line_avatar_url: data.line_avatar_url || undefined,
   }
 }
@@ -196,9 +241,9 @@ export async function getBoundLineAvatarUrl(userId: string): Promise<string> {
   if (!supabase) return ""
 
   const { data, error } = await supabase
-    .from("line_users")
-    .select("avatar_url")
-    .eq("profile_id", userId)
+    .from("profiles")
+    .select("line_avatar_url")
+    .eq("id", userId)
     .maybeSingle()
 
   if (error) {
@@ -206,7 +251,7 @@ export async function getBoundLineAvatarUrl(userId: string): Promise<string> {
     return ""
   }
 
-  return data?.avatar_url || ""
+  return data?.line_avatar_url || ""
 }
 
 export async function getUnits() {

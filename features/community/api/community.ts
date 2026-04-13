@@ -33,6 +33,7 @@ export interface CommunityPost {
   post_type?: string
   likes_count?: number
   comments_count?: number
+  tags?: string[]
 }
 
 export interface PostComment {
@@ -569,6 +570,23 @@ export async function createReport(report: {
   return data as Report
 }
 
+export async function getPostsByIds(postIds: string[]): Promise<CommunityPost[]> {
+  const supabase = getSupabaseClient()
+  if (!supabase || !postIds.length) return []
+
+  const { data, error } = await supabase
+    .from("community_posts")
+    .select("*")
+    .in("id", postIds)
+
+  if (error) {
+    console.error("[v0] Error fetching posts by ids:", error)
+    return []
+  }
+
+  return (data || []) as CommunityPost[]
+}
+
 export async function getOwnModeratedPosts(userId: string): Promise<CommunityPost[]> {
   const supabase = getSupabaseClient()
 
@@ -580,7 +598,9 @@ export async function getOwnModeratedPosts(userId: string): Promise<CommunityPos
     .from("community_posts")
     .select("*")
     .eq("author_id", userId)
-    .in("status", ["removed", "shadow", "redacted"])
+    .eq("status", "pending")
+    .not("ai_risk_level", "is", null)
+    .is("moderated_by", null)
     .order("updated_at", { ascending: false })
 
   if (error) {

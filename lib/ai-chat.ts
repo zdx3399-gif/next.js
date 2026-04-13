@@ -1,3 +1,5 @@
+import { generateGeminiContent } from "@/lib/gemini-client";
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 export interface ChatResult {
@@ -26,35 +28,23 @@ export async function chat(query: string): Promise<ChatResult> {
   }
 
   try {
-    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: query,
-              },
-            ],
-          },
-        ],
-      }),
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              text: query,
+            },
+          ],
+        },
+      ],
+    };
+
+    const { data, model } = await generateGeminiContent({
+      apiKey: GEMINI_API_KEY,
+      payload,
+      debugLabel: "ai-chat",
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Gemini API error:", errorData);
-      return {
-        answer: "無法取得 AI 回應，請稍後重試。",
-        answered: false,
-      };
-    }
-
-    const data = await response.json();
 
     // Extract answer from Gemini response
     const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || "無法生成回應。";
@@ -66,7 +56,7 @@ export async function chat(query: string): Promise<ChatResult> {
       intent_confidence: 0.95,
       answered: answer && answer.length > 0,
       metadata: {
-        model: "gemini-pro",
+        model,
         timestamp: new Date().toISOString(),
       },
     };

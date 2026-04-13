@@ -472,19 +472,19 @@ export default function AdminPage() {
                       </span>
                     </h3>
                     <p className="text-sm text-[var(--theme-text-secondary)] mb-3">
-                      審核新進的解密申請，通過後將送交系統管理員覆核
+                      審核新進的解密申請，通過後將送交開發者覆核
                     </p>
                     <DecryptionReviewPanel reviewerId={currentUser?.id || ""} reviewerRole="committee" isPreviewMode={false} />
                   </div>
                 )}
 
-                {/* 系統管理員覆核區（第二層）- 只有 admin 可以操作 */}
+                {/* 開發者覆核區（第二層）- 只有 admin 可以操作 */}
                 {currentUser?.role === "admin" && (
                   <div>
                     <h3 className="text-lg font-semibold mb-3 text-[var(--theme-text-primary)]">
                       <span className="inline-flex items-center gap-2">
                         <span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded">第二層</span>
-                        系統管理員覆核
+                        開發者覆核
                       </span>
                     </h3>
                     <p className="text-sm text-[var(--theme-text-secondary)] mb-3">

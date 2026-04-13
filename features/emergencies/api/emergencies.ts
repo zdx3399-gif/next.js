@@ -1,4 +1,4 @@
-﻿import { getSupabaseClient } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 import { createAuditLog } from "@/lib/audit"
 
 export interface Emergency {
@@ -6,6 +6,8 @@ export interface Emergency {
   type: string
   note: string
   time?: string
+  status?: string
+  source?: string
   reported_by_id?: string
   created_by?: string
   reported_by_name?: string
@@ -42,18 +44,18 @@ function getCurrentOperator() {
 }
 
 export async function fetchEmergencies(filters?: { reportedById?: string }): Promise<Emergency[]> {
-  const supabase = getSupabaseClient()!
+  const supabase = getSupabaseClient()
+  if (!supabase) return []
   let query = supabase
-    .from("emergencies")
+    .from("emergency_incidents")
     .select(`
       *,
-      reporter:profiles!emergencies_reported_by_id_fkey(name),
-      creator:profiles!emergencies_created_by_fkey(name)
+      reporter:profiles!emergency_incidents_reporter_profile_id_fkey(name)
     `)
     .order("created_at", { ascending: false })
 
   if (filters?.reportedById) {
-    query = query.eq("reported_by_id", filters.reportedById)
+    query = query.eq("reporter_profile_id", filters.reportedById)
   }
 
   const { data, error } = await query
@@ -61,22 +63,42 @@ export async function fetchEmergencies(filters?: { reportedById?: string }): Pro
   if (error) {
     // Fallback: 沒有 JOIN
     let fallbackQuery = supabase
-      .from("emergencies")
+      .from("emergency_incidents")
       .select("*")
       .order("created_at", { ascending: false })
     if (filters?.reportedById) {
-      fallbackQuery = fallbackQuery.eq("reported_by_id", filters.reportedById)
+      fallbackQuery = fallbackQuery.eq("reporter_profile_id", filters.reportedById)
     }
     const { data: fallbackData } = await fallbackQuery
-    return fallbackData || []
+    return (fallbackData || []).map((item: any) => ({
+      id: item.id,
+      type: item.event_type || "未分類",
+      note: item.description || "",
+      description: item.description || undefined,
+      location: item.location || undefined,
+      time: item.created_at || item.updated_at || undefined,
+      source: item.source || undefined,
+      status: item.status || undefined,
+      reported_by_id: item.reporter_profile_id || undefined,
+      reported_by_name: "未知",
+      by: "未知",
+      created_at: item.created_at || undefined,
+    }))
   }
 
   return (data || []).map((item: any) => ({
-    ...item,
-    location: item.location || undefined,
+    id: item.id,
+    type: item.event_type || "未分類",
+    note: item.description || "",
     description: item.description || undefined,
-    reported_by_name: item.reporter?.name || item.creator?.name || "未知",
-    by: item.reporter?.name || item.creator?.name || "未知",
+    location: item.location || undefined,
+    time: item.created_at || item.updated_at || undefined,
+    source: item.source || undefined,
+    status: item.status || undefined,
+    reported_by_id: item.reporter_profile_id || undefined,
+    reported_by_name: item.reporter?.name || "未知",
+    by: item.reporter?.name || "未知",
+    created_at: item.created_at || undefined,
   }))
 }
 
@@ -116,9 +138,10 @@ export async function triggerEmergency(
 }
 
 export async function deleteEmergency(id: string): Promise<void> {
-  const supabase = getSupabaseClient()!
+  const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
   const operator = getCurrentOperator()
-  const { error } = await supabase.from("emergencies").delete().eq("id", id)
+  const { error } = await supabase.from("emergency_incidents").delete().eq("id", id)
   if (error) {
     if (operator.id) {
       await createAuditLog({
@@ -148,9 +171,9 @@ export async function deleteEmergency(id: string): Promise<void> {
 }
 
 export async function editEmergency(id: string, payload: EmergencyUpdatePayload): Promise<void> {
-  const updatePayload: EmergencyUpdatePayload = {}
-  if (typeof payload.type === "string") updatePayload.type = payload.type
-  if (typeof payload.note === "string") updatePayload.note = payload.note
+  const updatePayload: Record<string, string> = {}
+  if (typeof payload.type === "string") updatePayload.event_type = payload.type
+  if (typeof payload.note === "string") updatePayload.description = payload.note
 
   const operator = getCurrentOperator()
 
@@ -169,8 +192,9 @@ export async function editEmergency(id: string, payload: EmergencyUpdatePayload)
     return
   }
 
-  const supabase = getSupabaseClient()!
-  const { error } = await supabase.from("emergencies").update(updatePayload).eq("id", id)
+  const supabase = getSupabaseClient()
+  if (!supabase) throw new Error("Supabase client unavailable")
+  const { error } = await supabase.from("emergency_incidents").update(updatePayload).eq("id", id)
   if (error) {
     if (operator.id) {
       await createAuditLog({
@@ -204,4 +228,3 @@ export async function editEmergency(id: string, payload: EmergencyUpdatePayload)
 export function getReportedByName(emergency: Emergency): string {
   return emergency.reported_by_name || "未知"
 }
-

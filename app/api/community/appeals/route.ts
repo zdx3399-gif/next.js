@@ -7,7 +7,11 @@ export const dynamic = "force-dynamic"
 
 function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || ""
-  const supabaseKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ""
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    ""
 
   if (!supabaseUrl || !supabaseKey) {
     throw new Error("Missing Supabase env")
@@ -47,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     const { data: post, error: postError } = await supabase
       .from("community_posts")
-      .select("id, author_id, status")
+      .select("id, author_id, status, ai_risk_level, moderated_by")
       .eq("id", postId)
       .single()
 
@@ -83,7 +87,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "只能為自己的貼文提出申訴" }, { status: 403 })
     }
 
-    if (!["removed", "shadow", "redacted"].includes(post.status)) {
+    if (post.status !== "pending") {
       await writeServerAuditLog({
         supabase,
         operatorId: authorId,
@@ -91,13 +95,45 @@ export async function POST(req: NextRequest) {
         actionType: "appeal_submit",
         targetType: "community_post",
         targetId: postId,
-        reason: "僅限被處置貼文可提出申訴",
+        reason: "僅限 AI 初篩待審貼文可提出申訴",
         module: "community",
         status: "blocked",
         errorCode: "invalid_post_status",
         beforeState: { status: post.status },
       })
-      return NextResponse.json({ error: "僅限被處置貼文可提出申訴" }, { status: 400 })
+      return NextResponse.json({ error: "僅限 AI 初篩待審貼文可提出申訴" }, { status: 400 })
+    }
+
+    if (!post.ai_risk_level) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: authorId,
+        operatorRole: "resident",
+        actionType: "appeal_submit",
+        targetType: "community_post",
+        targetId: postId,
+        reason: "僅限 AI 標記的貼文可提出申訴",
+        module: "community",
+        status: "blocked",
+        errorCode: "appeal_ai_only",
+      })
+      return NextResponse.json({ error: "僅限 AI 標記的貼文可提出申訴" }, { status: 400 })
+    }
+
+    if (post.moderated_by) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: authorId,
+        operatorRole: "resident",
+        actionType: "appeal_submit",
+        targetType: "community_post",
+        targetId: postId,
+        reason: "人工已處置貼文不可申訴",
+        module: "community",
+        status: "blocked",
+        errorCode: "appeal_manual_moderated_blocked",
+      })
+      return NextResponse.json({ error: "人工已處置貼文不可申訴" }, { status: 400 })
     }
 
     const { data: existingOpen } = await supabase
@@ -124,15 +160,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "已有處理中的申訴案件" }, { status: 409 })
     }
 
-    const { data: existingRejected } = await supabase
+    const { data: latestAppeal } = await supabase
       .from("moderation_appeals")
-      .select("id")
+      .select("id, status, created_at")
       .eq("post_id", postId)
       .eq("author_id", authorId)
-      .eq("status", "rejected")
+      .order("created_at", { ascending: false })
       .limit(1)
+      .maybeSingle()
 
-    if (existingRejected && existingRejected.length > 0) {
+    if (latestAppeal?.status === "rejected") {
       await writeServerAuditLog({
         supabase,
         operatorId: authorId,
@@ -148,14 +185,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "此貼文申訴已被駁回，無法再次申請" }, { status: 409 })
     }
 
-    const { data: latest } = await supabase
-      .from("moderation_appeals")
-      .select("created_at")
-      .eq("post_id", postId)
-      .eq("author_id", authorId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const latest = latestAppeal
 
     if (latest?.created_at) {
       const lastTs = new Date(latest.created_at).getTime()
@@ -208,16 +238,60 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: appealError?.message || "建立申訴失敗" }, { status: 500 })
     }
 
-    await supabase.from("moderation_queue").insert([
-      {
-        item_type: "post",
-        item_id: postId,
-        priority: "high",
-        ai_risk_summary: "住戶申訴案件：請人工複審",
-        ai_suggested_action: "review_appeal",
-        status: "pending",
-      },
-    ])
+    const queuePayload = {
+      item_type: "post",
+      item_id: postId,
+      priority: "high",
+      ai_risk_summary: "住戶申訴案件：請人工複審",
+      ai_suggested_action: "review_appeal",
+      status: "pending",
+    }
+
+    const { data: existingQueueItem } = await supabase
+      .from("moderation_queue")
+      .select("id")
+      .eq("item_type", "post")
+      .eq("item_id", postId)
+      .in("status", ["pending", "in_review"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    let queueError: any = null
+    if (existingQueueItem?.id) {
+      const { error } = await supabase
+        .from("moderation_queue")
+        .update({
+          ...queuePayload,
+          resolved_at: null,
+          resolution: null,
+        })
+        .eq("id", existingQueueItem.id)
+      queueError = error
+    } else {
+      const { error } = await supabase.from("moderation_queue").insert([queuePayload])
+      queueError = error
+    }
+
+    if (queueError) {
+      await writeServerAuditLog({
+        supabase,
+        operatorId: authorId,
+        operatorRole: "resident",
+        actionType: "appeal_submit",
+        targetType: "community_post",
+        targetId: postId,
+        reason: queueError?.message || "建立審核隊列失敗",
+        module: "community",
+        status: "failed",
+        errorCode: queueError?.message || "appeal_queue_failed",
+        relatedRequestId: appeal.id,
+      })
+
+      // 申訴案件與審核隊列必須一致，若無法入列則回滾剛建立的申訴
+      await supabase.from("moderation_appeals").delete().eq("id", appeal.id)
+      return NextResponse.json({ error: "建立審核隊列失敗，請稍後再試" }, { status: 500 })
+    }
 
     await writeServerAuditLog({
       supabase,

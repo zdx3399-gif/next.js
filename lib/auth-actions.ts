@@ -269,8 +269,6 @@ export async function registerUser(
           status: "active",
           tenant_id: tenantId,
           unit_id: unitId,
-          emergency_contact_name: emergencyContactName || null,
-          emergency_contact_phone: emergencyContactPhone || null,
         },
       ])
       .select("*")
@@ -297,6 +295,22 @@ export async function registerUser(
         ])
       if (householdError) {
         console.warn("[v0] 建立 household_member 失敗:", householdError.message)
+      }
+    }
+
+    const normalizedEmergencyContactName = (emergencyContactName || "").trim()
+    const normalizedEmergencyContactPhone = (emergencyContactPhone || "").trim()
+    if (normalizedEmergencyContactName || normalizedEmergencyContactPhone) {
+      const { error: emergencyContactError } = await supabase.from("emergency_contacts").insert([
+        {
+          resident_profile_id: profile.id,
+          contact_name: normalizedEmergencyContactName || "緊急聯絡人",
+          contact_phone: normalizedEmergencyContactPhone || "",
+        },
+      ])
+
+      if (emergencyContactError) {
+        console.warn("[v0] 建立 emergency_contact 失敗:", emergencyContactError.message)
       }
     }
 

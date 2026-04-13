@@ -114,14 +114,6 @@ CREATE TABLE IF NOT EXISTS meetings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Added messages table
-CREATE TABLE IF NOT EXISTS messages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL,
-  text TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now())
-);
-
 -- Updated packages table to match exact schema
 CREATE TABLE IF NOT EXISTS packages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -133,18 +125,6 @@ CREATE TABLE IF NOT EXISTS packages (
   picked_up_at TIMESTAMP WITH TIME ZONE,
   status TEXT NOT NULL DEFAULT 'pending',
   notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Updated residents table to match exact schema
-CREATE TABLE IF NOT EXISTS residents (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  room TEXT NOT NULL,
-  phone TEXT DEFAULT '',
-  email TEXT DEFAULT '',
-  role TEXT DEFAULT 'resident' CHECK (role IN ('resident', 'committee', 'guard', 'admin')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

@@ -1,8 +1,15 @@
-﻿"use client";
+"use client";
 import { useState, useEffect } from "react";
 
+type AdminEventRow = {
+  event_type?: "visitor" | "package" | "emergency" | string;
+  time_created?: string;
+  message?: string;
+  unit?: string;
+};
+
 export default function AdminPage() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<AdminEventRow[]>([]);
 
   async function loadEvents() {
     const res = await fetch("/api/events/list");
@@ -17,9 +24,9 @@ export default function AdminPage() {
   }, []);
 
   // 依類型分組
-  const visitorEvents = events.filter((e: any) => e.event_type === "visitor");
-  const packageEvents = events.filter((e: any) => e.event_type === "package");
-  const emergencyEvents = events.filter((e: any) => e.event_type === "emergency");
+  const visitorEvents = events.filter(e => e.event_type === "visitor");
+  const packageEvents = events.filter(e => e.event_type === "package");
+  const emergencyEvents = events.filter(e => e.event_type === "emergency");
 
   // 取最大長度，讓表格對齊
   const maxRows = Math.max(visitorEvents.length, packageEvents.length, emergencyEvents.length);
@@ -48,7 +55,7 @@ export default function AdminPage() {
               <td style={{ verticalAlign: "top", padding: "8px" }}>
                 {visitorEvents[i] ? (
                   <>
-                    <span style={{ color: "#b8860b", fontWeight: "bold" }}>{new Date(visitorEvents[i].time_created).toLocaleString()}</span><br />
+                    <span style={{ color: "#b8860b", fontWeight: "bold" }}>{new Date(visitorEvents[i].time_created || "").toLocaleString()}</span><br />
                     {visitorEvents[i].message}<br />
                     {visitorEvents[i].unit && (
                       <span style={{ color: "purple" }}>for Unit {visitorEvents[i].unit}</span>
@@ -60,7 +67,7 @@ export default function AdminPage() {
               <td style={{ verticalAlign: "top", padding: "8px" }}>
                 {packageEvents[i] ? (
                   <>
-                    <span style={{ color: "#b8860b", fontWeight: "bold" }}>{new Date(packageEvents[i].time_created).toLocaleString()}</span><br />
+                    <span style={{ color: "#b8860b", fontWeight: "bold" }}>{new Date(packageEvents[i].time_created || "").toLocaleString()}</span><br />
                     {packageEvents[i].message}<br />
                     {packageEvents[i].unit && (
                       <span style={{ color: "orange" }}>to Unit {packageEvents[i].unit}</span>
@@ -72,7 +79,7 @@ export default function AdminPage() {
               <td style={{ verticalAlign: "top", padding: "8px", background: emergencyEvents[i] ? "#ffcccc" : undefined }}>
                 {emergencyEvents[i] ? (
                   <>
-                    <span style={{ color: "red", fontWeight: "bold" }}>{new Date(emergencyEvents[i].time_created).toLocaleString()}</span><br />
+                    <span style={{ color: "red", fontWeight: "bold" }}>{new Date(emergencyEvents[i].time_created || "").toLocaleString()}</span><br />
                     {emergencyEvents[i].message}<br />
                     {emergencyEvents[i].unit && (
                       <span style={{ color: "purple" }}>by Unit {emergencyEvents[i].unit}</span>

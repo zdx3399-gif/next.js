@@ -1,7 +1,7 @@
-﻿"use client"
+"use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Search, Plus, Edit, Trash2, CheckCircle, XCircle, Shield, Users, Building, MoreVertical, Inbox, FileText, ArrowRight, RefreshCw } from "lucide-react"
+import { Search, Plus, Edit, Trash2, CheckCircle, XCircle, Shield, Users, Building, MoreVertical, FileText, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useKnowledgeCards } from "../hooks/useKMS"
-import { getPendingKMSPosts, importPostToKMS, rejectKMSSuggestion } from "../api/kms"
+import { getPendingKMSPosts, getRejectedKMSPosts, importPostToKMS, rejectKMSSuggestion } from "../api/kms"
 import type { User } from "@/features/profile/api/profile"
 import type { CommunityPost } from "@/features/community/api/community"
 import { HelpHint } from "@/components/ui/help-hint"
@@ -33,8 +33,6 @@ interface KnowledgeBaseAdminProps {
   currentUser: User | null
   isPreviewMode?: boolean
 }
-
-type TabType = "cards" | "pending"
 
 const CATEGORIES = [
   { value: "all", label: "全部" },
@@ -51,8 +49,8 @@ const CATEGORIES = [
 const STATUS_OPTIONS = [
   { value: "all", label: "全部狀態" },
   { value: "active", label: "已發布" },
-  { value: "unverified", label: "待驗證" },
-  { value: "archived", label: "已封存" },
+  { value: "unverified", label: "待入庫" },
+  { value: "archived", label: "拒絕入庫" },
 ]
 
 const CREDIBILITY_OPTIONS = [
@@ -72,11 +70,30 @@ const PREVIEW_CARDS = [
 const PREVIEW_PENDING_POSTS: CommunityPost[] = [
   {
     id: "preview-kms-pending-1",
+    author_id: "preview-user-1",
     title: "測試資料",
     content: "測試資料",
-    category: "visitor",
+    category: "howto",
+    display_mode: "real_name",
     display_name: "測試資料",
+    status: "published",
+    ai_risk_level: "low",
+    ai_risk_reason: null,
+    ai_suggestions: null,
+    view_count: 0,
+    like_count: 0,
+    comment_count: 0,
+    bookmark_count: 0,
+    helpful_vote_count: 0,
+    moderated_at: null,
+    moderated_by: null,
+    moderation_reason: null,
+    is_in_kms: false,
+    kms_card_id: null,
+    edited_at: null,
+    can_edit_until: null,
     created_at: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
     structured_data: {
       kms_suggestion: {
         suggested_title: "測試資料",
@@ -84,11 +101,10 @@ const PREVIEW_PENDING_POSTS: CommunityPost[] = [
         suggested_category: "visitor",
       },
     },
-  } as unknown as CommunityPost,
+  },
 ]
 
 export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: KnowledgeBaseAdminProps) {
-  const [activeTab, setActiveTab] = useState<TabType>("cards")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [selectedStatus, setSelectedStatus] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
@@ -100,7 +116,9 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
   const [selectedCard, setSelectedCard] = useState<any>(null)
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
   const [pendingPosts, setPendingPosts] = useState<CommunityPost[]>([])
+  const [rejectedPosts, setRejectedPosts] = useState<CommunityPost[]>([])
   const [pendingLoading, setPendingLoading] = useState(false)
+  const [rejectedLoading, setRejectedLoading] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [actionSubmitting, setActionSubmitting] = useState(false)
 
@@ -130,15 +148,33 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       setPendingLoading(false)
     }
   }, [isPreviewMode])
-
-  useEffect(() => {
-    if (activeTab === "pending") {
-      loadPendingPosts()
+  const loadRejectedPosts = useCallback(async () => {
+    if (isPreviewMode) {
+      setRejectedLoading(false)
+      setRejectedPosts([])
+      return
     }
-  }, [activeTab, loadPendingPosts])
+
+    setRejectedLoading(true)
+    try {
+      const posts = await getRejectedKMSPosts()
+      setRejectedPosts(posts as CommunityPost[])
+    } catch (err) {
+      console.error("[v0] Error loading rejected posts:", err)
+    } finally {
+      setRejectedLoading(false)
+    }
+  }, [isPreviewMode])
+
+  // 初次進入頁面就先載入一次，讓「待入庫審核」筆數可立即顯示
+  useEffect(() => {
+    loadPendingPosts()
+    loadRejectedPosts()
+  }, [loadPendingPosts, loadRejectedPosts])
 
   const { cards: realCards, loading: realLoading, error: realError, refresh: realRefresh, createCard, updateCard, deleteCard } = useKnowledgeCards({
     category: selectedCategory === "all" ? undefined : selectedCategory,
+    status: selectedStatus,
     search: searchQuery || undefined,
   })
 
@@ -183,6 +219,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       setSelectedPost(null)
       setRejectReason("")
       loadPendingPosts()
+      loadRejectedPosts()
     } catch (err: any) {
       alert("操作失敗: " + err.message)
     } finally {
@@ -289,6 +326,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       await updateCard(
         cardId,
         {
+          status: newStatus as "active" | "unverified" | "archived",
           changelog: `狀態變更為 ${newStatus}`,
         },
         currentUser.id,
@@ -310,6 +348,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       await updateCard(
         cardId,
         {
+          credibility: newCredibility,
           changelog: `可信度變更為 ${newCredibility}`,
         },
         currentUser.id,
@@ -362,9 +401,9 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
       case "active":
         return <Badge className="bg-green-500/20 text-green-500 border-green-500/50">已發布</Badge>
       case "unverified":
-        return <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/50">待驗證</Badge>
+        return <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/50">待入庫(待入庫審核)</Badge>
       case "archived":
-        return <Badge className="bg-gray-500/20 text-gray-500 border-gray-500/50">已封存</Badge>
+        return <Badge className="bg-gray-500/20 text-gray-500 border-gray-500/50">拒絕入庫</Badge>
       case "removed":
         return <Badge className="bg-red-500/20 text-red-500 border-red-500/50">已移除</Badge>
       default:
@@ -374,118 +413,15 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
 
   return (
     <div className="space-y-4">
-      {/* Tab 切換 */}
       <div className="flex gap-2 border-b border-border pb-2">
-        <Button
-          variant={activeTab === "cards" ? "default" : "ghost"}
-          onClick={() => setActiveTab("cards")}
-          className="gap-2"
-        >
+        <Button variant="default" className="gap-2">
           <FileText className="w-4 h-4" />
-          知識卡管理
+          知識庫管理
         </Button>
-        <Button
-          variant={activeTab === "pending" ? "default" : "ghost"}
-          onClick={() => setActiveTab("pending")}
-          className="gap-2"
-        >
-          <Inbox className="w-4 h-4" />
-          待入庫審核
-          {pendingPosts.length > 0 && (
-            <Badge variant="destructive" className="ml-1">{pendingPosts.length}</Badge>
-          )}
-        </Button>
-        <HelpHint title="管理端知識庫分頁" description="知識卡管理：維護正式內容；待入庫審核：處理 AI 建議貼文。" workflow={["平時在知識卡管理維護正式內容。","有新建議時切到待入庫審核做入庫或拒絕。"]} logic={["分頁分工可區分既有內容維護與新內容審核流程。"]} align="center" />
+        <HelpHint title="管理端知識庫" description="在同一頁管理正式知識卡、待入庫貼文與拒絕入庫紀錄。" workflow={["用狀態切換查看已發布、待入庫與拒絕入庫內容。","待入庫與拒絕入庫都直接來自貼文審核結果。"]} logic={["避免分頁拆散資料流，讓待審與拒絕結果都在同一套狀態篩選中查看。"]} align="center" />
       </div>
 
-      {activeTab === "pending" ? (
-        /* 待入庫審核分頁 */
-        <div className="space-y-4">
-          <div className="bg-card border rounded-lg p-4">
-            <h3 className="font-semibold mb-2 flex items-center gap-2">AI 建議入庫的貼文<HelpHint title="管理端待入庫" description="先確認內容正確與可重用性，再決定入庫或拒絕。" workflow={["先看貼文內容與 AI 建議摘要。","判斷是否可轉成可重用標準流程。","選擇入庫或拒絕並留下理由。"]} logic={["待入庫審核是內容品質閘門，避免低品質資訊進知識庫。"]} align="center" /></h3>
-            <p className="text-sm text-muted-foreground">
-              以下貼文經 AI 評估後建議納入知識庫，請審核後決定是否入庫。
-            </p>
-          </div>
-
-          {pendingLoading ? (
-            <div className="text-center py-8 text-muted-foreground">載入中...</div>
-          ) : pendingPosts.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">目前沒有待入庫的貼文</div>
-          ) : (
-            <div className="space-y-3">
-              {pendingPosts.map((post) => {
-                const kmsSuggestion = (post as any).structured_data?.kms_suggestion || {}
-                return (
-                  <div key={post.id} className="bg-card border rounded-lg p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap gap-2 mb-2">
-                          <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30">
-                            AI 建議入庫
-                          </Badge>
-                          <Badge variant="outline">
-                            {CATEGORIES.find((c) => c.value === post.category)?.label || post.category}
-                          </Badge>
-                        </div>
-                        <h3 className="font-semibold text-foreground">{post.title}</h3>
-                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{post.content}</p>
-                        
-                        {/* AI 分析結果 */}
-                        <div className="mt-3 p-3 bg-muted/50 rounded-lg text-sm">
-                          <div className="font-medium text-primary mb-1">AI 分析結果</div>
-                          {kmsSuggestion.suggested_title && (
-                            <div><span className="text-muted-foreground">建議標題：</span>{kmsSuggestion.suggested_title}</div>
-                          )}
-                          {kmsSuggestion.suggested_category && (
-                            <div><span className="text-muted-foreground">建議分類：</span>
-                              {CATEGORIES.find((c) => c.value === kmsSuggestion.suggested_category)?.label || kmsSuggestion.suggested_category}
-                            </div>
-                          )}
-                          {kmsSuggestion.summary && (
-                            <div className="mt-1"><span className="text-muted-foreground">摘要：</span>{kmsSuggestion.summary}</div>
-                          )}
-                        </div>
-
-                        <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
-                          <span>發布於 {new Date(post.created_at).toLocaleDateString()}</span>
-                          <span>👍 {post.like_count || 0}</span>
-                          <span>💬 {post.comment_count || 0}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => openImportDialog(post)}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          入庫
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedPost(post)
-                            setShowRejectDialog(true)
-                          }}
-                          className="text-destructive border-destructive/50"
-                        >
-                          <XCircle className="w-4 h-4 mr-1" />
-                          拒絕
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      ) : (
-        /* 知識卡管理分頁 */
-        <>
+      <>
           {/* Header with actions */}
           <div className="flex flex-col sm:flex-row gap-3 justify-between">
             <div className="relative flex-1 max-w-md">
@@ -493,13 +429,15 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
                 <span className="text-xs text-muted-foreground">搜尋知識卡</span>
                 <HelpHint title="管理端搜尋" description="可依標題或內容關鍵字查找既有知識卡。" workflow={["輸入標題或摘要關鍵字。","從結果中快速進入編輯或狀態調整。"]} logic={["搜尋能縮短維護定位時間，特別適合大量知識卡。"]} align="center" />
               </div>
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="搜尋知識卡..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="搜尋知識卡..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={refresh} disabled={loading}>
@@ -535,7 +473,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
           {/* Status filter */}
           <div className="flex gap-2 items-center">
             <span className="text-sm text-muted-foreground">狀態：</span>
-            <HelpHint title="管理端狀態篩選" description="可檢視已發布、待驗證、已封存內容，安排維護優先序。" workflow={["切換狀態快速檢視不同生命週期內容。","優先處理待驗證與需封存項目。"]} logic={["全部狀態：顯示全部生命週期內容。","已發布（active）：可供住戶查閱。","待驗證（unverified）：內容待確認，需優先檢核。","已封存（archived）：保留歷史，不做主推。"]} align="center" />
+            <HelpHint title="管理端狀態篩選" description="可檢視已發布、待入庫(待入庫審核)、拒絕入庫內容，安排維護優先序。" workflow={["切換狀態快速檢視不同生命週期內容。","優先處理待入庫與拒絕入庫項目。"]} logic={["全部狀態：顯示全部生命週期內容。","已發布（active）：可供住戶查閱。","待入庫（unverified）：內容待入庫審核。","拒絕入庫（archived）：已決定不入庫。"]} align="center" />
             {STATUS_OPTIONS.map((status) => (
               <Button
                 key={status.value}
@@ -566,14 +504,159 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
             </div>
             <div className="bg-card border rounded-lg p-3 text-center">
               <div className="text-2xl font-bold text-yellow-500">
-                {cards.filter((c) => c.status === "unverified").length}
+                {pendingPosts.length}
               </div>
-              <div className="text-sm text-muted-foreground">待驗證</div>
+              <div className="text-sm text-muted-foreground">待入庫</div>
+            </div>
+            <div className="bg-card border rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-gray-400">{rejectedPosts.length}</div>
+              <div className="text-sm text-muted-foreground">拒絕入庫</div>
             </div>
           </div>
 
+          {/* 合併後：待入庫狀態直接顯示原待入庫審核貼文 */}
+          {selectedStatus === "unverified" && (
+            <div className="space-y-4">
+              <div className="bg-card border rounded-lg p-4">
+                <h3 className="font-semibold mb-2 flex items-center gap-2">待入庫(待入庫審核)</h3>
+                <p className="text-sm text-muted-foreground">以下貼文經 AI 評估後建議納入知識庫，請審核後決定是否入庫。</p>
+              </div>
+
+              {pendingLoading ? (
+                <div className="text-center py-8 text-muted-foreground">載入中...</div>
+              ) : pendingPosts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">目前沒有待入庫的貼文</div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingPosts.map((post) => {
+                    const kmsSuggestion = (post as any).structured_data?.kms_suggestion || {}
+                    return (
+                      <div key={post.id} className="bg-card border rounded-lg p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap gap-2 mb-2">
+                              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30">
+                                AI 建議入庫
+                              </Badge>
+                              <Badge variant="outline">
+                                {CATEGORIES.find((c) => c.value === post.category)?.label || post.category}
+                              </Badge>
+                            </div>
+                            <h3 className="font-semibold text-foreground">{post.title}</h3>
+                            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{post.content}</p>
+
+                            <div className="mt-3 p-3 bg-muted/50 rounded-lg text-sm">
+                              <div className="font-medium text-primary mb-1">AI 分析結果</div>
+                              {kmsSuggestion.suggested_title && (
+                                <div>
+                                  <span className="text-muted-foreground">建議標題：</span>
+                                  {kmsSuggestion.suggested_title}
+                                </div>
+                              )}
+                              {kmsSuggestion.suggested_category && (
+                                <div>
+                                  <span className="text-muted-foreground">建議分類：</span>
+                                  {CATEGORIES.find((c) => c.value === kmsSuggestion.suggested_category)?.label ||
+                                    kmsSuggestion.suggested_category}
+                                </div>
+                              )}
+                              {kmsSuggestion.summary && (
+                                <div className="mt-1">
+                                  <span className="text-muted-foreground">摘要：</span>
+                                  {kmsSuggestion.summary}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
+                              <span>發布於 {new Date(post.created_at).toLocaleDateString()}</span>
+                              <span>👍 {post.like_count || 0}</span>
+                              <span>💬 {post.comment_count || 0}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            <Button size="sm" onClick={() => openImportDialog(post)} className="bg-green-600 hover:bg-green-700 text-white">
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              入庫
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedPost(post)
+                                setShowRejectDialog(true)
+                              }}
+                              className="text-destructive border-destructive/50"
+                            >
+                              <XCircle className="w-4 h-4 mr-1" />
+                              拒絕
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedStatus === "archived" && (
+            <div className="space-y-4">
+              <div className="bg-card border rounded-lg p-4">
+                <h3 className="font-semibold mb-2 flex items-center gap-2">拒絕入庫</h3>
+                <p className="text-sm text-muted-foreground">以下貼文是已被管理員拒絕入庫的紀錄。</p>
+              </div>
+
+              {rejectedLoading ? (
+                <div className="text-center py-8 text-muted-foreground">載入中...</div>
+              ) : rejectedPosts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">目前沒有拒絕入庫的貼文</div>
+              ) : (
+                <div className="space-y-3">
+                  {rejectedPosts.map((post) => {
+                    const kmsSuggestion = (post as any).structured_data?.kms_suggestion || {}
+                    return (
+                      <div key={post.id} className="bg-card border rounded-lg p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap gap-2 mb-2">
+                              <Badge variant="outline" className="bg-gray-500/10 text-gray-300 border-gray-500/30">
+                                已拒絕入庫
+                              </Badge>
+                              <Badge variant="outline">
+                                {CATEGORIES.find((c) => c.value === post.category)?.label || post.category}
+                              </Badge>
+                            </div>
+                            <h3 className="font-semibold text-foreground">{post.title}</h3>
+                            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{post.content}</p>
+                            <div className="mt-3 p-3 bg-muted/50 rounded-lg text-sm space-y-1">
+                              {kmsSuggestion.reject_reason && (
+                                <div>
+                                  <span className="text-muted-foreground">拒絕原因：</span>
+                                  {kmsSuggestion.reject_reason}
+                                </div>
+                              )}
+                              {kmsSuggestion.rejected_at && (
+                                <div>
+                                  <span className="text-muted-foreground">拒絕時間：</span>
+                                  {new Date(kmsSuggestion.rejected_at).toLocaleString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Cards list */}
-          {loading ? (
+          {selectedStatus !== "unverified" && selectedStatus !== "archived" && (loading ? (
             <div className="text-center py-8 text-muted-foreground">載入中...</div>
           ) : error ? (
             <div className="text-center py-8 text-destructive">{error}</div>
@@ -621,11 +704,11 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleStatusChange(card.id, "unverified")}>
                           <XCircle className="w-4 h-4 mr-2 text-yellow-500" />
-                          設為待驗證
+                          設為待入庫(待入庫審核)
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleStatusChange(card.id, "archived")}>
                           <XCircle className="w-4 h-4 mr-2 text-gray-500" />
-                          封存
+                          拒絕入庫
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleCredibilityChange(card.id, "official")}>
@@ -657,7 +740,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
                 </div>
               ))}
             </div>
-          )}
+          ))}
 
           {/* Create Dialog - 使用 summary */}
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -816,8 +899,7 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </>
-      )}
+      </>
 
       {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
@@ -920,4 +1002,3 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
     </div>
   )
 }
-

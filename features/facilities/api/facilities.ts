@@ -84,6 +84,29 @@ export interface UserPointsInfo {
   active_bookings_count: number
 }
 
+const INITIAL_FACILITY_POINTS = 100
+
+async function resolveFacilityPointsBalance(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  userId: string,
+  rawBalance?: number | null,
+) {
+  if (typeof rawBalance === "number" && Number.isFinite(rawBalance) && rawBalance >= 0) {
+    return rawBalance
+  }
+
+  const { data: transactions } = await supabase.from("points_transactions").select("amount").eq("user_id", userId)
+  const totalDelta = (transactions || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0)
+  const normalizedBalance = Math.max(0, INITIAL_FACILITY_POINTS + totalDelta)
+
+  await supabase
+    .from("profiles")
+    .update({ points_balance: normalizedBalance })
+    .eq("id", userId)
+
+  return normalizedBalance
+}
+
 function getCurrentOperator() {
   if (typeof window === "undefined") return { id: "", role: "unknown" }
 
@@ -170,6 +193,8 @@ export async function getUserPointsInfo(userId: string): Promise<UserPointsInfo 
     return null
   }
 
+  const pointsBalance = await resolveFacilityPointsBalance(supabase, userId, profile?.points_balance)
+
   // 計算有效預約數量
   const { count } = await supabase
     .from("facility_bookings")
@@ -178,7 +203,7 @@ export async function getUserPointsInfo(userId: string): Promise<UserPointsInfo 
     .eq("status", "confirmed")
 
   return {
-    points_balance: profile?.points_balance || 100,
+    points_balance: pointsBalance,
     penalty_count: profile?.penalty_count || 0,
     booking_status: profile?.booking_status || "active",
     suspend_until: profile?.suspend_until,
@@ -198,8 +223,9 @@ export async function deductPoints(
 
   // 先獲取當前餘額
   const { data: profile } = await supabase.from("profiles").select("points_balance").eq("id", userId).single()
+  const currentBalance = await resolveFacilityPointsBalance(supabase, userId, profile?.points_balance)
 
-  if (!profile || profile.points_balance < amount) {
+  if (!profile || currentBalance < amount) {
     await logFacilityAudit({
       action: "deduct_points",
       targetId: userId,
@@ -236,7 +262,7 @@ export async function deductPoints(
   // 直接更新餘額（delta 方式，相容於無觸發器的環境）
   await supabase
     .from("profiles")
-    .update({ points_balance: profile.points_balance - amount })
+    .update({ points_balance: currentBalance - amount })
     .eq("id", userId)
 
   await logFacilityAudit({
@@ -266,6 +292,7 @@ export async function refundPoints(
     .select("points_balance")
     .eq("id", userId)
     .single()
+  const currentBalance = await resolveFacilityPointsBalance(supabase, userId, profileForRefund?.points_balance)
 
   const { error: txError } = await supabase.from("points_transactions").insert({
     user_id: userId,
@@ -292,7 +319,7 @@ export async function refundPoints(
   if (profileForRefund) {
     await supabase
       .from("profiles")
-      .update({ points_balance: (profileForRefund.points_balance ?? 0) + amount })
+      .update({ points_balance: currentBalance + amount })
       .eq("id", userId)
   }
 

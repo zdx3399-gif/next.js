@@ -728,7 +728,9 @@ export async function POST(req) {
           }
 
           const bookingPoints = Number(facilityInfo.base_price || 0);
-          const currentPoints = Number(existingProfile?.points_balance || 0);
+          const currentPoints = existingProfile?.points_balance == null
+            ? 100
+            : Math.max(0, Number(existingProfile.points_balance));
 
           if (currentPoints < bookingPoints) {
             facilityBookingSessions.delete(userId);
@@ -2789,7 +2791,9 @@ export async function POST(req) {
             await supabase
               .from('profiles')
               .update({
-                points_balance: Number(existingProfile.points_balance || 0) + refundPoints,
+                points_balance: (existingProfile?.points_balance == null
+                  ? 100
+                  : Math.max(0, Number(existingProfile.points_balance))) + refundPoints,
                 updated_at: new Date().toISOString()
               })
               .eq('id', existingProfile.id);

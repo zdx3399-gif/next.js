@@ -95,6 +95,9 @@ export async function POST(req: NextRequest) {
           phone: phone || null,
           role: role || 'resident',
           status: 'active',
+          points_balance: 100,
+          penalty_count: 0,
+          booking_status: 'active',
           unit_id: unitId,
         },
       ])

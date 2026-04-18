@@ -5,11 +5,11 @@ import { getEmbedding } from './embedding';
 import { saveChatWithLearning } from './chat-logger';
 
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
+  process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.SUPABASE_ANON_KEY || 'placeholder-key'
 );
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY || 'placeholder-key';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama3-8b-8192';
 
 const SYNONYMS: Record<string, string[]> = {

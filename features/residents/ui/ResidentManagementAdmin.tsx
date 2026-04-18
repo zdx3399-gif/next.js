@@ -25,9 +25,9 @@ import {
 
 const getRelationshipLabel = (relationship?: string): string => {
   const labels: Record<string, string> = {
-    owner: "戶主",
-    household_member: "住戶成員",
-    tenant: "租客",
+      household_member: "戶長",
+      family_member: "家屬",
+      tenant: "租客",
   }
   return labels[relationship || "household_member"] || "住戶成員"
 }
@@ -168,8 +168,8 @@ function ResidentFormModal({
               onChange={(e) => onChange("relationship", e.target.value)}
               className="w-full p-3 rounded-xl theme-select outline-none cursor-pointer"
             >
-              <option value="owner">戶主</option>
-              <option value="household_member">住戶成員</option>
+              <option value="household_member">戶長</option>
+              <option value="family_member">家屬</option>
               <option value="tenant">租客</option>
             </select>
           </div>
@@ -199,8 +199,8 @@ function ResidentFormModal({
 
 // 預覽模式的模擬資料
 const PREVIEW_RESIDENTS: Resident[] = [
-  { id: "preview-1", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", emergency_contact_name: "測試資料", emergency_contact_phone: "測試資料", relationship: "owner", role: "resident" as const },
-  { id: "preview-2", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", emergency_contact_name: "測試資料", emergency_contact_phone: "測試資料", relationship: "household_member", role: "resident" as const },
+  { id: "preview-1", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", emergency_contact_name: "測試資料", emergency_contact_phone: "測試資料", relationship: "household_member", role: "resident" as const },
+  { id: "preview-2", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", emergency_contact_name: "測試資料", emergency_contact_phone: "測試資料", relationship: "family_member", role: "resident" as const },
   { id: "preview-3", name: "測試資料", room: "測試資料", phone: "測試資料", email: "測試資料", emergency_contact_name: "測試資料", emergency_contact_phone: "測試資料", relationship: "tenant", role: "committee" as const },
 ]
 

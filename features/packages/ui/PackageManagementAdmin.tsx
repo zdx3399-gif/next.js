@@ -208,9 +208,9 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave, isEdit,
 
 const getRelationshipLabel = (relationship?: string): string => {
   const labels: Record<string, string> = {
-    owner: "戶主",
-    household_member: "住戶成員",
-    tenant: "租客",
+      household_member: "戶長",
+      family_member: "家族成員",
+      tenant: "租客",
   }
   return labels[relationship || "household_member"] || "住戶成員"
 }

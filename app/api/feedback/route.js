@@ -55,11 +55,12 @@ export async function POST(req) {
       );
     }
 
-    // 1. 記錄回饋到 chat_feedback 表
+    // 1. 記錄此回饋至 chat_event_feedback 表
     const { data: feedbackData, error: feedbackError } = await supabase
-      .from('chat_feedback')
+      .from('chat_event_feedback')
       .insert([{
-        chat_log_id: chatLogId,
+        chat_event_id: chatLogId,
+        source: 'chat_log',
         user_id: userId,
         feedback_type: feedbackType,
         clarification_choice: clarificationChoice || null,
@@ -88,24 +89,24 @@ export async function POST(req) {
       );
     }
 
-    // 2. 更新 chat_log 的回饋狀態
+    // 2. 更新 chat_events 的回饋狀態
     const feedbackField = feedbackType === 'helpful' ? 'success_count' :
                          feedbackType === 'unclear' ? 'unclear_count' : 'fail_count';
 
-    const { data: chatLog, error: chatLogError } = await supabase
-      .from('chat_log')
+    const { data: chatEvent, error: chatEventError } = await supabase
+      .from('chat_events')
       .select('id, feedback, success_count, unclear_count, fail_count')
       .eq('id', chatLogId)
       .single();
 
-    if (chatLogError) {
-      console.error('[Chat Log Query Error]', chatLogError);
+    if (chatEventError) {
+      console.error('[Chat Event Query Error]', chatEventError);
     }
 
     // 更新計數器和回饋狀態
     const updateData = {
       feedback: feedbackType,
-      [feedbackField]: (chatLog?.[feedbackField] || 0) + 1
+      [feedbackField]: (chatEvent?.[feedbackField] || 0) + 1
     };
 
     // 如果是 not_helpful，標記 answered = false
@@ -114,12 +115,12 @@ export async function POST(req) {
     }
 
     const { error: updateError } = await supabase
-      .from('chat_log')
+      .from('chat_events')
       .update(updateData)
       .eq('id', chatLogId);
 
     if (updateError) {
-      console.error('[Chat Log Update Error]', updateError);
+      console.error('[Chat Event Update Error]', updateError);
       await writeServerAuditLog({
         supabase,
         operatorId: userId || null,
@@ -133,7 +134,7 @@ export async function POST(req) {
         errorCode: updateError.message,
       });
       return new Response(
-        JSON.stringify({ error: '更新 chat_log 失敗', details: updateError.message }),
+        JSON.stringify({ error: '更新 chat_events 失敗', details: updateError.message }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -148,8 +149,8 @@ export async function POST(req) {
         break;
 
       case 'unclear':
-        // 從 chat_log 取得 intent，提供澄清選項
-        const intent = chatLog?.intent;
+        // 從 chatEvent 獲取 intent，來決定澄清選項
+        const intent = chatEvent?.intent;t;
         responseMessage = '好，我懂～你是比較想問下面哪一種呢？';
         nextActions = generateClarificationOptions(intent);
         break;

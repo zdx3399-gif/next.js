@@ -37,11 +37,9 @@ export async function POST(req) {
     // 防重複：檢查此 eventId 是否已處理過
     if (eventId) {
       const { data: existingLog } = await supabase
-        .from('chat_log')
-        .select('id, raw_question')
-        .eq('event_id', eventId)
-        .maybeSingle();
-      
+          .from('chat_events')
+          .select('id, raw_question')
+          .eq('source', 'chat_log')
       if (existingLog) {
         console.log('[防重複] eventId 已存在，跳過寫入:', eventId);
         return new Response(JSON.stringify({ 
@@ -58,11 +56,14 @@ export async function POST(req) {
     // 呼叫 chat 取得回答與相關資訊
     const result = await chat(query);
 
-    // 準備要寫入 chat_log 的欄位
+    // 準備要寫入 chat_events 的欄位
     // 假設 result 會回傳 normalized_question、intent、intent_confidence、answered
     // 若沒有，這裡可根據你的 chat 回傳內容調整
     const logData = {
+      source: 'chat_log',
+      source_pk: `llm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       raw_question: query,
+      question: result.normalized_question || query,
       normalized_question: result.normalized_question || query, // 若無正規化則用原文
       intent: result.intent || null,
       intent_confidence: typeof result.intent_confidence === 'number' ? result.intent_confidence : null,
@@ -73,8 +74,8 @@ export async function POST(req) {
     };
 
 
-    // 寫入 Supabase chat_log，並檢查回傳 error
-    const { error: insertError, data: insertData } = await supabase.from('chat_log').insert([logData]).select();
+    // 寫入 Supabase chat_events，並檢查回傳 error
+    const { error: insertError, data: insertData } = await supabase.from('chat_events').insert([logData]).select();
     if (insertError) {
       console.error('[Supabase Insert Error]', insertError);
       await writeServerAuditLog({
@@ -95,7 +96,7 @@ export async function POST(req) {
       });
     }
     
-    // 取得新插入的 chat_log id
+    // 取得新插入的 chat_events id
     const chatLogId = insertData?.[0]?.id;
 
     await writeServerAuditLog({
@@ -105,7 +106,7 @@ export async function POST(req) {
       actionType: 'system_action',
       targetType: 'system',
       targetId: String(chatLogId || eventId || 'llm'),
-      reason: 'LLM 對話寫入 chat_log',
+      reason: 'LLM 對話寫入 chat_events',
       afterState: { event_id: eventId || null, answered: logData.answered },
       module: 'llm',
       status: 'success',

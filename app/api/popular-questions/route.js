@@ -21,8 +21,9 @@ export async function GET() {
 
     // 查詢最近30天的問題記錄
     const { data, error } = await supabase
-      .from('chat_log')
+      .from('chat_events')
       .select('raw_question, intent')
+      .eq('source', 'chat_log')
       .not('raw_question', 'is', null)
       .not('raw_question', 'like', 'clarify:%') // 排除澄清選項
       .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()) // 最近30天

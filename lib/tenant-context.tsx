@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { createTenantClient, getCurrentTenant, setCurrentTenant, type TenantId } from "./supabase"
@@ -37,3 +37,4 @@ export function useTenant() {
   }
   return context
 }
+

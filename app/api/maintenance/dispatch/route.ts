@@ -6,8 +6,8 @@ import { createClient } from '@supabase/supabase-js'
 import { writeServerAuditLog } from '@/lib/audit-server'
 
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
+  process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.SUPABASE_ANON_KEY || 'placeholder-key'
 )
 
 const LINE_API = 'https://api.line.me/v2/bot/message/push'

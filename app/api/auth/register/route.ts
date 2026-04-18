@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_ANON_KEY!
     );
 
-    const { email, password, name, phone, role = 'resident', relationship = 'owner', unit } = await req.json();
+    const { email, password, name, phone, role = 'resident', relationship = 'household_member', unit } = await req.json();
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
 
     if (!normalizedEmail || !password) {
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
         .insert([{
           name: name || null,
           role: role || 'resident',
-          relationship: relationship || 'owner',
+          relationship: relationship || 'household_member',
           unit_id: unitId,
           profile_id: profile.id,
         }]);

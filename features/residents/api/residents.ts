@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase"
+﻿import { getSupabaseClient } from "@/lib/supabase"
 import { createAuditLog } from "@/lib/audit"
 
 export interface Resident {
@@ -10,7 +10,7 @@ export interface Resident {
   emergency_contact_name?: string
   emergency_contact_phone?: string
   role?: "resident" | "committee" | "guard"
-  relationship?: "owner" | "family_member" | "tenant" | "household_member"
+  relationship?: "household_member" | "family_member" | "tenant"
   created_at?: string
   updated_at?: string
   // FK 欄位
@@ -273,7 +273,7 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
   const dbUpdates: Record<string, any> = { ...restDbUpdates }
 
   if (normalizedRole !== undefined) {
-    dbUpdates.role = normalizedRole
+    (dbUpdates as any).role = normalizedRole
   }
 
   // 更新 household_members（不含 phone/email）
@@ -284,8 +284,8 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
     .select(`*, profile_id`)
     .single()
 
-  if (error && dbUpdates.role !== undefined) {
-    const { role: _role, ...fallbackDbUpdates } = dbUpdates
+  if (error && (dbUpdates as any).role !== undefined) {
+    const { role: _role, ...fallbackDbUpdates } = dbUpdates as any
     const retry = await supabase
       .from("household_members")
       .update(fallbackDbUpdates)
@@ -669,3 +669,4 @@ export async function deleteUnit(id: string): Promise<boolean> {
   }
   return true
 }
+

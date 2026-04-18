@@ -345,8 +345,8 @@ export default function AuthPage() {
                 className="theme-select w-full px-4 py-3 border-2 rounded-lg outline-none cursor-pointer"
               >
                 <option value="">請選擇關係</option>
-                <option value="owner">戶主</option>
-                <option value="household_member">住戶成員</option>
+                <option value="household_member">戶長</option>
+                <option value="family_member">家屬</option>
                 <option value="tenant">租客</option>
               </select>
             </div>

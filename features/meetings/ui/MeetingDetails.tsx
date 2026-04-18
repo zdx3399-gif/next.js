@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { getMeetingById, type Meeting } from "../api/meetings"
@@ -77,7 +77,7 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
     setExporting(true)
     setExportMessage("正在生成 PDF...")
     try {
-      const result = await exportMeetingPDFViaAPI(meeting.id)
+      const result = await exportMeetingPDFViaAPI(meeting.id!)
       setExportMessage(result.message)
       setTimeout(() => setExportMessage(""), 3000)
     } catch (error) {
@@ -251,3 +251,4 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
     </div>
   )
 }
+

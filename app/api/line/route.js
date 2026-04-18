@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 import { fileTypeFromBuffer } from 'file-type';
 import heicConvert from 'heic-convert';
 
-const supabaseServerKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabaseServerKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'dummy_key';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabase = createClient(
-  process.env.SUPABASE_URL,
+  supabaseUrl,
   supabaseServerKey,
   {
     auth: {
@@ -19,8 +20,8 @@ import { chat } from '@/lib/ai-chat';
 export const runtime = 'nodejs';
 
 const lineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || 'dummy-access-token',
+  channelSecret: process.env.LINE_CHANNEL_SECRET || 'dummy-channel-secret',
 };
 
 const client = new Client(lineConfig);// LINE Bot SDK 客戶端

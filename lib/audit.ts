@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase"
+﻿import { getSupabaseClient } from "@/lib/supabase"
 
 // 稽核動作類型
 export type AuditActionType =
@@ -261,7 +261,7 @@ export const ACTION_TYPE_LABELS: Record<AuditActionType, string> = {
 }
 
 // 目標類型的中文標籤
-export const TARGET_TYPE_LABELS: Record<AuditTargetType, string> = {
+export const TARGET_TYPE_LABELS: Partial<Record<AuditTargetType, string>> = {
   post: "貼文",
   comment: "留言",
   user: "用戶",
@@ -274,3 +274,4 @@ export const TARGET_TYPE_LABELS: Record<AuditTargetType, string> = {
   decryption_request: "解密申請",
   system: "系統",
 }
+

@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase"
+﻿import { getSupabaseClient } from "@/lib/supabase"
 
 export interface Package {
   id: string
@@ -89,7 +89,7 @@ export async function fetchPackages(room?: string, isAdmin = false, userUnitId?:
       for (const o of ownersData) {
         if (o.unit_id) {
           // 優先使用戶主，如果已有則不覆蓋
-          if (o.relationship === "戶長" || o.relationship === "owner") {
+          if (o.relationship === "household_member" || o.relationship === "戶長") {
             unitOwnerMap[o.unit_id] = o.name
           } else if (!unitOwnerMap[o.unit_id]) {
             unitOwnerMap[o.unit_id] = o.name
@@ -189,12 +189,12 @@ export async function markPackageAsPickedUp(
 
   return {
     id: packageId,
+    recipient_name: "",
+    recipient_room: "",
     courier: "",
     arrived_at: new Date().toISOString(),
     status: "picked_up",
     picked_up_by: pickedUpBy,
-    recipient_name: "",
-    recipient_room: "",
   }
 }
 
@@ -239,3 +239,4 @@ export function getRecipientName(pkg: Package): string {
 export function getRecipientRoom(pkg: Package): string {
   return pkg.recipient_room || ""
 }
+

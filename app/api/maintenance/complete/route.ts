@@ -5,10 +5,18 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { writeServerAuditLog } from '@/lib/audit-server'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_ANON_KEY || 'placeholder-key'
-)
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const dbKey = serviceRoleKey || anonKey
+
+  if (!url || !dbKey) {
+    throw new Error('Missing Supabase configuration: need URL and service role key or anon key')
+  }
+
+  return createClient(url, dbKey)
+}
 
 const LINE_API = 'https://api.line.me/v2/bot/message/push'
 
@@ -32,6 +40,7 @@ interface CompleteRequest {
 
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabase()
     const body: CompleteRequest = await req.json()
 
     const {

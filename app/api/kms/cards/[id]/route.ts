@@ -7,16 +7,16 @@ export const dynamic = "force-dynamic";
 
 // ✅ 延後到 request 才建立，避免 build 階段就因 env 缺而爆掉
 function getSupabase() {
-  // 你目前這支 route 用的是 SUPABASE_URL / SUPABASE_ANON_KEY
-  // 確保 .env.local / Vercel env 有這兩個（或你可以改成 TENANT_A_ 那套）
-  const url = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const dbKey = serviceRoleKey || anonKey;
 
-  if (!url || !anonKey) {
-    throw new Error("supabaseUrl is required. Missing SUPABASE_URL or SUPABASE_ANON_KEY.");
+  if (!url || !dbKey) {
+    throw new Error("Missing Supabase configuration: need URL and service role key or anon key");
   }
 
-  return createClient(url, anonKey);
+  return createClient(url, dbKey);
 }
 
 // GET: 獲取單一知識卡詳情

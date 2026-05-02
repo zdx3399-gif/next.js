@@ -7,14 +7,16 @@ export const dynamic = "force-dynamic";
 
 // ✅ 延後到 request 才建立，避免 build 階段就因 env 缺而爆
 function getSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const dbKey = serviceRoleKey || anonKey;
 
-  if (!url || !anonKey) {
-    throw new Error("supabaseUrl is required. Missing SUPABASE_URL or SUPABASE_ANON_KEY.");
+  if (!url || !dbKey) {
+    throw new Error("Missing Supabase configuration: need URL and service role key or anon key");
   }
 
-  return createClient(url, anonKey);
+  return createClient(url, dbKey);
 }
 
 // GET: 獲取單一貼文詳情

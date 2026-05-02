@@ -5,6 +5,9 @@ export interface ProfileData {
   name: string
   unit_id?: string
   room?: string // 加入 room 欄位用於表單顯示
+  ping_size?: number
+  car_spots?: number
+  moto_spots?: number
   phone: string
   email: string
   emergency_contact_name?: string
@@ -84,6 +87,30 @@ export async function updateProfile(userId: string, data: ProfileData): Promise<
       })
     }
     throw error
+  }
+
+  const unitMetaPayload: Record<string, number> = {}
+  if (data.ping_size !== undefined && Number.isFinite(Number(data.ping_size)) && Number(data.ping_size) >= 0) {
+    unitMetaPayload.ping_size = Number(data.ping_size)
+  }
+  if (data.car_spots !== undefined && Number.isFinite(Number(data.car_spots)) && Number(data.car_spots) >= 0) {
+    unitMetaPayload.car_spots = Number(data.car_spots)
+  }
+  if (data.moto_spots !== undefined && Number.isFinite(Number(data.moto_spots)) && Number(data.moto_spots) >= 0) {
+    unitMetaPayload.moto_spots = Number(data.moto_spots)
+  }
+
+  if (Object.keys(unitMetaPayload).length > 0) {
+    let targetUnitId = data.unit_id
+
+    if (!targetUnitId) {
+      const { data: profileWithUnit } = await supabase.from("profiles").select("unit_id").eq("id", userId).maybeSingle()
+      targetUnitId = profileWithUnit?.unit_id || undefined
+    }
+
+    if (targetUnitId) {
+      await supabase.from("units").update(unitMetaPayload).eq("id", targetUnitId)
+    }
   }
 
   const emergencyContactName = (data.emergency_contact_name || "").trim()

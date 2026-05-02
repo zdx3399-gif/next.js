@@ -137,7 +137,7 @@ export async function createAnnouncement(data: Partial<Announcement>, userId?: s
           image_url: data.image_url,
           author: data.author_name,
           pushOnly: false,
-          test: false,
+
         }),
       })
 
@@ -208,7 +208,6 @@ export async function createAnnouncement(data: Partial<Announcement>, userId?: s
         image_url: data.image_url,
         author: data.author_name,
         pushOnly: true, // 只推播，不重複寫入資料庫
-        test: false,
       }),
     })
 
@@ -282,7 +281,6 @@ export async function updateAnnouncement(id: string, data: Partial<Announcement>
           image_url: result.image_url,
           author: result.author_name,
           pushOnly: true,
-          test: false,
         }),
       })
 

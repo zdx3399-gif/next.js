@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { useVisitors } from "../hooks/useVisitors"
 import { VisitorCard } from "./VisitorCard"
 import type { Visitor } from "../api/visitors"
@@ -39,6 +40,30 @@ export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: V
     handleCheckOut,
     reload,
   } = useVisitors({ currentUser, isAdmin: true })
+
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<{ type: "check_in" | "check_out"; visitorId: string } | null>(null)
+
+  const requestCheckIn = (visitorId: string) => {
+    setPendingAction({ type: "check_in", visitorId })
+    setSendModeDialogOpen(true)
+  }
+
+  const requestCheckOut = (visitorId: string) => {
+    setPendingAction({ type: "check_out", visitorId })
+    setSendModeDialogOpen(true)
+  }
+
+  const handleSelectSendMode = async (sendMode: "test" | "official") => {
+    if (!pendingAction) return
+    if (pendingAction.type === "check_in") {
+      await handleCheckIn(pendingAction.visitorId, sendMode)
+    } else {
+      await handleCheckOut(pendingAction.visitorId, sendMode)
+    }
+    setSendModeDialogOpen(false)
+    setPendingAction(null)
+  }
 
   // 預覽模式使用模擬資料
   const reservedVisitors = isPreviewMode ? PREVIEW_VISITORS.reserved : realReserved
@@ -129,7 +154,7 @@ export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: V
           <div className="space-y-3">
             {reservedVisitors.length > 0 ? (
               reservedVisitors.map((visitor) => (
-                <VisitorCard key={visitor.id} visitor={visitor} isAdmin={true} onCheckIn={handleCheckIn} />
+                <VisitorCard key={visitor.id} visitor={visitor} isAdmin={true} onCheckIn={requestCheckIn} />
               ))
             ) : (
               <div className="text-center text-[var(--theme-text-secondary)] py-6">
@@ -160,7 +185,7 @@ export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: V
           <div className="space-y-3">
             {checkedInVisitors.length > 0 ? (
               checkedInVisitors.map((visitor) => (
-                <VisitorCard key={visitor.id} visitor={visitor} isAdmin={true} onCheckOut={handleCheckOut} />
+                <VisitorCard key={visitor.id} visitor={visitor} isAdmin={true} onCheckOut={requestCheckOut} />
               ))
             ) : (
               <div className="text-center text-[var(--theme-text-secondary)] py-6">
@@ -199,6 +224,44 @@ export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: V
           </div>
         </div>
       </div>
+
+      {sendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">
+                🤖 {pendingAction?.type === "check_out" ? "選擇簽退通知頻道" : "選擇簽到通知頻道"}
+              </h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">請選擇要使用測試或正式 LINE BOT 發送訪客狀態通知</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                onClick={() => handleSelectSendMode("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試 BOT
+              </button>
+              <button
+                onClick={() => handleSelectSendMode("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+              >
+                ✓ 正式 BOT
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                onClick={() => {
+                  setSendModeDialogOpen(false)
+                  setPendingAction(null)
+                }}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

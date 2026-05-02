@@ -27,12 +27,12 @@ function getCurrentOperator() {
   }
 }
 
-async function notifyMeetingLine(meeting: Meeting, notificationType?: "pdf_added") {
+async function notifyMeetingLine(meeting: Meeting, notificationType?: "pdf_added", sendMode?: "test" | "official") {
   try {
     const notifyRes = await fetch("/api/meeting/notify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ meeting, notificationType }),
+      body: JSON.stringify({ meeting, notificationType, sendMode }),
       keepalive: true,
     })
 
@@ -72,6 +72,7 @@ export async function getMeetings(): Promise<Meeting[]> {
 export async function createMeeting(
   meeting: Omit<Meeting, "id" | "created_at">,
   userId?: string,
+  sendMode?: "test" | "official",
 ): Promise<Meeting | null> {
   const supabase = getSupabaseClient()
   if (!supabase) return null
@@ -114,7 +115,7 @@ export async function createMeeting(
         additionalData: { module: "meetings", status: "success" },
       })
     }
-    void notifyMeetingLine(data)
+    void notifyMeetingLine(data, undefined, sendMode)
   }
 
   return data

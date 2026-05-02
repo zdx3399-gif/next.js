@@ -148,6 +148,24 @@ async function logFacilityAudit(params: {
   })
 }
 
+async function notifyFacilityLine(params: {
+  eventType: "booking_created" | "booking_cancelled"
+  userId: string
+  payload: Record<string, any>
+  sendMode?: "test" | "official"
+}) {
+  try {
+    await fetch("/api/facility/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+      keepalive: true,
+    })
+  } catch (err: any) {
+    console.warn("Facility notify error:", err?.message || err)
+  }
+}
+
 // ==================== 基本設施查詢 ====================
 
 export async function getFacilities(): Promise<Facility[]> {
@@ -195,19 +213,25 @@ export async function getUserPointsInfo(userId: string): Promise<UserPointsInfo 
 
   const pointsBalance = await resolveFacilityPointsBalance(supabase, userId, profile?.points_balance)
 
-  // 計算有效預約數量
-  const { count } = await supabase
+  // 計算有效預約數量：僅計入尚未結束的 confirmed 預約，避免舊單卡住上限
+  const { data: activeBookings } = await supabase
     .from("facility_bookings")
-    .select("*", { count: "exact", head: true })
+    .select("booking_date, end_time")
     .eq("user_id", userId)
     .eq("status", "confirmed")
+
+  const now = new Date()
+  const activeBookingsCount = (activeBookings || []).filter((booking) => {
+    const endAt = new Date(`${booking.booking_date}T${booking.end_time}`)
+    return Number.isFinite(endAt.getTime()) && endAt > now
+  }).length
 
   return {
     points_balance: pointsBalance,
     penalty_count: profile?.penalty_count || 0,
     booking_status: profile?.booking_status || "active",
     suspend_until: profile?.suspend_until,
-    active_bookings_count: count || 0,
+    active_bookings_count: activeBookingsCount,
   }
 }
 
@@ -530,6 +554,7 @@ export async function attemptBooking(
   userName: string,
   userRoom?: string,
   notes?: string,
+  sendMode?: "test" | "official",
 ): Promise<{ success: boolean; message: string; bookingId?: string }> {
   const supabase = getSupabaseClient()
   if (!supabase) return { success: false, message: "系統錯誤" }
@@ -643,6 +668,24 @@ export async function attemptBooking(
       afterState: { facilityId, slotId, points_spent: finalPrice },
     })
 
+    const { data: bookedFacility } = await supabase.from("facilities").select("name").eq("id", facilityId).single()
+    const latestPoints = await getUserPointsInfo(userId)
+
+    void notifyFacilityLine({
+      eventType: "booking_created",
+      userId,
+      sendMode,
+      payload: {
+        bookingId: booking.id,
+        facilityName: bookedFacility?.name || "設施",
+        bookingDate: slot.slot_date,
+        startTime: slot.start_time,
+        endTime: slot.end_time,
+        pointsSpent: finalPrice,
+        remainingPoints: latestPoints?.points_balance,
+      },
+    })
+
     return { success: true, message: `預約成功！已扣除 ${finalPrice} 點`, bookingId: booking.id }
   } catch (error: any) {
     await logFacilityAudit({
@@ -684,6 +727,7 @@ export function calculateCancelFee(
 export async function cancelBookingWithRefund(
   bookingId: string,
   userId: string,
+  sendMode?: "test" | "official",
 ): Promise<{ success: boolean; message: string }> {
   const supabase = getSupabaseClient()
   if (!supabase) return { success: false, message: "系統錯誤" }
@@ -735,19 +779,36 @@ export async function cancelBookingWithRefund(
 
     // 3. 退還點數
     if (refundAmount > 0) {
-      await refundPoints(userId, refundAmount, "booking_refund", bookingId, "取消預約退款")
+      const refundDesc =
+        feeAmount > 0
+          ? `取消預約退款（已扣手續費 ${feeAmount} 點）`
+          : "取消預約退款"
+      await refundPoints(userId, refundAmount, "booking_refund", bookingId, refundDesc)
     }
 
-    // 4. 如果有手續費，記錄
-    if (feeAmount > 0) {
-      await supabase.from("points_transactions").insert({
-        user_id: userId,
-        amount: -feeAmount,
-        transaction_type: "cancel_fee",
-        reference_id: bookingId,
-        description: "取消預約手續費",
-      })
-    }
+    const { data: cancelledFacility } = await supabase
+      .from("facilities")
+      .select("name")
+      .eq("id", booking.facility_id)
+      .single()
+    const latestPoints = await getUserPointsInfo(userId)
+
+    void notifyFacilityLine({
+      eventType: "booking_cancelled",
+      userId,
+      sendMode,
+      payload: {
+        bookingId,
+        facilityName: cancelledFacility?.name || "設施",
+        bookingDate: booking.booking_date,
+        startTime: booking.start_time,
+        endTime: booking.end_time,
+        pointsSpent: booking.points_spent || 0,
+        refundAmount,
+        feeAmount,
+        remainingPoints: latestPoints?.points_balance,
+      },
+    })
 
     const message =
       feeAmount > 0
@@ -988,14 +1049,48 @@ export async function createBooking(booking: {
   await logFacilityAudit({ action: "create_booking", targetId: booking.user_id, reason: "建立預約", status: "success", afterState: booking as Record<string, any> })
 }
 
-export async function cancelBooking(bookingId: string): Promise<void> {
+export async function cancelBooking(bookingId: string, sendMode?: "test" | "official"): Promise<void> {
   const supabase = getSupabaseClient()
   if (!supabase) throw new Error("Supabase client unavailable")
+
+  const { data: booking } = await supabase
+    .from("facility_bookings")
+    .select("id, user_id, facility_id, booking_date, start_time, end_time, points_spent")
+    .eq("id", bookingId)
+    .maybeSingle()
+
   const { error } = await supabase.from("facility_bookings").update({ status: "cancelled" }).eq("id", bookingId)
 
   if (error) {
     await logFacilityAudit({ action: "cancel_booking", targetId: bookingId, reason: error.message, status: "failed", errorCode: error.message })
     throw error
+  }
+
+  if (booking?.user_id) {
+    const { data: cancelledFacility } = await supabase
+      .from("facilities")
+      .select("name")
+      .eq("id", booking.facility_id)
+      .single()
+
+    const latestPoints = await getUserPointsInfo(booking.user_id)
+
+    void notifyFacilityLine({
+      eventType: "booking_cancelled",
+      userId: booking.user_id,
+      sendMode,
+      payload: {
+        bookingId,
+        facilityName: cancelledFacility?.name || "設施",
+        bookingDate: booking.booking_date,
+        startTime: booking.start_time,
+        endTime: booking.end_time,
+        pointsSpent: booking.points_spent || 0,
+        refundAmount: 0,
+        feeAmount: 0,
+        remainingPoints: latestPoints?.points_balance,
+      },
+    })
   }
 
   await logFacilityAudit({ action: "cancel_booking", targetId: bookingId, reason: "取消預約", status: "success" })

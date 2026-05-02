@@ -6,7 +6,7 @@ import type { Resident } from "../api/residents"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, RefreshCw, Search } from "lucide-react"
+import { Eye, Plus, RefreshCw, Search } from "lucide-react"
 import {
   CUSTOMIZABLE_SECTIONS,
   USER_ROLES,
@@ -55,7 +55,7 @@ function ResidentFormModal({
   onClose: () => void
   resident: Partial<Resident>
   onSave: () => void
-  onChange: (field: keyof Resident, value: string) => void
+  onChange: (field: keyof Resident, value: any) => void
   isEditing: boolean
   isSaving: boolean
 }) {
@@ -96,6 +96,40 @@ function ResidentFormModal({
               placeholder="例：A棟 10樓 1001室"
               className="w-full p-3 rounded-xl theme-input outline-none"
             />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[var(--theme-text-primary)] font-medium mb-2">入坪數</label>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={resident.ping_size ?? 0}
+                onChange={(e) => onChange("ping_size", Number(e.target.value))}
+                className="w-full p-3 rounded-xl theme-input outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[var(--theme-text-primary)] font-medium mb-2">汽車位</label>
+              <input
+                type="number"
+                min="0"
+                value={resident.car_spots ?? 0}
+                onChange={(e) => onChange("car_spots", Number(e.target.value))}
+                className="w-full p-3 rounded-xl theme-input outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[var(--theme-text-primary)] font-medium mb-2">機車位</label>
+              <input
+                type="number"
+                min="0"
+                value={resident.moto_spots ?? 0}
+                onChange={(e) => onChange("moto_spots", Number(e.target.value))}
+                className="w-full p-3 rounded-xl theme-input outline-none"
+              />
+            </div>
           </div>
 
           {/* 電話 */}
@@ -190,6 +224,54 @@ function ResidentFormModal({
             className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isSaving ? "儲存中..." : isEditing ? "儲存變更" : "新增"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
+  return (
+    <div className="flex gap-3 py-1.5 border-b border-[var(--theme-border)] last:border-0">
+      <span className="text-[var(--theme-text-secondary)] w-28 flex-shrink-0 text-sm">{label}</span>
+      <span className="text-[var(--theme-text-primary)] text-sm break-all">{value || "-"}</span>
+    </div>
+  )
+}
+
+function ResidentDetailModal({ resident, onClose }: { resident: Resident; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+      <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-4 border-b border-[var(--theme-border)]">
+          <h3 className="text-lg font-bold text-[var(--theme-accent)] flex items-center gap-2">
+            <span className="material-icons">person</span>
+            住戶完整資料
+          </h3>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors">
+            <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
+          </button>
+        </div>
+        <div className="p-4 space-y-0">
+          <InfoRow label="姓名" value={resident.name} />
+          <InfoRow label="房號" value={resident.room} />
+          <InfoRow label="電話" value={resident.phone} />
+          <InfoRow label="Email" value={resident.email} />
+          <InfoRow label="緊急聯絡人" value={resident.emergency_contact_name} />
+          <InfoRow label="緊急聯絡電話" value={resident.emergency_contact_phone} />
+          <InfoRow label="身分" value={getResidentRoleLabel(resident.role)} />
+          <InfoRow label="關係" value={getRelationshipLabel(resident.relationship)} />
+          <InfoRow label="坪數" value={resident.ping_size ? `${resident.ping_size} 坪` : undefined} />
+          <InfoRow label="汽車位" value={resident.car_spots} />
+          <InfoRow label="機車位" value={resident.moto_spots} />
+        </div>
+        <div className="p-4 border-t border-[var(--theme-border)]">
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all"
+          >
+            關閉
           </button>
         </div>
       </div>
@@ -299,6 +381,7 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [formData, setFormData] = useState<Partial<Resident>>({})
   const [searchTerm, setSearchTerm] = useState("")
+  const [viewingResident, setViewingResident] = useState<Resident | null>(null)
   const [permissionSaving, setPermissionSaving] = useState(false)
   const [permissionDraft, setPermissionDraft] = useState<Record<PermissionPageMode, Record<UserRole, Section[]>>>(() => {
     const empty = {} as Record<PermissionPageMode, Record<UserRole, Section[]>>
@@ -366,6 +449,9 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
     setFormData({
       name: "",
       room: "",
+      ping_size: 0,
+      car_spots: 0,
+      moto_spots: 0,
       phone: "",
       email: "",
       emergency_contact_name: "",
@@ -378,7 +464,12 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
   }
 
   const handleOpenEditModal = (resident: Resident, index: number) => {
-    setFormData({ ...resident })
+    setFormData({
+      ...resident,
+      ping_size: resident.ping_size ?? 0,
+      car_spots: resident.car_spots ?? 0,
+      moto_spots: resident.moto_spots ?? 0,
+    })
     setEditingIndex(index)
     setIsModalOpen(true)
   }
@@ -389,7 +480,7 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
     setFormData({})
   }
 
-  const handleFormChange = (field: keyof Resident, value: string) => {
+  const handleFormChange = (field: keyof Resident, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -621,15 +712,13 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
         <table className="w-full table-auto border-collapse text-sm">
           <thead>
             <tr className="bg-[var(--theme-accent-light)]">
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">姓名<HelpHint title="管理端姓名欄" description="顯示住戶或人員姓名。" workflow={["先看姓名辨識目標住戶。","再對照房號避免同名誤操作。"]} logic={["姓名是列表主要識別欄位。"]} align="center" /></span></th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">房號<HelpHint title="管理端房號欄" description="顯示住戶所屬房號或位置。" workflow={["以房號快速判斷住戶所屬戶別。","操作前先核對姓名與房號組合。"]} logic={["房號是戶別管理與費用關聯關鍵欄位。"]} align="center" /></span></th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">電話<HelpHint title="管理端電話欄" description="顯示聯絡電話，供通知或聯繫使用。" workflow={["需要聯絡時先檢查電話欄最新值。","若號碼失效，立即進入編輯更新。"]} logic={["電話欄直接影響緊急聯繫品質。"]} align="center" /></span></th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">Email<HelpHint title="管理端 Email 欄" description="顯示電子郵件，供帳號通知使用。" workflow={["檢查 Email 是否完整可用。","通知退信時優先回來修正此欄。"]} logic={["Email 影響帳號通知與重設流程。"]} align="center" /></span></th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">緊急聯絡人<HelpHint title="管理端緊急聯絡人" description="顯示住戶指定的緊急聯絡人姓名。" workflow={["確認聯絡人姓名是否為最新。","如有異動，請立即更新。"]} logic={["緊急事件時會優先參考此欄位。"]} align="center" /></span></th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">緊急聯絡電話<HelpHint title="管理端緊急聯絡電話" description="顯示住戶緊急聯絡電話。" workflow={["確認電話格式完整可撥通。","變更後請通知住戶確認。"]} logic={["緊急通報速度取決於此欄正確性。"]} align="center" /></span></th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">身分<HelpHint title="管理端身分欄" description="顯示該帳號在系統中的角色。" workflow={["先檢查角色是否符合職責。","需要調整權限時進入編輯修改。"]} logic={["角色會決定後台可見功能範圍。"]} align="center" /></span></th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">關係<HelpHint title="管理端關係欄" description="顯示與該戶的關係類型。" workflow={["核對戶主/成員/租客是否正確。","異動時同步修正，維持戶別資料正確。"]} logic={["關係欄影響住戶統計與管理決策。"]} align="center" /></span></th>
-              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]"><span className="inline-flex items-center gap-1">操作<HelpHint title="管理端操作" description="可編輯或刪除資料，刪除前請先確認是否仍在住。" workflow={["點編輯更新欄位資料。","確認不再使用時再執行刪除。","操作後回列表確認結果。"]} logic={["刪除屬高風險操作，建議先確認關聯資料影響。"]} align="center" /></span></th>
+              <th className="py-2 px-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">姓名</th>
+              <th className="py-2 px-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">房號</th>
+              <th className="py-2 px-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">電話</th>
+              <th className="py-2 px-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">Email</th>
+              <th className="py-2 px-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">身分</th>
+              <th className="py-2 px-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">關係</th>
+              <th className="py-2 px-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)]">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -638,46 +727,47 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
                 .filter((r) => r.id)
                 .map((row: Resident, index: number) => (
                   <tr key={row.id || `new-${index}`} className="hover:bg-[var(--theme-accent-light)] transition-colors">
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
-                      {row.name || "-"}
+                    <td className="py-2 px-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] max-w-[120px]">
+                      <span className="block truncate" title={row.name || "-"}>{row.name || "-"}</span>
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
-                      {row.room || "-"}
+                    <td className="py-2 px-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] max-w-[140px]">
+                      <span className="block truncate" title={row.room || "-"}>{row.room || "-"}</span>
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
-                      {row.phone || "-"}
+                    <td className="py-2 px-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] max-w-[120px]">
+                      <span className="block truncate" title={row.phone || "-"}>{row.phone || "-"}</span>
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-all">
-                      {row.email || "-"}
+                    <td className="py-2 px-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] max-w-[160px]">
+                      <span className="block truncate" title={row.email || "-"}>{row.email || "-"}</span>
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
-                      {row.emergency_contact_name || "-"}
-                    </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
-                      {row.emergency_contact_phone || "-"}
-                    </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
+                    <td className="py-2 px-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] whitespace-nowrap">
                       {getResidentRoleLabel(row.role)}
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] break-words">
+                    <td className="py-2 px-3 border-b border-[var(--theme-border)] text-[var(--theme-text-primary)] whitespace-nowrap">
                       {getRelationshipLabel(row.relationship)}
                     </td>
-                    <td className="p-3 border-b border-[var(--theme-border)] whitespace-nowrap">
-                      <div className="flex gap-2 flex-nowrap">
+                    <td className="py-2 px-3 border-b border-[var(--theme-border)] whitespace-nowrap">
+                      <div className="flex gap-1.5 flex-nowrap">
+                        <button
+                          onClick={() => setViewingResident(row)}
+                          className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
+                          title="查看詳情"
+                        >
+                          <span className="material-icons text-lg">visibility</span>
+                        </button>
                         <button
                           onClick={() => handleOpenEditModal(row, index)}
-                          className="p-1.5 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
+                          className="p-2 rounded-lg border border-[var(--theme-btn-save-border)] text-[var(--theme-btn-save-text)] hover:bg-[var(--theme-btn-save-hover)] transition-all"
                           title="編輯"
                         >
-                          <span className="material-icons text-base">edit</span>
+                          <span className="material-icons text-lg">edit</span>
                         </button>
                         {row.id && (
                           <button
                             onClick={() => handleDelete(row.id!)}
-                            className="p-1.5 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
+                            className="p-2 rounded-lg border border-[var(--theme-btn-delete-border)] text-[var(--theme-btn-delete-text)] hover:bg-[var(--theme-btn-delete-hover)] transition-all"
                             title="刪除"
                           >
-                            <span className="material-icons text-base">delete</span>
+                            <span className="material-icons text-lg">delete</span>
                           </button>
                         )}
                       </div>
@@ -686,7 +776,7 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
                 ))
             ) : (
               <tr>
-                <td colSpan={9} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
                   {searchTerm ? "沒有符合條件的住戶資料" : "目前沒有資料"}
                 </td>
               </tr>
@@ -704,6 +794,12 @@ export function ResidentManagementAdmin({ isPreviewMode = false }: ResidentManag
         isEditing={editingIndex !== null}
         isSaving={isSaving}
       />
+      {viewingResident && (
+        <ResidentDetailModal
+          resident={viewingResident}
+          onClose={() => setViewingResident(null)}
+        />
+      )}
       </>
       )}
     </div>

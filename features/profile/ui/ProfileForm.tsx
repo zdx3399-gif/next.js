@@ -12,10 +12,13 @@ interface ProfileFormProps {
 }
 
 export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps) {
-  const [profileForm, setProfileForm] = useState<ProfileData & { room: string }>({
+  const [profileForm, setProfileForm] = useState<ProfileData & { room: string; ping_size: number; car_spots: number; moto_spots: number }>({
     name: "",
     unit_id: "",
     room: "",
+    ping_size: 0,
+    car_spots: 0,
+    moto_spots: 0,
     phone: "",
     email: "",
     emergency_contact_name: "",
@@ -28,20 +31,45 @@ export function ProfileForm({ currentUser, onUpdate, onClose }: ProfileFormProps
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (currentUser) {
-      setProfileForm({
-        name: currentUser.name || "",
-        unit_id: currentUser.unit_id || "",
-        room: currentUser.room || "",
-        phone: currentUser.phone || "",
-        email: currentUser.email || "",
-        emergency_contact_name: currentUser.emergency_contact_name || "",
-        emergency_contact_phone: currentUser.emergency_contact_phone || "",
-        line_avatar_url: currentUser.line_avatar_url || "",
+    if (!currentUser) return
+
+    setProfileForm({
+      name: currentUser.name || "",
+      unit_id: currentUser.unit_id || "",
+      room: currentUser.room || "",
+      ping_size: Number(currentUser.ping_size || 0),
+      car_spots: Number(currentUser.car_spots || 0),
+      moto_spots: Number(currentUser.moto_spots || 0),
+      phone: currentUser.phone || "",
+      email: currentUser.email || "",
+      emergency_contact_name: currentUser.emergency_contact_name || "",
+      emergency_contact_phone: currentUser.emergency_contact_phone || "",
+      line_avatar_url: currentUser.line_avatar_url || "",
+      password: "",
+    })
+    setAvatarFile(null)
+
+    // 以資料庫最新值覆蓋 localStorage 快取，確保緊急聯絡人來自 emergency_contacts
+    ;(async () => {
+      const latest = await getProfile(currentUser.id)
+      if (!latest) return
+
+      setProfileForm((prev) => ({
+        ...prev,
+        name: latest.name || prev.name,
+        unit_id: latest.unit_id || prev.unit_id,
+        room: latest.room || prev.room,
+        ping_size: Number(latest.ping_size || 0),
+        car_spots: Number(latest.car_spots || 0),
+        moto_spots: Number(latest.moto_spots || 0),
+        phone: latest.phone || prev.phone,
+        email: latest.email || prev.email,
+        emergency_contact_name: latest.emergency_contact_name || "",
+        emergency_contact_phone: latest.emergency_contact_phone || "",
+        line_avatar_url: latest.line_avatar_url || prev.line_avatar_url,
         password: "",
-      })
-      setAvatarFile(null)
-    }
+      }))
+    })()
   }, [currentUser])
 
   useEffect(() => {

@@ -80,6 +80,8 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
   const [deletingVoteId, setDeletingVoteId] = useState<string | null>(null)
   const [uploadingResultVoteId, setUploadingResultVoteId] = useState<string | null>(null)
   const [selectedResultFiles, setSelectedResultFiles] = useState<Record<string, File | null>>({})
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
+  const [pendingVoteData, setPendingVoteData] = useState<Parameters<typeof createVote>[0] | null>(null)
 
   const loadHistory = async () => {
     if (isPreviewMode) {
@@ -125,19 +127,27 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
       return
     }
 
+    const votePayload = {
+      title: formData.title.trim(),
+      description: formData.description.trim(),
+      ends_at: new Date(formData.endDate).toISOString(),
+      mode: activeTab,
+      external_url: activeTab === "external" ? formData.externalUrl.trim() : undefined,
+      options: activeTab === "internal" ? parsedOptions : [],
+      author: currentUser?.name || "管委會",
+      created_by: currentUser?.id,
+    }
+    setPendingVoteData(votePayload)
+    setSendModeDialogOpen(true)
+  }
+
+  const handleSendVoteWithMode = async (sendMode: "test" | "official") => {
+    if (!pendingVoteData) return
+    setSendModeDialogOpen(false)
     setLoading(true)
     let vote = null
     try {
-      vote = await createVote({
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        ends_at: new Date(formData.endDate).toISOString(),
-        mode: activeTab,
-        external_url: activeTab === "external" ? formData.externalUrl.trim() : undefined,
-        options: activeTab === "internal" ? parsedOptions : [],
-        author: currentUser?.name || "管委會",
-        created_by: currentUser?.id,
-      })
+      vote = await createVote({ ...pendingVoteData, sendMode })
     } finally {
       setLoading(false)
     }
@@ -148,6 +158,7 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
     }
 
     alert("投票已建立並完成通知")
+    setPendingVoteData(null)
     setFormData({ title: "", description: "", endDate: "", externalUrl: "", optionsText: "同意\n反對\n棄權" })
     loadHistory()
   }
@@ -274,6 +285,7 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex p-1 bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-xl w-full max-w-md mx-auto mb-6">
         <button
@@ -712,5 +724,44 @@ export function VoteManagementAdmin({ currentUser, isPreviewMode = false }: Vote
         </div>
       )}
     </div>
+
+    {/* sendMode Dialog */}
+    {sendModeDialogOpen && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+        <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+          <div className="border-b border-[var(--theme-border)] p-5">
+            <h3 className="text-lg font-bold text-[var(--theme-accent)]">🤖 選擇投票通知頻道</h3>
+            <p className="text-sm text-[var(--theme-text-secondary)] mt-3">
+              請選擇要使用測試或正式 LINE BOT 發送投票通知
+            </p>
+          </div>
+          <div className="p-5 space-y-3">
+            <button
+              onClick={() => handleSendVoteWithMode("test")}
+              className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+            >
+              🧪 測試 BOT
+              <div className="text-xs font-normal mt-1 opacity-80">限制通知範圍，用於測試</div>
+            </button>
+            <button
+              onClick={() => handleSendVoteWithMode("official")}
+              className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+            >
+              ✓ 正式 BOT
+              <div className="text-xs font-normal mt-1 opacity-80">通知所有相關住戶</div>
+            </button>
+          </div>
+          <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+            <button
+              onClick={() => { setSendModeDialogOpen(false); setPendingVoteData(null) }}
+              className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   )
 }

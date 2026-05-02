@@ -22,12 +22,21 @@ function getSupabase() {
   return createClient(url, serviceRoleKey || anonKey);
 }
 
-function getLineClient() {
-  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+function getNotificationToken(sendMode) {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official';
+  return mode === 'test'
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN)
+    : process.env.LINE_CHANNEL_ACCESS_TOKEN;
+}
+
+function getLineClient(sendMode) {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official';
+  const channelAccessToken = getNotificationToken(mode);
   const channelSecret = process.env.LINE_CHANNEL_SECRET;
   if (!channelAccessToken || !channelSecret) {
     throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN or LINE_CHANNEL_SECRET");
   }
+  console.log(`[Announce] 📡 通知模式: ${mode}，使用 ${mode === 'test' ? 'BOT2(測試)' : 'BOT1(正式)'}`);
   return new Client({ channelAccessToken, channelSecret });
 }
 
@@ -78,13 +87,12 @@ export async function POST(req) {
     const supabase = getSupabase();
     console.log("[Announce] ✅ Supabase 初始化成功");
 
-    console.log("[Announce] ⏳ 初始化 LINE Client...");
-    const client = getLineClient();
-    console.log("[Announce] ✅ LINE Client 初始化成功");
-
     console.log("[Announce] ⏳ 解析 request body...");
     const body = await req.json();
-    const { title, content, image_url, author, test, pushOnly, operatorId, operatorRole, operatorName } = body;
+    const { title, content, image_url, author, test, sendMode, pushOnly, operatorId, operatorRole, operatorName } = body;
+    // sendMode 優先；其次 test boolean 轉換；最後讀 env var
+    const notifyMode = sendMode || (test === true ? 'test' : (test === false ? 'official' : undefined));
+    const client = getLineClient(notifyMode);
     console.log("[Announce] ✅ Request body 解析成功");
     console.log("[Announce]    - title:", title);
     console.log("[Announce]    - content length:", content?.length || 0);

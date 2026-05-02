@@ -16,8 +16,15 @@ function getSupabase() {
   return createClient(url, serviceRoleKey || anonKey)
 }
 
-function getLineClient() {
-  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
+function getNotificationToken(sendMode) {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || "official"
+  return mode === "test"
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN)
+    : process.env.LINE_CHANNEL_ACCESS_TOKEN
+}
+
+function getLineClient(sendMode) {
+  const channelAccessToken = getNotificationToken(sendMode)
   const channelSecret = process.env.LINE_CHANNEL_SECRET
 
   if (!channelAccessToken || !channelSecret) {
@@ -114,10 +121,10 @@ async function sendIotCommand(req, cmd) {
 export async function POST(req) {
   try {
     const supabase = getSupabase()
-    const client = getLineClient()
 
     const body = await req.json()
-    const { name, phone, purpose, reservation_time, unit_id, reserved_by, reserved_by_id } = body
+    const { name, phone, purpose, reservation_time, unit_id, reserved_by, reserved_by_id, sendMode } = body
+    const client = getLineClient(sendMode)
     const operator = getVisitorOperator(body)
 
     if (!name || !phone || !reservation_time) {
@@ -281,10 +288,10 @@ export async function POST(req) {
 export async function PATCH(req) {
   try {
     const supabase = getSupabase()
-    const client = getLineClient()
 
     const body = await req.json()
-    const { visitor_id, action } = body
+    const { visitor_id, action, sendMode } = body
+    const client = getLineClient(sendMode)
     const operator = getVisitorOperator(body)
 
     if (!visitor_id || !action) {

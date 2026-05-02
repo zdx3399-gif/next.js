@@ -108,7 +108,11 @@ export function useFinanceAdmin() {
     setRecords((prev) => [...prev, newRow])
   }
 
-  const saveRecord = async (record: Omit<FinanceRecord, 'id'> & { id?: string }, index: number) => {
+  const saveRecord = async (
+    record: Omit<FinanceRecord, 'id'> & { id?: string },
+    index: number,
+    sendMode?: "test" | "official",
+  ) => {
     console.log("[v0] saveRecord called with:", { record, index })
 
     if (record.id) {
@@ -137,7 +141,7 @@ export function useFinanceAdmin() {
         paid: record.paid,
         unit_id: record.unit_id,
         monthly_fee: record.monthly_fee,
-      })
+      }, sendMode)
       if (!result.success) {
         console.error("[v0] Create failed:", result.error)
         alert("新增失敗: " + result.error)

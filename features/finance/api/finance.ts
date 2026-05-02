@@ -165,6 +165,7 @@ export async function removeExpenseRecord(id: string): Promise<{ success: boolea
 
 export async function createFinanceRecord(
   record: Omit<FinanceRecord, "id" | "created_at">,
+  sendMode?: "test" | "official",
 ): Promise<{ success: boolean; error?: string; data?: FinanceRecord }> {
   try {
     const response = await fetch("/api/fees", {
@@ -178,6 +179,7 @@ export async function createFinanceRecord(
         paid: record.paid,
         note: record.note,
         unit_id: record.unit_id,
+        sendMode,
       }),
     })
 

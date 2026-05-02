@@ -1,4 +1,12 @@
-﻿import { getSupabaseClient } from "@/lib/supabase"
+﻿import { getSupabaseClient, createTenantClient } from "@/lib/supabase"
+
+function getClient() {
+  try {
+    return getSupabaseClient() ?? createTenantClient()
+  } catch {
+    return null
+  }
+}
 
 export interface Package {
   id: string
@@ -24,6 +32,7 @@ export interface AddPackageData {
   tracking_number?: string
   arrived_at: string
   unit_id?: string
+  sendMode?: "test" | "official"
 }
 
 export interface UpdatePackageData {
@@ -36,7 +45,7 @@ export interface UpdatePackageData {
 }
 
 export async function fetchPackages(room?: string, isAdmin = false, userUnitId?: string): Promise<Package[]> {
-  const supabase = getSupabaseClient()
+  const supabase = getClient()
   if (!supabase) return []
 
   const { data: packagesData, error } = await supabase
@@ -173,11 +182,12 @@ export async function markPackageAsPickedUp(
   packageId: string,
   pickedUpBy: string,
   pickedUpById?: string,
+  sendMode?: "test" | "official",
 ): Promise<Package | null> {
   const res = await fetch("/api/packages", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ packageId, picked_up_by: pickedUpBy, picked_up_by_id: pickedUpById }),
+    body: JSON.stringify({ packageId, picked_up_by: pickedUpBy, picked_up_by_id: pickedUpById, sendMode }),
   })
 
   const result = await res.json().catch(() => ({}))

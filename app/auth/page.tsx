@@ -102,7 +102,22 @@ export default function AuthPage() {
     const relationship = formData.get("relationship") as string
     const emergencyContactName = formData.get("emergency_contact_name") as string
     const emergencyContactPhone = formData.get("emergency_contact_phone") as string
+    const pingSizeRaw = formData.get("ping_size") as string
+    const carSpotsRaw = formData.get("car_spots") as string
+    const motoSpotsRaw = formData.get("moto_spots") as string
     const tenantId = formData.get("tenant") as TenantId
+
+    const parseOptionalNumber = (value: string): number | undefined => {
+      const text = (value || "").trim()
+      if (!text) return undefined
+      const num = Number(text)
+      if (!Number.isFinite(num) || num < 0) return undefined
+      return num
+    }
+
+    const pingSize = parseOptionalNumber(pingSizeRaw)
+    const carSpots = parseOptionalNumber(carSpotsRaw)
+    const motoSpots = parseOptionalNumber(motoSpotsRaw)
 
     if (!tenantId) {
       setErrorMessage("請選擇要註冊的社區")
@@ -122,6 +137,9 @@ export default function AuthPage() {
         relationship,
         emergencyContactName,
         emergencyContactPhone,
+        pingSize,
+        carSpots,
+        motoSpots,
       )
 
       if (!result.success) {
@@ -319,6 +337,45 @@ export default function AuthPage() {
                 placeholder="例：A棟12樓3號"
                 className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
               />
+            </div>
+            <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                  入坪數
+                </label>
+                <input
+                  type="number"
+                  name="ping_size"
+                  min="0"
+                  step="0.1"
+                  placeholder="例：35"
+                  className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                  汽車位
+                </label>
+                <input
+                  type="number"
+                  name="car_spots"
+                  min="0"
+                  placeholder="例：1"
+                  className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
+                  機車位
+                </label>
+                <input
+                  type="number"
+                  name="moto_spots"
+                  min="0"
+                  placeholder="例：2"
+                  className="theme-input w-full px-4 py-3 border-2 rounded-lg outline-none transition-all"
+                />
+              </div>
             </div>
             <div className="mb-6">
               <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>

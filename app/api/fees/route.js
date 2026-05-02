@@ -56,8 +56,15 @@ async function resolveLineUserId(supabase, unitId) {
   return null
 }
 
-async function pushFeeMessage(lineUserId, room, amount, due) {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
+function getNotificationToken(sendMode) {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official';
+  return mode === 'test'
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN)
+    : process.env.LINE_CHANNEL_ACCESS_TOKEN;
+}
+
+async function pushFeeMessage(lineUserId, room, amount, due, sendMode) {
+  const token = getNotificationToken(sendMode)
   if (!token || !lineUserId) {
     return { pushed: false, reason: "missing_token_or_line_user" }
   }
@@ -107,6 +114,7 @@ export async function POST(req) {
       note,
       unit_id: rawUnitId,
       test,
+      sendMode,
     } = body || {}
 
     if (!amount || !due) {
@@ -180,7 +188,7 @@ export async function POST(req) {
     let notify = { pushed: false, reason: "paid_or_no_notify" }
     if (!paid) {
       const lineUserId = await resolveLineUserId(supabase, unitId)
-      notify = await pushFeeMessage(lineUserId, room, amount, due)
+      notify = await pushFeeMessage(lineUserId, room, amount, due, sendMode)
     }
 
     const sent = notify?.pushed ? 1 : 0

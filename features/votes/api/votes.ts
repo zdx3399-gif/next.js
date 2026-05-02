@@ -159,6 +159,7 @@ export async function createVote(vote: {
   options?: string[]
   author?: string
   created_by?: string
+  sendMode?: "test" | "official"
 }): Promise<Vote | null> {
   try {
     const operator = getCurrentOperator()

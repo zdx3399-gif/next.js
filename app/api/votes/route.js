@@ -23,9 +23,16 @@ function getSupabase() {
   return createClient(url, serviceRoleKey || anonKey);
 }
 
+function getNotificationToken(sendMode) {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official';
+  return mode === 'test'
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN)
+    : process.env.LINE_CHANNEL_ACCESS_TOKEN;
+}
+
 // ✅ LINE client 也改成延後建立（同樣避免 env 缺直接炸）
-function getLineClient() {
-  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+function getLineClient(sendMode) {
+  const channelAccessToken = getNotificationToken(sendMode);
   const channelSecret = process.env.LINE_CHANNEL_SECRET;
 
   if (!channelAccessToken || !channelSecret) {
@@ -640,7 +647,7 @@ async function handleSubmitVote({ supabase, body }) {
 
 async function handleCreateVote({ supabase, body }) {
   const operator = getOperator(body, { role: "committee" });
-  const { title, description, author, created_by, ends_at, mode, external_url, options, test } = body;
+  const { title, description, author, created_by, ends_at, mode, external_url, options, test, sendMode } = body;
 
   if (!title || !ends_at) {
     await writeServerAuditLog({
@@ -811,7 +818,7 @@ async function handleCreateVote({ supabase, body }) {
 
   let client;
   try {
-    client = getLineClient();
+    client = getLineClient(sendMode);
   } catch (lineErr) {
     console.warn("[Votes] LINE client not available, skip push:", lineErr?.message);
     return Response.json({ 
@@ -853,7 +860,7 @@ async function handleCreateVote({ supabase, body }) {
 
   const text =
     finalMode === "external"
-      ? `📢 新問卷通知\n標題：${title}\n截止時間：${formatLineDateTime(ends_at)}\n請點擊下方連結填寫：\n${normalizedExternalUrl}`
+      ? `📢 新問卷通知\n標題：${title}\n截止時間：${formatLineDateTime(ends_at)}${description ? "\n" + description : ""}\n\n請點擊下方連結填寫：\n${normalizedExternalUrl}`
       : `📢 新投票通知\n標題：${title}\n截止時間：${formatLineDateTime(ends_at)}\n${description || "請至社區系統參與投票"}\n\n系統投票入口：\n${internalVoteLink}\n(進入後點選「社區投票」)`;
 
   let totalSent = 0;

@@ -11,7 +11,13 @@ const supabase = createClient(
 )
 
 const LINE_API = 'https://api.line.me/v2/bot/message/push'
-const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
+
+function getNotificationToken(sendMode: string | undefined): string {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official'
+  return mode === 'test'
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN || '')
+    : (process.env.LINE_CHANNEL_ACCESS_TOKEN || '')
+}
 
 interface CompleteRequest {
   maintenanceId: string
@@ -19,6 +25,7 @@ interface CompleteRequest {
   completion_note?: string
   completion_photo_url?: string
   generate_fee?: boolean  // Whether to generate a fee record
+  sendMode?: string
   operatorId?: string | null
   operatorRole?: string
 }
@@ -33,9 +40,12 @@ export async function POST(req: Request) {
       completion_note,
       completion_photo_url,
       generate_fee = false,
+      sendMode,
       operatorId,
       operatorRole
     } = body
+    
+    const LINE_TOKEN = getNotificationToken(sendMode)
 
     if (!maintenanceId) {
       await writeServerAuditLog({
@@ -131,7 +141,6 @@ export async function POST(req: Request) {
           due: dueDate.toISOString(),
           paid: false,
           note: `維修費用 - ${maintenance.equipment || ''} ${maintenance.item || ''}`,
-          maintenance_id: maintenanceId
         })
         .select()
         .single()
@@ -160,7 +169,7 @@ export async function POST(req: Request) {
 
     // 4) Find reporter's LINE user ID
     let lineUserId: string | null = null
-    let residentName = maintenance.reported_by_name || '住戶'
+    let residentName = '住戶'
 
     if (maintenance.reported_by_id) {
       const { data: profile } = await supabase

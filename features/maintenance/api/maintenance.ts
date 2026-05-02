@@ -40,6 +40,19 @@ function getCurrentOperator() {
   }
 }
 
+  async function notifyMaintenanceRequestCreated(maintenanceId: string, sendMode?: "test" | "official") {
+    try {
+      await fetch("/api/maintenance/request-notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maintenanceId, sendMode }),
+        keepalive: true,
+      })
+    } catch (err: any) {
+      console.warn("Maintenance request notify error:", err?.message || err)
+    }
+  }
+
 export async function fetchMaintenanceRequests(): Promise<MaintenanceRequest[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
@@ -121,6 +134,7 @@ export async function submitMaintenanceRequest(
   formData: MaintenanceFormData,
   userId: string,
   userName: string,
+  sendMode?: "test" | "official",
 ): Promise<{ success: boolean; error?: string; data?: MaintenanceRequest }> {
   const supabase = getSupabaseClient()
   if (!supabase) return { success: false, error: "Supabase client unavailable" }
@@ -179,6 +193,10 @@ export async function submitMaintenanceRequest(
         afterState: { equipment: formData.type, item: formData.location, status: "open" },
         additionalData: { module: "maintenance", status: "success" },
       })
+    }
+
+    if (data?.id) {
+      void notifyMaintenanceRequestCreated(data.id, sendMode)
     }
 
     return { success: true, data: { ...data, reported_by_name: userName } }

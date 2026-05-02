@@ -15,8 +15,15 @@ function getSupabase() {
   return createClient(url, serviceRoleKey || anonKey)
 }
 
-function getLineClient() {
-  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
+function getNotificationToken(sendMode) {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official';
+  return mode === 'test'
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN)
+    : process.env.LINE_CHANNEL_ACCESS_TOKEN;
+}
+
+function getLineClient(sendMode) {
+  const channelAccessToken = getNotificationToken(sendMode)
   const channelSecret = process.env.LINE_CHANNEL_SECRET
 
   if (!channelAccessToken || !channelSecret) {
@@ -29,10 +36,10 @@ function getLineClient() {
 export async function POST(req) {
   try {
     const supabase = getSupabase()
-    const client = getLineClient()
 
     const body = await req.json()
-    const { meeting, notificationType } = body
+    const { meeting, notificationType, sendMode } = body
+    const client = getLineClient(sendMode)
 
     if (!meeting || !meeting.topic) {
       return Response.json({ error: "Missing meeting data" }, { status: 400 })
@@ -183,29 +190,8 @@ export async function POST(req) {
       },
     }
 
-    // 建立要發送的消息（每位住戶共用同一組內容）
+    // 只發送 Flex 卡片，避免卡片後再追加純文字造成訊息重複
     const messages = [flexMessage]
-    if (pdf_file_url) {
-      if (isPdfUpdateNotification) {
-        messages.push({
-          type: "text",
-          text: isHttpPdfUrl
-            ? `✅ 會議記錄已準備就緒\n📥 長按此訊息可保存檔案連結\n🔗 ${pdf_file_url}`
-            : "✅ 會議記錄已更新\n目前檔案為系統內嵌格式，請至住戶端會議詳情頁下載完整 PDF。",
-        })
-      } else {
-        messages.push({
-          type: "text",
-          text: "📎 會議紀錄檔案已上傳，點擊上方「下載完整會議紀錄」按鈕取得 PDF。\n\n💡 您也可以長按此訊息分享給其他住戶或保存至相簿。",
-        })
-        if (isHttpPdfUrl) {
-          messages.push({
-            type: "text",
-            text: `🔗 直接連結：${pdf_file_url}`,
-          })
-        }
-      }
-    }
 
     // 發送給所有綁定的住戶（批次並行，避免逐筆等待過久）
     let successCount = 0

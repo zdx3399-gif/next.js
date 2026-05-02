@@ -74,7 +74,10 @@ export function useVisitors({ userRoom, userUnitId, currentUser, isAdmin = false
     filterVisitors()
   }, [filterVisitors])
 
-  const handleReservation = async (reservation: VisitorReservation): Promise<boolean> => {
+  const handleReservation = async (
+    reservation: VisitorReservation,
+    sendMode?: "test" | "official",
+  ): Promise<boolean> => {
     if (!currentUser) {
       alert("請先登入")
       return false
@@ -83,7 +86,7 @@ export function useVisitors({ userRoom, userUnitId, currentUser, isAdmin = false
     try {
       const room = currentUser.room || userRoom
       const unitId = currentUser.unit_id || userUnitId
-      await createVisitorReservation(reservation, room, currentUser.name, unitId, currentUser.id)
+      await createVisitorReservation(reservation, room, currentUser.name, unitId, currentUser.id, sendMode)
       alert("訪客預約成功！")
       await loadVisitors()
       return true
@@ -93,9 +96,9 @@ export function useVisitors({ userRoom, userUnitId, currentUser, isAdmin = false
     }
   }
 
-  const handleCheckIn = async (visitorId: string): Promise<void> => {
+  const handleCheckIn = async (visitorId: string, sendMode?: "test" | "official"): Promise<void> => {
     try {
-      await checkInVisitor(visitorId)
+      await checkInVisitor(visitorId, sendMode)
       alert("訪客已簽到")
       await loadVisitors()
     } catch (e: any) {
@@ -103,9 +106,9 @@ export function useVisitors({ userRoom, userUnitId, currentUser, isAdmin = false
     }
   }
 
-  const handleCheckOut = async (visitorId: string): Promise<void> => {
+  const handleCheckOut = async (visitorId: string, sendMode?: "test" | "official"): Promise<void> => {
     try {
-      await checkOutVisitor(visitorId)
+      await checkOutVisitor(visitorId, sendMode)
       alert("訪客已簽退")
       await loadVisitors()
     } catch (e: any) {

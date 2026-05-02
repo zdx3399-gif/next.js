@@ -46,7 +46,7 @@ export function VisitorList({ userRoom, currentUser }: VisitorListProps) {
 
   const editingVisitor = reservedVisitors.find((v) => v.id === editingVisitorId)
 
-  const handleSubmitReservation = async (reservation: VisitorReservation) => {
+  const handleSubmitReservation = async (reservation: VisitorReservation, sendMode: "test" | "official") => {
     if (editingVisitorId) {
       const success = await handleUpdateReservation({ id: editingVisitorId, ...reservation })
       if (success) {
@@ -56,7 +56,7 @@ export function VisitorList({ userRoom, currentUser }: VisitorListProps) {
       return success
     }
 
-    return handleReservation(reservation)
+    return handleReservation(reservation, sendMode)
   }
 
   const handleEdit = (visitorId: string) => {

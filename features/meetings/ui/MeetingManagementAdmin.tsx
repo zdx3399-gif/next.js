@@ -51,18 +51,16 @@ function MeetingFormModal({
   const startEditTakeaway = (index: number) => {
     const currentTakeaways = formData.key_takeaways || []
     setEditingTakeawayIndex(index)
-    setEditingTakeawayText(currentTakeaways[index])
+    setEditingTakeawayText(currentTakeaways[index] || "")
   }
 
   const saveEditTakeaway = () => {
-    if (editingTakeawayIndex !== null && editingTakeawayText.trim()) {
-      const currentTakeaways = formData.key_takeaways || []
-      const updated = [...currentTakeaways]
-      updated[editingTakeawayIndex] = editingTakeawayText.trim()
-      onChange("key_takeaways", updated)
-      setEditingTakeawayIndex(null)
-      setEditingTakeawayText("")
-    }
+    if (editingTakeawayIndex === null || !editingTakeawayText.trim()) return
+    const currentTakeaways = [...(formData.key_takeaways || [])]
+    currentTakeaways[editingTakeawayIndex] = editingTakeawayText.trim()
+    onChange("key_takeaways", currentTakeaways)
+    setEditingTakeawayIndex(null)
+    setEditingTakeawayText("")
   }
 
   const cancelEditTakeaway = () => {
@@ -298,6 +296,8 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
     pdf_file_url: undefined,
   })
   const [searchTerm, setSearchTerm] = useState("")
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
+  const [pendingMeetingData, setPendingMeetingData] = useState<Omit<Meeting, "id" | "created_at"> | null>(null)
 
   const filteredMeetings = meetings.filter((meeting) => {
     if (!searchTerm) return true
@@ -365,17 +365,34 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
 
       if (editingId) {
         await editMeeting(editingId, finalData)
+        setIsModalOpen(false)
+        setSavingStage("idle")
       } else {
-        await addMeeting(finalData)
+        // 新增會議：先儲存 payload，開啟發送模式 Dialog
+        setPendingMeetingData(finalData)
+        setSendModeDialogOpen(true)
+        setIsModalOpen(false)
+        setSavingStage("idle")
       }
-      setIsModalOpen(false)
-      setSavingStage("idle")
     } catch (error) {
       console.error("Error saving meeting:", error)
       alert("儲存失敗，請稍後再試")
     } finally {
       setIsSaving(false)
       setSavingStage("idle")
+    }
+  }
+
+  const handleSendMeetingWithMode = async (sendMode: "test" | "official") => {
+    if (!pendingMeetingData) return
+    setSendModeDialogOpen(false)
+    try {
+      await addMeeting(pendingMeetingData, sendMode)
+    } catch (error) {
+      console.error("Error adding meeting:", error)
+      alert("儲存失敗，請稍後再試")
+    } finally {
+      setPendingMeetingData(null)
     }
   }
 
@@ -528,6 +545,46 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
         isSaving={isSaving}
         savingLabel={savingLabel}
       />
+
+      {sendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">🤖 選擇會議通知頻道</h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">
+                請選擇要使用測試或正式 LINE BOT 發送會議通知
+              </p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                onClick={() => handleSendMeetingWithMode("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">限制通知範圍，用於測試</div>
+              </button>
+              <button
+                onClick={() => handleSendMeetingWithMode("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+              >
+                ✓ 正式 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">通知所有相關住戶</div>
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                onClick={() => {
+                  setSendModeDialogOpen(false)
+                  setPendingMeetingData(null)
+                }}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

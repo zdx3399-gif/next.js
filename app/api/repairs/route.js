@@ -191,7 +191,7 @@ export async function PATCH(req) {
         updateData.completed_at = new Date().toISOString();
       }
     }
-    if (assigned_to !== undefined) updateData.assignee = assigned_to;
+    if (assigned_to !== undefined) updateData.assignee_id = assigned_to;
     if (notes !== undefined) updateData.note = notes;
     if (priority) {
       updateData.admin_note = `priority=${priority}${notes ? `; ${notes}` : ''}`;
@@ -321,7 +321,6 @@ export async function POST(req) {
         description,
         status: 'open',
         reported_by_id: user_id || null,
-        reported_by_name: user_id ? '住戶' : '管理員',
         note: priority ? `priority=${priority}` : '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

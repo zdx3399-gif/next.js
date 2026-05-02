@@ -18,9 +18,16 @@ function getSupabase() {
   return createClient(url, serviceRoleKey || anonKey);
 }
 
+function getNotificationToken(sendMode) {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official';
+  return mode === 'test'
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN)
+    : process.env.LINE_CHANNEL_ACCESS_TOKEN;
+}
+
 // ✅ LINE client 也延後建立
-function getLineClient() {
-  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+function getLineClient(sendMode) {
+  const channelAccessToken = getNotificationToken(sendMode);
   const channelSecret = process.env.LINE_CHANNEL_SECRET;
 
   if (!channelAccessToken || !channelSecret) {
@@ -106,44 +113,43 @@ function normalizeRoom(room) {
 async function resolveUnitByRoom(supabase, recipientRoom) {
   const normalized = normalizeRoom(recipientRoom);
 
-  let foundUnit = null;
-
-  const { data: exact1 } = await supabase
+  // 1. unit_code 精確比對（參數化，避免字串插值注入）
+  const { data: byCode } = await supabase
     .from("units")
     .select("id, unit_code")
-    .or(`unit_code.eq.${recipientRoom},unit_number.eq.${recipientRoom}`)
+    .eq("unit_code", recipientRoom)
     .limit(1);
+  if (byCode?.length > 0) return byCode[0];
 
-  if (exact1 && exact1.length > 0) {
-    foundUnit = exact1[0];
-  }
+  // 2. unit_number 精確比對
+  const { data: byNum } = await supabase
+    .from("units")
+    .select("id, unit_code")
+    .eq("unit_number", recipientRoom)
+    .limit(1);
+  if (byNum?.length > 0) return byNum[0];
 
-  if (!foundUnit) {
-    const { data: allUnits } = await supabase.from("units").select("id, unit_code, unit_number");
-    if (allUnits && allUnits.length > 0) {
-      for (const u of allUnits) {
-        const normCode = normalizeRoom(u.unit_code);
-        const normNum = normalizeRoom(u.unit_number);
-        if (normCode === normalized || normNum === normalized) {
-          foundUnit = u;
-          break;
-        }
+  // 3. 標準化後全表比對
+  const { data: allUnits } = await supabase.from("units").select("id, unit_code, unit_number");
+  if (allUnits?.length > 0) {
+    for (const u of allUnits) {
+      const normCode = normalizeRoom(u.unit_code);
+      const normNum = normalizeRoom(u.unit_number);
+      if (normCode === normalized || normNum === normalized) {
+        return u;
       }
     }
   }
 
-  if (!foundUnit) {
-    const { data: likeUnits } = await supabase
-      .from("units")
-      .select("id, unit_code")
-      .ilike("unit_code", `%${recipientRoom}%`)
-      .limit(1);
-    if (likeUnits && likeUnits.length > 0) {
-      foundUnit = likeUnits[0];
-    }
-  }
+  // 4. ilike 模糊比對（fallback）
+  const { data: likeUnits } = await supabase
+    .from("units")
+    .select("id, unit_code")
+    .ilike("unit_code", `%${recipientRoom}%`)
+    .limit(1);
+  if (likeUnits?.length > 0) return likeUnits[0];
 
-  return foundUnit;
+  return null;
 }
 
 async function resolveRecipientProfileId(supabase, unitId, recipientName) {
@@ -203,10 +209,10 @@ async function sendIotCommand(req, cmd) {
 export async function POST(req) {
   try {
     const supabase = getSupabase();
-    const client = getLineClient();
 
     const body = await req.json();
-    const { courier, recipient_name, recipient_room, tracking_number, arrived_at, test } = body;
+    const { courier, recipient_name, recipient_room, tracking_number, arrived_at, test, sendMode } = body;
+    const client = getLineClient(sendMode);
     const operator = getPackageOperator(body);
 
     // Validation
@@ -607,11 +613,11 @@ export async function DELETE(req) {
 export async function PATCH(req) {
   try {
     const supabase = getSupabase();
-    const client = getLineClient();
 
     const body = await req.json();
-    const { packageId, picked_up_by } = body;
+    const { packageId, picked_up_by, sendMode } = body;
     const operator = getPackageOperator(body);
+    const client = getLineClient(sendMode);
 
     if (!packageId || !picked_up_by) {
       await writeServerAuditLog({

@@ -36,6 +36,9 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
   const [lotteryBid, setLotteryBid] = useState<number>(0)
   const [activeTab, setActiveTab] = useState<"booking" | "my-bookings" | "facilities">("booking")
   const [searchTerm, setSearchTerm] = useState("")
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
+  const [sendModeAction, setSendModeAction] = useState<"booking" | "cancel" | null>(null)
+  const [pendingCancelBookingId, setPendingCancelBookingId] = useState<string | null>(null)
 
   const filteredFacilities = facilities.filter((facility) => {
     if (!searchTerm) return true
@@ -83,10 +86,10 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
     }
   }
 
-  const handleDirectBooking = async () => {
+  const executeDirectBooking = async (sendMode: "test" | "official") => {
     if (!userId || !selectedSlot) return
 
-    const result = await attemptBooking(userId, selectedFacility, selectedSlot.id, userName || "未知", userRoom, notes)
+    const result = await attemptBooking(userId, selectedFacility, selectedSlot.id, userName || "未知", userRoom, notes, sendMode)
 
     alert(result.message)
     if (result.success) {
@@ -96,6 +99,14 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
       getUserPointsInfo(userId).then(setUserPoints)
       generateTimeSlots(selectedFacility, selectedDate).then(setTimeSlots)
     }
+    setSendModeDialogOpen(false)
+    setSendModeAction(null)
+  }
+
+  const handleDirectBooking = async () => {
+    if (!userId || !selectedSlot) return
+    setSendModeAction("booking")
+    setSendModeDialogOpen(true)
   }
 
   const handleJoinLottery = async () => {
@@ -109,16 +120,39 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
     }
   }
 
-  const handleCancel = async (bookingId: string) => {
+  const executeCancel = async (bookingId: string, sendMode: "test" | "official") => {
     if (!userId) return
-    if (!confirm("確定要取消此預約？")) return
 
-    const result = await cancelBookingWithRefund(bookingId, userId)
+    const result = await cancelBookingWithRefund(bookingId, userId, sendMode)
     alert(result.message)
     if (result.success) {
       reload()
       getUserPointsInfo(userId).then(setUserPoints)
     }
+    setPendingCancelBookingId(null)
+    setSendModeDialogOpen(false)
+    setSendModeAction(null)
+  }
+
+  const handleCancel = async (bookingId: string) => {
+    if (!userId) return
+    if (!confirm("確定要取消此預約？")) return
+    setPendingCancelBookingId(bookingId)
+    setSendModeAction("cancel")
+    setSendModeDialogOpen(true)
+  }
+
+  const handleSelectSendMode = async (sendMode: "test" | "official") => {
+    if (sendModeAction === "booking") {
+      await executeDirectBooking(sendMode)
+      return
+    }
+    if (sendModeAction === "cancel" && pendingCancelBookingId) {
+      await executeCancel(pendingCancelBookingId, sendMode)
+      return
+    }
+    setSendModeDialogOpen(false)
+    setSendModeAction(null)
   }
 
   const handleCheckIn = async (bookingId: string) => {
@@ -658,6 +692,49 @@ export function FacilityList({ userId, userName, userRoom }: FacilityListProps) 
               ) : (
                 <div className="text-center text-[var(--theme-text-muted)] py-8">暫無交易紀錄</div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">
+                🤖 {sendModeAction === "cancel" ? "選擇取消通知頻道" : "選擇預約通知頻道"}
+              </h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">
+                {sendModeAction === "cancel"
+                  ? "請選擇要使用測試或正式 LINE BOT 發送取消預約卡片"
+                  : "請選擇要使用測試或正式 LINE BOT 發送預約成功卡片"}
+              </p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                onClick={() => handleSelectSendMode("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試 BOT
+              </button>
+              <button
+                onClick={() => handleSelectSendMode("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+              >
+                ✓ 正式 BOT
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                onClick={() => {
+                  setSendModeDialogOpen(false)
+                  setSendModeAction(null)
+                  setPendingCancelBookingId(null)
+                }}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
             </div>
           </div>
         </div>

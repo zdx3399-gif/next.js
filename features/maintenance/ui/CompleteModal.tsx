@@ -32,6 +32,8 @@ export function CompleteModal({ isOpen, onClose, maintenanceId, estimatedCost, o
   })
   const [isLoading, setIsLoading] = useState(false)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
+  const [pendingCompleteData, setPendingCompleteData] = useState<any>(null)
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -49,21 +51,31 @@ export function CompleteModal({ isOpen, onClose, maintenanceId, estimatedCost, o
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
     const operator = getCurrentOperator()
+    setPendingCompleteData({
+      maintenanceId,
+      final_cost: formData.final_cost,
+      completion_note: formData.completion_note,
+      completion_photo_url: formData.completion_photo_url,
+      generate_fee: formData.generate_fee && formData.final_cost > 0,
+      operatorId: operator.id || null,
+      operatorRole: operator.role,
+    })
+    setSendModeDialogOpen(true)
+  }
+
+  const handleSendCompleteWithMode = async (sendMode: "test" | "official") => {
+    if (!pendingCompleteData) return
+    setSendModeDialogOpen(false)
+    setIsLoading(true)
 
     try {
       const response = await fetch('/api/maintenance/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          maintenanceId,
-          final_cost: formData.final_cost,
-          completion_note: formData.completion_note,
-          completion_photo_url: formData.completion_photo_url,
-          generate_fee: formData.generate_fee && formData.final_cost > 0,
-          operatorId: operator.id || null,
-          operatorRole: operator.role,
+          ...pendingCompleteData,
+          sendMode,
         })
       })
 
@@ -107,6 +119,7 @@ export function CompleteModal({ isOpen, onClose, maintenanceId, estimatedCost, o
   if (!isOpen) return null
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
       <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
         {/* Header */}
@@ -247,5 +260,44 @@ export function CompleteModal({ isOpen, onClose, maintenanceId, estimatedCost, o
         </form>
       </div>
     </div>
+
+    {/* sendMode Dialog */}
+    {sendModeDialogOpen && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+        <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+          <div className="border-b border-[var(--theme-border)] p-5">
+            <h3 className="text-lg font-bold text-[var(--theme-accent)]">🤖 選擇結案通知頻道</h3>
+            <p className="text-sm text-[var(--theme-text-secondary)] mt-3">
+              請選擇要使用測試或正式 LINE BOT 發送結案通知
+            </p>
+          </div>
+          <div className="p-5 space-y-3">
+            <button
+              onClick={() => handleSendCompleteWithMode("test")}
+              className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+            >
+              🧪 測試 BOT
+              <div className="text-xs font-normal mt-1 opacity-80">限制通知範圍，用於測試</div>
+            </button>
+            <button
+              onClick={() => handleSendCompleteWithMode("official")}
+              className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+            >
+              ✓ 正式 BOT
+              <div className="text-xs font-normal mt-1 opacity-80">通知所有相關住戶</div>
+            </button>
+          </div>
+          <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+            <button
+              onClick={() => { setSendModeDialogOpen(false); setPendingCompleteData(null) }}
+              className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

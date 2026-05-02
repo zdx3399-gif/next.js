@@ -25,8 +25,8 @@ export function useMeetings() {
     loadMeetings()
   }, [loadMeetings])
 
-  const addMeeting = async (meeting: Omit<Meeting, "id" | "created_at">) => {
-    const newMeeting = await createMeeting(meeting)
+  const addMeeting = async (meeting: Omit<Meeting, "id" | "created_at">, sendMode?: "test" | "official") => {
+    const newMeeting = await createMeeting(meeting, undefined, sendMode)
     if (newMeeting) {
       setMeetings((prev) => [newMeeting, ...prev])
       return true

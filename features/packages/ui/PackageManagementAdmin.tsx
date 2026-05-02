@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { usePackages } from "../hooks/usePackages"
-import { fetchResidentsByRoom } from "@/features/residents/api/residents"
+import { fetchResidentsByRoom, fetchResidentsByUnitId, fetchUnits, lookupUnitIdByCode } from "@/features/residents/api/residents"
 import type { Package } from "../api/packages"
 import type { Resident } from "@/features/residents/api/residents"
 import { HelpHint } from "@/components/ui/help-hint"
@@ -23,17 +23,50 @@ interface NewPackage {
   arrived_at: string
 }
 
+function toLocalDateTimeInputValue(value: string | undefined): string {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  const hh = String(date.getHours()).padStart(2, "0")
+  const mm = String(date.getMinutes()).padStart(2, "0")
+  return `${y}-${m}-${d}T${hh}:${mm}`
+}
+
+function nowLocalDateTimeInputValue(): string {
+  return toLocalDateTimeInputValue(new Date().toISOString())
+}
+
 interface PackageFormModalProps {
   isOpen: boolean
   onClose: () => void
   formData: NewPackage
+  roomOptions: string[]
+  loadingRooms: boolean
+  residentOptions: Resident[]
+  loadingResidents: boolean
   onChange: (field: keyof NewPackage, value: string) => void
   onSave: () => void
   isEdit: boolean
   isSaving: boolean
 }
 
-function PackageFormModal({ isOpen, onClose, formData, onChange, onSave, isEdit, isSaving }: PackageFormModalProps) {
+function PackageFormModal({
+  isOpen,
+  onClose,
+  formData,
+  roomOptions,
+  loadingRooms,
+  residentOptions,
+  loadingResidents,
+  onChange,
+  onSave,
+  isEdit,
+  isSaving,
+}: PackageFormModalProps) {
   if (!isOpen) return null
 
   return (
@@ -89,30 +122,6 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave, isEdit,
           </div>
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <label className="block text-[var(--theme-text-primary)] font-medium">收件人 *</label>
-              <HelpHint
-                title="管理端收件人"
-                description="請填寫包裹上的收件姓名，避免通知到錯誤住戶。"
-                workflow={[
-                  "依包裹面單輸入收件姓名。",
-                  "與房號交叉檢查避免誤登記。",
-                  "若姓名不明可先向住戶確認。",
-                ]}
-                logic={[
-                  "收件人欄位影響通知與交付準確性。",
-                ]}
-              />
-            </div>
-            <input
-              type="text"
-              value={formData.recipient_name || ""}
-              onChange={(e) => onChange("recipient_name", e.target.value)}
-              placeholder="收件人姓名"
-              className="w-full p-3 rounded-xl theme-input outline-none"
-            />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 mb-2">
               <label className="block text-[var(--theme-text-primary)] font-medium">房號 *</label>
               <HelpHint
                 title="管理端房號"
@@ -127,13 +136,63 @@ function PackageFormModal({ isOpen, onClose, formData, onChange, onSave, isEdit,
                 ]}
               />
             </div>
-            <input
-              type="text"
+            <select
               value={formData.recipient_room || ""}
               onChange={(e) => onChange("recipient_room", e.target.value)}
-              placeholder="例：A棟 10樓 1001室"
-              className="w-full p-3 rounded-xl theme-input outline-none"
-            />
+              className="w-full p-3 rounded-xl theme-select outline-none"
+            >
+              <option value="">-- 請選擇房號 --</option>
+              {roomOptions.map((room) => (
+                <option key={room} value={room}>
+                  {room}
+                </option>
+              ))}
+            </select>
+            {loadingRooms && (
+              <div className="text-xs text-[var(--theme-text-secondary)] mt-2">正在載入房號清單...</div>
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-[var(--theme-text-primary)] font-medium">收件人 *</label>
+              <HelpHint
+                title="管理端收件人"
+                description="先輸入房號後，系統會從資料庫帶出同房號住戶名單供選擇。"
+                workflow={[
+                  "先填房號，系統會即時查詢對應住戶。",
+                  "從下拉選單挑選正確收件人。",
+                  "若查無名單再手動輸入收件姓名。",
+                ]}
+                logic={[
+                  "房號與收件人連動可降低誤登記與誤通知風險。",
+                ]}
+              />
+            </div>
+            {residentOptions.length > 0 ? (
+              <select
+                value={formData.recipient_name || ""}
+                onChange={(e) => onChange("recipient_name", e.target.value)}
+                className="w-full p-3 rounded-xl theme-select outline-none"
+              >
+                <option value="">-- 請選擇收件人 --</option>
+                {residentOptions.map((resident) => (
+                  <option key={resident.id} value={resident.name || ""}>
+                    {resident.name} ({getRelationshipLabel(resident.relationship)})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={formData.recipient_name || ""}
+                onChange={(e) => onChange("recipient_name", e.target.value)}
+                placeholder="收件人姓名"
+                className="w-full p-3 rounded-xl theme-input outline-none"
+              />
+            )}
+            {loadingResidents && (
+              <div className="text-xs text-[var(--theme-text-secondary)] mt-2">正在查詢房號住戶名單...</div>
+            )}
           </div>
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -246,23 +305,35 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedPickers, setSelectedPickers] = useState<{ [key: string]: Resident | null }>({})
   const [roomResidents, setRoomResidents] = useState<{ [room: string]: Resident[] }>({})
+  const [roomOptions, setRoomOptions] = useState<string[]>([])
+  const [loadingRooms, setLoadingRooms] = useState(false)
+  const [formRoomResidents, setFormRoomResidents] = useState<Resident[]>([])
+  const [loadingFormResidents, setLoadingFormResidents] = useState(false)
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null)
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
+  const [pendingPkgData, setPendingPkgData] = useState<NewPackage | null>(null)
+  const [pickupSendModeDialogOpen, setPickupSendModeDialogOpen] = useState(false)
+  const [pendingPickup, setPendingPickup] = useState<{ packageId: string; pickedUpBy: string } | null>(null)
   const [newPackage, setNewPackage] = useState<NewPackage>({
     courier: "",
     recipient_name: "",
     recipient_room: "",
     tracking_number: "",
-    arrived_at: new Date().toISOString().slice(0, 16),
+    arrived_at: nowLocalDateTimeInputValue(),
   })
 
   useEffect(() => {
     pendingPackages.forEach((pkg) => {
-      loadRoomResidents(pkg.recipient_room)
+      loadRoomResidents(pkg.unit_id || null, pkg.recipient_room)
     })
   }, [pendingPackages])
+
+  useEffect(() => {
+    void loadRoomOptions()
+  }, [])
 
   const filterPackages = (pkgs: Package[]) => {
     if (!searchTerm) return pkgs
@@ -278,23 +349,66 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
   const filteredPending = filterPackages(pendingPackages)
   const filteredPickedUp = filterPackages(pickedUpPackages)
 
-  const loadRoomResidents = async (room: string) => {
-    if (!room || roomResidents[room]) return
-    const residents = await fetchResidentsByRoom(room)
+  // key 統一用 unit_id（已知）或 recipient_room（fallback 顯示用）
+  const loadRoomResidents = async (unitId: string | null, room: string) => {
+    const stateKey = unitId || room
+    if (!stateKey || roomResidents[stateKey]) return
+
+    // 1. 優先用已知的 unit_id
+    let resolvedUnitId = unitId
+
+    // 2. 若無 unit_id，透過房號查詢 units 表取得 unit_id
+    if (!resolvedUnitId && room) {
+      resolvedUnitId = await lookupUnitIdByCode(room)
+      console.log("[packages] lookupUnitIdByCode", room, "→", resolvedUnitId)
+    }
+
+    // 3. 有 unit_id 就用 FK 查，否則 fallback 到 fuzzy room 查詢
+    const residents = resolvedUnitId
+      ? await fetchResidentsByUnitId(resolvedUnitId)
+      : await fetchResidentsByRoom(room)
+
+    console.log("[packages] loadRoomResidents key=", stateKey, "residents=", residents)
+
     setRoomResidents((prev) => ({
       ...prev,
-      [room]: residents,
+      [stateKey]: residents,
     }))
   }
 
-  const onMarkAsPickedUp = async (packageId: string) => {
+  const loadRoomOptions = async () => {
+    setLoadingRooms(true)
+    try {
+      const units = await fetchUnits()
+      const options = Array.from(
+        new Set(
+          (units || [])
+            .map((u) => (u.unit_code || u.unit_number || "").trim())
+            .filter(Boolean),
+        ),
+      )
+      setRoomOptions(options)
+    } finally {
+      setLoadingRooms(false)
+    }
+  }
+
+  const onMarkAsPickedUp = (packageId: string) => {
     const selectedResident = selectedPickers[packageId]
     if (!selectedResident || !selectedResident.name) {
       alert("請選擇領取人")
       return
     }
+    setPendingPickup({ packageId, pickedUpBy: selectedResident.name })
+    setPickupSendModeDialogOpen(true)
+  }
 
-    const success = await handleMarkAsPickedUp(packageId, selectedResident.name)
+  const handlePickupWithMode = async (sendMode: "test" | "official") => {
+    if (!pendingPickup) return
+    setPickupSendModeDialogOpen(false)
+    const { packageId, pickedUpBy } = pendingPickup
+    setPendingPickup(null)
+    const success = await handleMarkAsPickedUp(packageId, pickedUpBy, sendMode)
     if (success) {
       setSelectedPickers((prev) => {
         const newState = { ...prev }
@@ -307,8 +421,36 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
     }
   }
 
+  const loadFormRoomResidents = async (room: string, keepName?: string) => {
+    const normalizedRoom = (room || "").trim()
+    if (!normalizedRoom) {
+      setFormRoomResidents([])
+      return
+    }
+
+    setLoadingFormResidents(true)
+    try {
+      const residents = await fetchResidentsByRoom(normalizedRoom)
+      setFormRoomResidents(residents)
+      if (residents.length > 0) {
+        const preferred = keepName ? residents.find((r) => r.name === keepName) : undefined
+        const pickedName = preferred?.name || residents[0]?.name || ""
+        if (pickedName) {
+          setNewPackage((prev) => ({ ...prev, recipient_name: pickedName }))
+        }
+      }
+    } finally {
+      setLoadingFormResidents(false)
+    }
+  }
+
   const handleFormChange = (field: keyof NewPackage, value: string) => {
     setNewPackage((prev) => ({ ...prev, [field]: value }))
+    if (field === "recipient_room") {
+      setFormRoomResidents([])
+      setNewPackage((prev) => ({ ...prev, recipient_name: "", recipient_room: value }))
+      void loadFormRoomResidents(value)
+    }
   }
 
   const resetPackageForm = () => {
@@ -317,8 +459,9 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
       recipient_name: "",
       recipient_room: "",
       tracking_number: "",
-      arrived_at: new Date().toISOString().slice(0, 16),
+      arrived_at: nowLocalDateTimeInputValue(),
     })
+    setFormRoomResidents([])
     setEditingPackageId(null)
   }
 
@@ -329,18 +472,42 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
       return
     }
 
+    if (!editingPackageId) {
+      // 新增時先選 sendMode
+      setPendingPkgData({ ...newPackage })
+      setSendModeDialogOpen(true)
+      return
+    }
+
+    // 編輯直接更新，不需要 sendMode
     setIsSaving(true)
     try {
-      const success = editingPackageId
-        ? await handleUpdatePackage({ id: editingPackageId, ...newPackage })
-        : await handleAddPackage(newPackage)
-
+      const success = await handleUpdatePackage({ id: editingPackageId, ...newPackage })
       if (success) {
-        alert(editingPackageId ? "包裹更新成功" : "包裹新增成功")
+        alert("包裹更新成功")
         setIsModalOpen(false)
         resetPackageForm()
       } else {
-        alert(editingPackageId ? "更新失敗" : "新增失敗")
+        alert("更新失敗")
+      }
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleSendPackageWithMode = async (sendMode: "test" | "official") => {
+    if (!pendingPkgData) return
+    setSendModeDialogOpen(false)
+    setIsSaving(true)
+    try {
+      const success = await handleAddPackage({ ...pendingPkgData, sendMode })
+      if (success) {
+        alert("包裹新增成功")
+        setIsModalOpen(false)
+        resetPackageForm()
+        setPendingPkgData(null)
+      } else {
+        alert("新增失敗")
       }
     } finally {
       setIsSaving(false)
@@ -354,8 +521,9 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
       recipient_name: pkg.recipient_name || "",
       recipient_room: pkg.recipient_room || "",
       tracking_number: pkg.tracking_number || "",
-      arrived_at: pkg.arrived_at ? new Date(pkg.arrived_at).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+      arrived_at: pkg.arrived_at ? toLocalDateTimeInputValue(pkg.arrived_at) : nowLocalDateTimeInputValue(),
     })
+    void loadFormRoomResidents(pkg.recipient_room || "", pkg.recipient_name || "")
     setIsModalOpen(true)
   }
 
@@ -465,7 +633,8 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
           <div className="space-y-3">
             {filteredPending.length > 0 ? (
               filteredPending.map((pkg) => {
-                const residents = roomResidents[pkg.recipient_room] || []
+                const residents = roomResidents[pkg.unit_id || pkg.recipient_room] || []
+                console.log("[render] pkg.id=", pkg.id, "unit_id=", pkg.unit_id, "room=", pkg.recipient_room, "lookupKey=", pkg.unit_id || pkg.recipient_room, "residents=", residents.length, residents[0])
                 const selectedResident = selectedPickers[pkg.id]
 
                 return (
@@ -638,11 +807,91 @@ export function PackageManagementAdmin({ currentUser, isPreviewMode = false }: P
           resetPackageForm()
         }}
         formData={newPackage}
+        roomOptions={roomOptions}
+        loadingRooms={loadingRooms}
+        residentOptions={formRoomResidents}
+        loadingResidents={loadingFormResidents}
         onChange={handleFormChange}
         onSave={onAddOrUpdatePackage}
         isEdit={!!editingPackageId}
         isSaving={isSaving}
       />
+
+      {/* 標記已領 sendMode Dialog */}
+      {pickupSendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">🤖 選擇領取通知頻道</h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">
+                請選擇要使用測試或正式 LINE BOT 發送包裹領取通知
+              </p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                onClick={() => handlePickupWithMode("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">限制通知範圍，用於測試</div>
+              </button>
+              <button
+                onClick={() => handlePickupWithMode("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+              >
+                ✓ 正式 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">通知所有相關住戶</div>
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                onClick={() => { setPickupSendModeDialogOpen(false); setPendingPickup(null) }}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* sendMode Dialog */}
+      {sendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">🤖 選擇包裹通知頻道</h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">
+                請選擇要使用測試或正式 LINE BOT 發送包裹到件通知
+              </p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                onClick={() => handleSendPackageWithMode("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">限制通知範圍，用於測試</div>
+              </button>
+              <button
+                onClick={() => handleSendPackageWithMode("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+              >
+                ✓ 正式 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">通知所有相關住戶</div>
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                onClick={() => { setSendModeDialogOpen(false); setPendingPkgData(null) }}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

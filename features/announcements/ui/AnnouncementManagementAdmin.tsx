@@ -248,6 +248,8 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
   const [formData, setFormData] = useState<Partial<Announcement>>({})
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
+  const [pendingAnnouncePayload, setPendingAnnouncePayload] = useState<any>(null)
 
   const loadAnnouncements = async () => {
     setLoading(true)
@@ -322,42 +324,21 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
         console.log("[UI] ✅ updateAnnouncement 成功");
         alert("公告已更新")
       } else {
-        console.log("[UI] ➕ 新增模式 - 直接呼叫 /api/announce");
+        console.log("[UI] ➕ 新增模式 - 開啟 sendMode 選擇");
         console.log("[UI] 📤 finalData:", JSON.stringify(finalData));
-        try {
-          const res = await fetch("/api/announce", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: finalData.title,
-              content: finalData.content,
-              image_url: finalData.image_url,
-              author: finalData.author_name || "管理委員會",
-              operatorId: operator.id || null,
-              operatorRole: operator.role,
-              operatorName: operator.name || finalData.author_name || "管理委員會",
-              pushOnly: false,
-              test: false,
-            }),
-          })
-          const payload = await res.json().catch(() => ({}))
-          console.log("[UI] 📥 /api/announce 回應:", res.status, JSON.stringify(payload));
-          if (!res.ok) {
-            alert(`新增失敗: ${payload?.error || "未知錯誤"}`)
-            setIsSaving(false)
-            return
-          }
-          
-          // 顯示統計推播結果
-          const message = payload?.message || `已推播給 ${payload?.sent || 0} 人`
-          console.log("[UI] ✅ 公告新增+推播成功，統計:", { sent: payload?.sent, skipped: payload?.skipped })
-          alert(`公告已新增\n\n${message}`)
-        } catch (fetchErr: any) {
-          console.error("[UI] 💥 fetch /api/announce 失敗:", fetchErr);
-          alert(`新增失敗: ${fetchErr?.message || "網路錯誤"}`)
-          setIsSaving(false)
-          return
-        }
+        setPendingAnnouncePayload({
+          title: finalData.title,
+          content: finalData.content,
+          image_url: finalData.image_url,
+          author: finalData.author_name || "管理委員會",
+          operatorId: operator.id || null,
+          operatorRole: operator.role,
+          operatorName: (operator as any).name || finalData.author_name || "管理委員會",
+          pushOnly: false,
+        })
+        setIsSaving(false)
+        setSendModeDialogOpen(true)
+        return
       }
 
       console.log("[UI] ✅ 儲存完成，刷新清單");
@@ -375,6 +356,33 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
     if (confirm("確定要刪除此公告嗎？")) {
       await deleteAnnouncement(id)
       loadAnnouncements()
+    }
+  }
+
+  const handleSendWithMode = async (sendMode: "test" | "official") => {
+    if (!pendingAnnouncePayload) return
+    setSendModeDialogOpen(false)
+    setIsSaving(true)
+    try {
+      const res = await fetch("/api/announce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...pendingAnnouncePayload, sendMode }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(`新增失敗: ${payload?.error || "未知錯誤"}`)
+        return
+      }
+      const message = payload?.message || `已推播給 ${payload?.sent || 0} 人`
+      alert(`公告已新增\n\n${message}`)
+      setIsModalOpen(false)
+      loadAnnouncements()
+    } catch (fetchErr: any) {
+      alert(`新增失敗: ${fetchErr?.message || "網路錯誤"}`)
+    } finally {
+      setIsSaving(false)
+      setPendingAnnouncePayload(null)
     }
   }
 
@@ -639,6 +647,44 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
         imageFile={imageFile}
         isSaving={isSaving}
       />
+
+      {/* sendMode Dialog */}
+      {sendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">🤖 選擇公告通知頻道</h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">
+                請選擇要使用測試或正式 LINE BOT 發送公告通知
+              </p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                onClick={() => handleSendWithMode("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">限制通知範圍，用於測試</div>
+              </button>
+              <button
+                onClick={() => handleSendWithMode("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+              >
+                ✓ 正式 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">通知所有相關住戶</div>
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                onClick={() => { setSendModeDialogOpen(false); setPendingAnnouncePayload(null) }}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

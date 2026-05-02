@@ -1,10 +1,25 @@
-﻿import { getSupabaseClient } from "@/lib/supabase"
+﻿import { getSupabaseClient, createTenantClient } from "@/lib/supabase"
 import { createAuditLog } from "@/lib/audit"
+
+/** getSupabaseClient 對 admin 回傳 null，此 helper 自動 fallback 到 createTenantClient，確保唯讀查詢在 admin 角色也能執行。 */
+function getClientForRead() {
+  try {
+    const client = getSupabaseClient()
+    if (client) return client
+    return createTenantClient()
+  } catch (e) {
+    console.error("[getClientForRead] failed to create client:", e)
+    return null
+  }
+}
 
 export interface Resident {
   id?: string
   name: string
   room?: string // 顯示用，從 units.unit_code 來
+  ping_size?: number
+  car_spots?: number
+  moto_spots?: number
   phone: string // 從 profiles 獲取
   email?: string // 從 profiles 獲取
   emergency_contact_name?: string
@@ -102,6 +117,75 @@ function getCurrentOperator() {
   }
 }
 
+function toNonNegativeNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) return undefined
+  return n
+}
+
+async function resolveOrCreateUnitId(supabase: any, room?: string, unitId?: string): Promise<string | null> {
+  if (unitId) return unitId
+
+  const roomText = (room || "").trim()
+  if (!roomText) return null
+
+  const { data: exactByCode } = await supabase
+    .from("units")
+    .select("id")
+    .eq("unit_code", roomText)
+    .limit(1)
+    .maybeSingle()
+  if (exactByCode?.id) return exactByCode.id
+
+  const { data: exactByNumber } = await supabase
+    .from("units")
+    .select("id")
+    .eq("unit_number", roomText)
+    .limit(1)
+    .maybeSingle()
+  if (exactByNumber?.id) return exactByNumber.id
+
+  const { data: created } = await supabase
+    .from("units")
+    .insert([{ unit_code: roomText, unit_number: roomText }])
+    .select("id")
+    .single()
+
+  return created?.id || null
+}
+
+async function syncUnitMeta(
+  supabase: any,
+  unitId: string | null,
+  updates: {
+    room?: string
+    ping_size?: unknown
+    car_spots?: unknown
+    moto_spots?: unknown
+  },
+) {
+  if (!unitId) return
+
+  const payload: Record<string, unknown> = {}
+
+  const roomText = (updates.room || "").trim()
+  if (roomText) {
+    payload.unit_code = roomText
+  }
+
+  const pingSize = toNonNegativeNumber(updates.ping_size)
+  const carSpots = toNonNegativeNumber(updates.car_spots)
+  const motoSpots = toNonNegativeNumber(updates.moto_spots)
+
+  if (pingSize !== undefined) payload.ping_size = pingSize
+  if (carSpots !== undefined) payload.car_spots = carSpots
+  if (motoSpots !== undefined) payload.moto_spots = motoSpots
+
+  if (Object.keys(payload).length === 0) return
+  await supabase.from("units").update(payload).eq("id", unitId)
+}
+
 export async function fetchResidents(): Promise<Resident[]> {
   const supabase = getSupabaseClient()
   if (!supabase) return []
@@ -141,11 +225,24 @@ export async function fetchResidents(): Promise<Resident[]> {
   const emergencyMap = await fetchEmergencyContactMap(supabase, profileIds)
 
   // 分開查詢 units
-  let unitsMap: Record<string, string> = {}
+  let unitsMap: Record<string, { unit_code: string; ping_size: number; car_spots: number; moto_spots: number }> = {}
   if (unitIds.length > 0) {
-    const { data: units } = await supabase.from("units").select("id, unit_code").in("id", unitIds)
+    const { data: units } = await supabase
+      .from("units")
+      .select("id, unit_code, ping_size, car_spots, moto_spots")
+      .in("id", unitIds)
     if (units) {
-      unitsMap = Object.fromEntries(units.map((u) => [u.id, u.unit_code]))
+      unitsMap = Object.fromEntries(
+        units.map((u) => [
+          u.id,
+          {
+            unit_code: u.unit_code || "",
+            ping_size: Number(u.ping_size || 0),
+            car_spots: Number(u.car_spots || 0),
+            moto_spots: Number(u.moto_spots || 0),
+          },
+        ]),
+      )
     }
   }
 
@@ -162,7 +259,10 @@ export async function fetchResidents(): Promise<Resident[]> {
     updated_at: r.updated_at,
     unit_id: r.unit_id,
     profile_id: r.profile_id,
-    room: r.unit_id ? unitsMap[r.unit_id] || "" : "",
+    room: r.unit_id ? unitsMap[r.unit_id]?.unit_code || "" : "",
+    ping_size: r.unit_id ? unitsMap[r.unit_id]?.ping_size || 0 : 0,
+    car_spots: r.unit_id ? unitsMap[r.unit_id]?.car_spots || 0 : 0,
+    moto_spots: r.unit_id ? unitsMap[r.unit_id]?.moto_spots || 0 : 0,
   }))
 }
 
@@ -181,9 +281,8 @@ export async function createResident(
     relationship: resident.relationship || "household_member",
   }
 
-  if (resident.unit_id) {
-    insertData.unit_id = resident.unit_id
-  }
+  const resolvedUnitId = await resolveOrCreateUnitId(supabase, resident.room, resident.unit_id)
+  if (resolvedUnitId) insertData.unit_id = resolvedUnitId
 
   if (resident.profile_id) {
     insertData.profile_id = resident.profile_id
@@ -238,6 +337,14 @@ export async function createResident(
     }
     return null
   }
+
+  await syncUnitMeta(supabase, resolvedUnitId, {
+    room: resident.room,
+    ping_size: resident.ping_size,
+    car_spots: resident.car_spots,
+    moto_spots: resident.moto_spots,
+  })
+
   if (operator.id && data?.id) {
     await createAuditLog({
       operatorId: operator.id,
@@ -261,6 +368,9 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
   const normalizedRole = updates.role
   const {
     room,
+    ping_size,
+    car_spots,
+    moto_spots,
     phone,
     email,
     profile_id,
@@ -271,6 +381,11 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
   } = updates
 
   const dbUpdates: Record<string, any> = { ...restDbUpdates }
+
+  const resolvedUnitId = await resolveOrCreateUnitId(supabase, room, updates.unit_id)
+  if (resolvedUnitId) {
+    dbUpdates.unit_id = resolvedUnitId
+  }
 
   if (normalizedRole !== undefined) {
     (dbUpdates as any).role = normalizedRole
@@ -313,6 +428,13 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
     return null
   }
 
+  await syncUnitMeta(supabase, resolvedUnitId || data?.unit_id || null, {
+    room,
+    ping_size,
+    car_spots,
+    moto_spots,
+  })
+
   const targetProfileId = data?.profile_id || profile_id
   if (
     targetProfileId &&
@@ -341,7 +463,13 @@ export async function updateResident(id: string, updates: Partial<Resident>): Pr
       targetType: "user",
       targetId: id,
       reason: updates.name || "更新住戶",
-      afterState: { ...dbUpdates, profile_id: targetProfileId || undefined },
+      afterState: {
+        ...dbUpdates,
+        profile_id: targetProfileId || undefined,
+        ping_size,
+        car_spots,
+        moto_spots,
+      },
       additionalData: { module: "residents", status: "success" },
     })
   }
@@ -386,7 +514,7 @@ export async function deleteResident(id: string): Promise<boolean> {
 }
 
 export async function fetchResidentsByRoom(room: string): Promise<Resident[]> {
-  const supabase = getSupabaseClient()
+  const supabase = getClientForRead()
   if (!supabase) return []
 
   // 先嘗試以 unit_code 或 unit_number 精確比對 room（UI 可能傳不同格式）
@@ -473,7 +601,7 @@ export async function fetchResidentsByRoom(room: string): Promise<Resident[]> {
 }
 
 export async function fetchResidentsByUnitId(unitId: string): Promise<Resident[]> {
-  const supabase = getSupabaseClient()
+  const supabase = getClientForRead()
   if (!supabase) return []
 
   const { data, error } = await supabase
@@ -543,6 +671,47 @@ export interface Unit {
   monthly_fee: number
   created_at?: string
   updated_at?: string
+}
+
+/**
+ * 透過 unit_code / unit_number 找到對應的 unit_id。
+ * 先精確比對，找不到再模糊 ilike。
+ */
+export async function lookupUnitIdByCode(code: string): Promise<string | null> {
+  const supabase = getClientForRead()
+  if (!supabase || !code) return null
+
+  const normalized = code.trim()
+
+  // 精確比對 unit_code
+  const { data: byCode, error: e1 } = await supabase
+    .from("units")
+    .select("id")
+    .eq("unit_code", normalized)
+    .limit(1)
+
+  if (e1) console.error("[lookupUnitIdByCode] unit_code query error:", e1)
+  if (byCode && byCode.length > 0) return byCode[0].id
+
+  // 精確比對 unit_number
+  const { data: byNum, error: e2 } = await supabase
+    .from("units")
+    .select("id")
+    .eq("unit_number", normalized)
+    .limit(1)
+
+  if (e2) console.error("[lookupUnitIdByCode] unit_number query error:", e2)
+  if (byNum && byNum.length > 0) return byNum[0].id
+
+  // 模糊比對 unit_code（容錯）
+  const { data: fuzzy, error: e3 } = await supabase
+    .from("units")
+    .select("id")
+    .ilike("unit_code", `%${normalized}%`)
+    .limit(1)
+
+  if (e3) console.error("[lookupUnitIdByCode] fuzzy query error:", e3)
+  return fuzzy && fuzzy.length > 0 ? fuzzy[0].id : null
 }
 
 export async function fetchUnits(): Promise<Unit[]> {

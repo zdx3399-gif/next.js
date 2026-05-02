@@ -87,6 +87,7 @@ export async function createVisitorReservation(
   reservedBy: string,
   unitId?: string,
   reservedById?: string,
+  sendMode?: "test" | "official",
 ): Promise<void> {
   const res = await fetch("/api/visitor", {
     method: "POST",
@@ -99,6 +100,7 @@ export async function createVisitorReservation(
       unit_id: unitId,
       reserved_by: reservedBy,
       reserved_by_id: reservedById,
+      sendMode,
     }),
   })
 
@@ -109,13 +111,14 @@ export async function createVisitorReservation(
   }
 }
 
-export async function checkInVisitor(visitorId: string): Promise<void> {
+export async function checkInVisitor(visitorId: string, sendMode?: "test" | "official"): Promise<void> {
   const res = await fetch("/api/visitor", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       visitor_id: visitorId,
       action: "check_in",
+      sendMode,
     }),
   })
 
@@ -126,13 +129,14 @@ export async function checkInVisitor(visitorId: string): Promise<void> {
   }
 }
 
-export async function checkOutVisitor(visitorId: string): Promise<void> {
+export async function checkOutVisitor(visitorId: string, sendMode?: "test" | "official"): Promise<void> {
   const res = await fetch("/api/visitor", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       visitor_id: visitorId,
       action: "check_out",
+      sendMode,
     }),
   })
 

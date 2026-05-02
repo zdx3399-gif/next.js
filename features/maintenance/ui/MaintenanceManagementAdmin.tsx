@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { getSupabaseClient } from "@/lib/supabase"
 import { HelpHint } from "@/components/ui/help-hint"
-import { DispatchModal } from "./DispatchModal"
+import DispatchModal from "@/features/maintenance/ui/DispatchModalView"
 import { CompleteModal } from "./CompleteModal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -189,7 +189,7 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
             >
               <option value="open">待處理</option>
               <option value="progress">處理中</option>
-              <option value="done">已完成</option>
+              <option value="closed">已完成</option>
             </select>
           </div>
           <div>
@@ -292,7 +292,7 @@ function MaintenanceFormModal({ isOpen, onClose, formData, onChange, onSave, isE
 const PREVIEW_MAINTENANCE = [
   { id: "preview-1", equipment: "測試資料", item: "測試資料", description: "測試資料", reported_by_name: "測試資料", reported_by_id: null, photo_url: null, status: "open", handler: "", cost: 0, note: "測試資料" },
   { id: "preview-2", equipment: "測試資料", item: "測試資料", description: "測試資料", reported_by_name: "測試資料", reported_by_id: null, photo_url: null, status: "progress", handler: "測試資料", cost: 2500, note: "測試資料" },
-  { id: "preview-3", equipment: "測試資料", item: "測試資料", description: "測試資料", reported_by_name: "測試資料", reported_by_id: null, photo_url: null, status: "done", handler: "測試資料", cost: 800, note: "測試資料" },
+  { id: "preview-3", equipment: "測試資料", item: "測試資料", description: "測試資料", reported_by_name: "測試資料", reported_by_id: null, photo_url: null, status: "closed", handler: "測試資料", cost: 800, note: "測試資料" },
 ]
 
 interface MaintenanceManagementAdminProps {
@@ -467,11 +467,20 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
       }
 
       const applyCompatibleAssigneeField = async (baseData: Record<string, any>) => {
+        // Try variants in order: normalized schema first, then legacy columns, then bare save
         const variants: Array<Record<string, any>> = [
+          {
+            assignment_snapshot: {
+              assignee_name: formData.handler,
+              handler_name: formData.handler,
+              updated_at: new Date().toISOString(),
+            },
+          },
           { assignee: formData.handler },
           { handler: formData.handler },
           { handler_name: formData.handler },
           { worker_name: formData.handler },
+          {}, // final fallback: save status/cost/note without handler field
         ]
 
         let lastError: any = null
@@ -486,30 +495,7 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
           if (!isUnknownColumn) return error
         }
 
-        // Fallback: some normalized schemas keep assignment details in JSON snapshot.
-        const { data: current, error: fetchError } = await supabase
-          .from("maintenance")
-          .select("assignment_snapshot")
-          .eq("id", formData.id)
-          .single()
-
-        if (fetchError) return lastError || fetchError
-
-        const mergedSnapshot = {
-          ...(current?.assignment_snapshot || {}),
-          assignee_name: formData.handler,
-          handler_name: formData.handler,
-          worker_name: formData.handler,
-          updated_at: new Date().toISOString(),
-        }
-
-        const { error: snapshotError } = await supabase
-          .from("maintenance")
-          .update({ ...baseData, assignment_snapshot: mergedSnapshot })
-          .eq("id", formData.id)
-
-        if (!snapshotError) return null
-        return lastError || snapshotError
+        return lastError
       }
 
       if (formData.id) {
@@ -598,7 +584,7 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
     const labels: Record<string, { text: string; class: string }> = {
       open: { text: "待處理", class: "bg-yellow-500/20 text-yellow-500" },
       progress: { text: "處理中", class: "bg-blue-500/20 text-blue-500" },
-      done: { text: "已完成", class: "bg-green-500/20 text-green-500" },
+      closed: { text: "已完成", class: "bg-green-500/20 text-green-500" },
     }
     return labels[status] || labels.open
   }
@@ -627,7 +613,7 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
               "結案成功後狀態變「已完成」；全流程可用搜尋快速定位並持續編輯/刪除紀錄。",
             ]}
             logic={[
-              "狀態流轉為：待處理(open) → 處理中(progress) → 已完成(done)，依序推進。",
+              "狀態流轉為：待處理(open) → 處理中(progress) → 已完成(closed)，依序推進。",
               "派工按鈕只在待處理顯示；結案按鈕只在處理中顯示，避免錯誤操作順序。",
               "派工會寫入派工資訊並可觸發通知；結案可寫入最終費用、備註與完工照片。",
               "預覽模式僅展示流程，不會真的送出派工或結案資料。",

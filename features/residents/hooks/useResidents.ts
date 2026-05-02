@@ -22,6 +22,9 @@ export function useResidents() {
     const newResident: Resident = {
       name: "",
       room: "",
+      ping_size: 0,
+      car_spots: 0,
+      moto_spots: 0,
       phone: "",
       email: "",
       emergency_contact_name: "",
@@ -32,7 +35,7 @@ export function useResidents() {
     setResidents((prev) => [newResident, ...prev])
   }
 
-  const updateRow = (index: number, field: keyof Resident, value: string) => {
+  const updateRow = (index: number, field: keyof Resident, value: any) => {
     setResidents((prev) => {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
@@ -50,6 +53,9 @@ export function useResidents() {
       const result = await createResident({
         name: resident.name,
         room: resident.room,
+        ping_size: resident.ping_size,
+        car_spots: resident.car_spots,
+        moto_spots: resident.moto_spots,
         phone: resident.phone,
         email: resident.email,
         emergency_contact_name: resident.emergency_contact_name,

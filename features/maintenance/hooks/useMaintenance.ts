@@ -34,12 +34,13 @@ export function useMaintenance(userId?: string, userOnly = false) {
   const handleSubmit = async (
     formData: MaintenanceFormData,
     userName: string,
+    sendMode?: "test" | "official",
   ): Promise<{ success: boolean; error?: string }> => {
     if (!userId) {
       return { success: false, error: "請先登入" }
     }
 
-    const result = await submitMaintenanceRequest(formData, userId, userName)
+    const result = await submitMaintenanceRequest(formData, userId, userName, sendMode)
 
     if (result.success) {
       await loadMaintenance()

@@ -22,18 +22,18 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
     image: null,
   })
   const [submitting, setSubmitting] = useState(false)
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
 
-  const onFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
+  const submitWithMode = async (sendMode: "test" | "official") => {
     if (!userId) {
       alert("錯誤：用戶資訊不完整，請重新登入")
       return
     }
 
     setSubmitting(true)
-    const result = await handleSubmit(form, userName || "未知")
+    const result = await handleSubmit(form, userName || "未知", sendMode)
     setSubmitting(false)
+    setSendModeDialogOpen(false)
 
     if (result.success) {
       alert("維修申請已提交！")
@@ -47,6 +47,11 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
     } else {
       alert(`提交失敗：${result.error}\n\n請確認：\n1. 已設定環境變數\n2. 已正確登入\n3. 資料庫連接正常`)
     }
+  }
+
+  const onFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSendModeDialogOpen(true)
   }
 
   return (
@@ -177,6 +182,42 @@ export function MaintenanceForm({ userId, userName, onSuccess }: MaintenanceForm
           {submitting ? "提交中..." : "提交申請"}
         </button>
       </form>
+
+      {sendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">🤖 選擇報修通知頻道</h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">請選擇要使用測試或正式 LINE BOT 發送報修申請卡片</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                type="button"
+                onClick={() => submitWithMode("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試 BOT
+              </button>
+              <button
+                type="button"
+                onClick={() => submitWithMode("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+              >
+                ✓ 正式 BOT
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                type="button"
+                onClick={() => setSendModeDialogOpen(false)}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

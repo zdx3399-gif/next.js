@@ -7,6 +7,13 @@ export const dynamic = "force-dynamic"
 
 const LINE_API = "https://api.line.me/v2/bot/message/push"
 
+function getNotificationToken(sendMode) {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official';
+  return mode === 'test'
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN)
+    : process.env.LINE_CHANNEL_ACCESS_TOKEN;
+}
+
 function getSupabase() {
   const url =
     process.env.SUPABASE_URL ||
@@ -35,7 +42,9 @@ function getSupabase() {
 export async function POST(req) {
   try {
     const supabase = getSupabase()
-    const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
+    const body = await req.json()
+    const { feeId, customMessage, sendMode } = body
+    const LINE_TOKEN = getNotificationToken(sendMode)
     if (!LINE_TOKEN) {
       await writeServerAuditLog({
         supabase,
@@ -52,7 +61,6 @@ export async function POST(req) {
       return NextResponse.json({ error: "缺少 LINE_CHANNEL_ACCESS_TOKEN 環境變數" }, { status: 500 })
     }
 
-    const { feeId, customMessage } = await req.json()
     if (!feeId) {
       await writeServerAuditLog({
         supabase,

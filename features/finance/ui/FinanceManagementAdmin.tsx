@@ -6,7 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { RefreshCw, Plus, Search, Bell } from "lucide-react"
+import { RefreshCw, Plus, Search } from "lucide-react"
 
 // --- Types ---
 interface FinanceRecord {
@@ -406,6 +406,9 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
     vendor: "",
   })
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false)
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
+  const [sendModeDialogTarget, setSendModeDialogTarget] = useState<"create" | "remind" | null>(null)
+  const [pendingFinanceData, setPendingFinanceData] = useState<any>(null)
 
   // --- Report Calculations ---
   const reportData = useMemo(() => {
@@ -472,43 +475,72 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
         } else {
           console.log("[v0] Save failed")
         }
+        setIsIncomeModalOpen(false)
       } else {
-        console.log("[v0] Creating new record:", incomeFormData)
-        const success = await saveRecord(
-          { ...incomeFormData, id: undefined, monthly_fee: incomeFormData.amount },
-          records.length,
-        )
-        if (success) {
-          console.log("[v0] Create successful, refreshing...")
-        } else {
-          console.log("[v0] Create failed")
-        }
+        // 新建收費單 → 先選 sendMode
+        console.log("[v0] Creating new record, opening sendMode dialog:", incomeFormData)
+        setPendingFinanceData({ ...incomeFormData, monthly_fee: incomeFormData.amount })
+        setSendModeDialogTarget("create")
+        setSendModeDialogOpen(true)
+        // Don't close modal yet - will be closed after sendMode selected
       }
-      setIsIncomeModalOpen(false)
     } finally {
       setIncomeSaving(false)
     }
   }
 
   const handleRemindFee = async (feeId: string) => {
-    try {
-      setRemindingId(feeId)
-      const res = await fetch("/api/remind-fee", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feeId }),
-      })
+    setPendingFinanceData({ feeId })
+    setSendModeDialogTarget("remind")
+    setSendModeDialogOpen(true)
+  }
 
-      const payload = await res.json().catch(() => null)
-      if (!res.ok) {
-        throw new Error(payload?.message || payload?.error || "催繳通知發送失敗")
+  const handleSendFinanceWithMode = async (sendMode: "test" | "official") => {
+    if (!sendModeDialogTarget || !pendingFinanceData) return
+    setSendModeDialogOpen(false)
+
+    if (sendModeDialogTarget === "create") {
+      setIncomeSaving(true)
+      try {
+        const success = await saveRecord(
+          { ...pendingFinanceData, id: undefined },
+          records.length,
+          sendMode,
+        )
+        if (success) {
+          console.log("[v0] Create successful, refreshing...")
+        } else {
+          console.log("[v0] Create failed")
+        }
+        setIsIncomeModalOpen(false)
+      } finally {
+        setIncomeSaving(false)
+        setPendingFinanceData(null)
+        setSendModeDialogTarget(null)
       }
+    } else if (sendModeDialogTarget === "remind") {
+      const feeId = pendingFinanceData.feeId
+      try {
+        setRemindingId(feeId)
+        const res = await fetch("/api/remind-fee", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ feeId, sendMode }),
+        })
 
-      alert(payload?.message || "催繳通知已送出")
-    } catch (error: any) {
-      alert(error?.message || "催繳通知發送失敗")
-    } finally {
-      setRemindingId(null)
+        const payload = await res.json().catch(() => null)
+        if (!res.ok) {
+          throw new Error(payload?.message || payload?.error || "催繳通知發送失敗")
+        }
+
+        alert(payload?.message || "催繳通知已送出")
+      } catch (error: any) {
+        alert(error?.message || "催繳通知發送失敗")
+      } finally {
+        setRemindingId(null)
+        setPendingFinanceData(null)
+        setSendModeDialogTarget(null)
+      }
     }
   }
 
@@ -653,10 +685,10 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
                           <button
                             onClick={() => handleRemindFee(row.id!)}
                             disabled={remindingId === row.id}
-                            className="p-2 rounded-lg border border-amber-400 text-amber-600 hover:bg-amber-50 transition-all disabled:opacity-60"
+                            className="p-2 rounded-lg border border-amber-400 text-amber-600 hover:bg-amber-400/10 transition-all disabled:opacity-60"
                             title="催繳"
                           >
-                            <Bell className="w-4 h-4" />
+                            <span className="material-icons text-lg">notifications</span>
                           </button>
                         )}
                         {row.id && (
@@ -1046,6 +1078,48 @@ export function FinanceManagementAdmin({ isPreviewMode = false }: FinanceManagem
         isEditing={expenseEditingId !== null}
         isSaving={expenseSaving}
       />
+
+      {/* sendMode Dialog */}
+      {sendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">
+                🤖 {sendModeDialogTarget === "remind" ? "選擇催繳通知頻道" : "選擇收費單通知頻道"}
+              </h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">
+                {sendModeDialogTarget === "remind"
+                  ? "請選擇要使用測試或正式 LINE BOT 發送催繳通知"
+                  : "請選擇要使用測試或正式 LINE BOT 發送新收費單通知"}
+              </p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                onClick={() => handleSendFinanceWithMode("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">限制通知範圍，用於測試</div>
+              </button>
+              <button
+                onClick={() => handleSendFinanceWithMode("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+              >
+                ✓ 正式 BOT
+                <div className="text-xs font-normal mt-1 opacity-80">通知所有相關住戶</div>
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                onClick={() => { setSendModeDialogOpen(false); setPendingFinanceData(null); setSendModeDialogTarget(null) }}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

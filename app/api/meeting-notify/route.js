@@ -14,8 +14,15 @@ function getSupabase() {
   return createClient(url, serviceRoleKey || anonKey);
 }
 
-function getLineClient() {
-  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+function getNotificationToken(sendMode) {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official';
+  return mode === 'test'
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN)
+    : process.env.LINE_CHANNEL_ACCESS_TOKEN;
+}
+
+function getLineClient(sendMode) {
+  const channelAccessToken = getNotificationToken(sendMode);
   const channelSecret = process.env.LINE_CHANNEL_SECRET;
   if (!channelAccessToken || !channelSecret) {
     throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN or LINE_CHANNEL_SECRET");
@@ -46,10 +53,10 @@ async function getAllLineUserIds(supabase) {
 export async function POST(req) {
   try {
     const supabase = getSupabase();
-    const client = getLineClient();
     
     const data = await req.json();
-    const { topic, time, location, key_takeaways, notes, pdf_file_url, created_by } = data;
+    const { topic, time, location, key_takeaways, notes, pdf_file_url, created_by, sendMode } = data;
+    const client = getLineClient(sendMode);
     if (!topic || !time || !location || !key_takeaways) {
       return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 });
     }

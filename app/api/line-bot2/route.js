@@ -18,43 +18,43 @@ const supabase = createClient(
 import { chat } from '@/lib/ai-chat';
 
 export const runtime = 'nodejs';
-const BOT_TAG = 'BOT1';
+const BOT_TAG = 'BOT2';
 
 const lineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || 'dummy-access-token',
-  channelSecret: process.env.LINE_CHANNEL_SECRET || 'dummy-channel-secret',
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN || 'dummy-access-token',
+  channelSecret: process.env.LINE_CHANNEL_SECRET_BOT2 || process.env.LINE_CHANNEL_SECRET || 'dummy-channel-secret',
 };
 
-const testLineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2,
-  channelSecret: process.env.LINE_CHANNEL_SECRET_BOT2,
+const officialLineConfig = {
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 
-const isTestConfigReady = Boolean(
-  testLineConfig.channelAccessToken && testLineConfig.channelSecret
+const isOfficialConfigReady = Boolean(
+  officialLineConfig.channelAccessToken && officialLineConfig.channelSecret
 );
 
-const testClient = isTestConfigReady
-  ? new Client(testLineConfig)
+const officialClient = isOfficialConfigReady
+  ? new Client(officialLineConfig)
   : null;
 
 function getNotificationChannelMode() {
-  const mode = (process.env.LINE_BOT_NOTIFICATION_MODE || 'official').toLowerCase();
-  return mode === 'test' ? 'test' : 'official';
+  const mode = (process.env.LINE_BOT_NOTIFICATION_MODE || 'test').toLowerCase();
+  return mode === 'official' ? 'official' : 'test';
 }
 
 function getNotificationClient() {
   const mode = getNotificationChannelMode();
 
-  if (mode === 'test' && testClient) {
-    return { mode, lineClient: testClient };
+  if (mode === 'official' && officialClient) {
+    return { mode, lineClient: officialClient };
   }
 
-  if (mode === 'test' && !testClient) {
-    console.warn(`[${BOT_TAG}] ⚠️ LINE_BOT_NOTIFICATION_MODE=test，但 BOT2 設定不完整，改用正式通道`);
+  if (mode === 'official' && !officialClient) {
+    console.warn(`[${BOT_TAG}] ⚠️ LINE_BOT_NOTIFICATION_MODE=official，但正式 LINE 設定不完整，改用測試 BOT2 通道`);
   }
 
-  return { mode: 'official', lineClient: client };
+  return { mode: 'test', lineClient: client };
 }
 
 const client = new Client(lineConfig);// LINE Bot SDK 客戶端
@@ -235,7 +235,7 @@ async function safeReplyMessage(replyToken, userId, message) {
 async function notifyEmergencyContact(operatorProfileId, eventContext = 'IoT 緊急事件') {
   try {
     const { mode, lineClient: notificationClient } = getNotificationClient();
-    console.log(`[${BOT_TAG}] [緊急通知] 目前通知通道: ${mode === 'test' ? '測試 BOT2' : '正式'}`);
+    console.log(`[${BOT_TAG}] [緊急通知] 目前通知通道: ${mode === 'official' ? '正式' : '測試 BOT2'}`);
     console.log(`🚨 [緊急通知] 準備推播給聯繫人，操作人員 ID: ${operatorProfileId}`);
 
     const { data: operatorProfile, error: profileError } = await supabase
@@ -523,7 +523,7 @@ function cleanupProcessedWebhookEvents(now = Date.now()) {
 // 處理 LINE Webhook 請求
 export async function POST(req) {
   const requestId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-  console.log(`\n========== [${requestId}] 新的 Webhook 請求 ==========`);
+  console.log(`\n========== [${BOT_TAG}] [${requestId}] 新的 Webhook 請求 ==========`);
   
   try {
     const rawBody = await req.text();// 取得原始請求體
@@ -536,7 +536,7 @@ export async function POST(req) {
     console.log('[Debug] Body length:', rawBody.length);
     
     if (!signature) {
-      console.error('[Signature Error] No signature header');
+      console.error(`[${BOT_TAG}] [Signature Error] No signature header`);
       return new Response('Unauthorized', { status: 401 });
     }
     
@@ -544,7 +544,7 @@ export async function POST(req) {
     console.log('[Debug] Signature valid:', isValid);
     
     if (!isValid) {
-      console.error('[Signature Error] Invalid signature');
+      console.error(`[${BOT_TAG}] [Signature Error] Invalid signature`);
       return new Response('Unauthorized', { status: 401 });
     }
 
@@ -1385,6 +1385,7 @@ export async function POST(req) {
                 reported_by_id: existingProfile?.id || null,
                 created_by: existingProfile?.id || null,
                 unit_id: existingProfile?.unit_id || null,
+                reported_by_name: existingProfile?.name || existingProfile?.line_display_name || null,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               }])
@@ -3031,7 +3032,7 @@ export async function POST(req) {
 
           try {
             const { mode, lineClient: notificationClient } = getNotificationClient();
-            console.log(`[${BOT_TAG}] [緊急事件審核推播] 目前通知通道: ${mode === 'test' ? '測試 BOT2' : '正式'}`);
+            console.log(`[${BOT_TAG}] [緊急事件審核推播] 目前通知通道: ${mode === 'official' ? '正式' : '測試 BOT2'}`);
             const nowIso = new Date().toISOString();
 
             const { data: session, error: sessionErr } = await supabase
@@ -3319,7 +3320,7 @@ export async function POST(req) {
             // 確認發布 -> 廣播給所有住戶
             if (action === 'approve') {
               const { mode, lineClient: notificationClient } = getNotificationClient();
-              console.log(`[${BOT_TAG}] [緊急廣播] 目前通知通道: ${mode === 'test' ? '測試 BOT2' : '正式'}`);
+              console.log(`[${BOT_TAG}] [緊急廣播] 目前通知通道: ${mode === 'official' ? '正式' : '測試 BOT2'}`);
               const broadcastText =
                 `🚨【緊急事件通知】\n` +
                 `類型：${emergencyEvent.event_type || '未指定'}\n` +

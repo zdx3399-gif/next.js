@@ -51,6 +51,7 @@ export function usePackages(options: UsePackagesOptions = {}) {
     recipient_room: string
     tracking_number?: string
     arrived_at?: string
+    sendMode?: "test" | "official"
   }) => {
     try {
       await addPackage(packageData as AddPackageData)
@@ -63,9 +64,9 @@ export function usePackages(options: UsePackagesOptions = {}) {
     }
   }
 
-  const handleMarkAsPickedUp = async (packageId: string, pickedUpBy: string) => {
+  const handleMarkAsPickedUp = async (packageId: string, pickedUpBy: string, sendMode?: "test" | "official") => {
     try {
-      await markPackageAsPickedUp(packageId, pickedUpBy)
+      await markPackageAsPickedUp(packageId, pickedUpBy, undefined, sendMode)
       await loadPackages()
       return true
     } catch (e: unknown) {

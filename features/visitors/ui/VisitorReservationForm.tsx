@@ -24,7 +24,7 @@ function nowLocalDateTimeInputValue(): string {
 }
 
 interface VisitorReservationFormProps {
-  onSubmit: (reservation: VisitorReservation) => Promise<boolean>
+  onSubmit: (reservation: VisitorReservation, sendMode: "test" | "official") => Promise<boolean>
   onCancel: () => void
   initialData?: VisitorReservation
   submitLabel?: string
@@ -44,14 +44,20 @@ export function VisitorReservationForm({
     purpose: initialData?.purpose || "",
     reservation_time: toLocalDateTimeInputValue(initialData?.reservation_time),
   })
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
+
+  const submitWithMode = async (sendMode: "test" | "official") => {
+    const success = await onSubmit(form, sendMode)
+    if (success) {
+      setForm({ name: "", phone: "", purpose: "", reservation_time: "" })
+      setSendModeDialogOpen(false)
+      onCancel()
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const success = await onSubmit(form)
-    if (success) {
-      setForm({ name: "", phone: "", purpose: "", reservation_time: "" })
-      onCancel()
-    }
+    setSendModeDialogOpen(true)
   }
 
   return (
@@ -165,6 +171,42 @@ export function VisitorReservationForm({
           </button>
         </div>
       </form>
+
+      {sendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">🤖 選擇訪客通知頻道</h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">請選擇要使用測試或正式 LINE BOT 發送訪客預約通知</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                type="button"
+                onClick={() => submitWithMode("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試 BOT
+              </button>
+              <button
+                type="button"
+                onClick={() => submitWithMode("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+              >
+                ✓ 正式 BOT
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                type="button"
+                onClick={() => setSendModeDialogOpen(false)}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

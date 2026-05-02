@@ -192,6 +192,9 @@ export async function registerUser(
   relationship: string,
   emergencyContactName?: string,
   emergencyContactPhone?: string,
+  pingSize?: number,
+  carSpots?: number,
+  motoSpots?: number,
 ) {
   try {
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
@@ -213,6 +216,9 @@ export async function registerUser(
       tenantId,
       emergencyContactName,
       emergencyContactPhone,
+      pingSize,
+      carSpots,
+      motoSpots,
     })
 
     const config = validateTenantConfig(tenantId)
@@ -230,6 +236,10 @@ export async function registerUser(
       }
     }
 
+    const normalizedPingSize = Number.isFinite(Number(pingSize)) && Number(pingSize) >= 0 ? Number(pingSize) : undefined
+    const normalizedCarSpots = Number.isFinite(Number(carSpots)) && Number(carSpots) >= 0 ? Number(carSpots) : undefined
+    const normalizedMotoSpots = Number.isFinite(Number(motoSpots)) && Number(motoSpots) >= 0 ? Number(motoSpots) : undefined
+
     let unitId: string | null = null
     if (unitNumber) {
       const parsed = parseUnitInput(unitNumber)
@@ -241,10 +251,30 @@ export async function registerUser(
 
       if (existingUnit) {
         unitId = existingUnit.id
+
+        const unitUpdates: Record<string, number> = {}
+        if (normalizedPingSize !== undefined) unitUpdates.ping_size = normalizedPingSize
+        if (normalizedCarSpots !== undefined) unitUpdates.car_spots = normalizedCarSpots
+        if (normalizedMotoSpots !== undefined) unitUpdates.moto_spots = normalizedMotoSpots
+
+        if (Object.keys(unitUpdates).length > 0) {
+          const { error: updateUnitError } = await supabase.from("units").update(unitUpdates).eq("id", unitId)
+          if (updateUnitError) {
+            console.warn("[v0] Update unit meta failed:", updateUnitError.message)
+          }
+        }
       } else {
         const { data: newUnit, error: createUnitError } = await supabase
           .from("units")
-          .insert([{ unit_code: parsed.unit_code, unit_number: parsed.unit_number }])
+          .insert([
+            {
+              unit_code: parsed.unit_code,
+              unit_number: parsed.unit_number,
+              ping_size: normalizedPingSize ?? 0,
+              car_spots: normalizedCarSpots ?? 0,
+              moto_spots: normalizedMotoSpots ?? 0,
+            },
+          ])
           .select("id")
           .single()
 

@@ -11,7 +11,13 @@ const supabase = createClient(
 )
 
 const LINE_API = 'https://api.line.me/v2/bot/message/push'
-const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN
+
+function getNotificationToken(sendMode: string | undefined): string {
+  const mode = sendMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official'
+  return mode === 'test'
+    ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN || '')
+    : (process.env.LINE_CHANNEL_ACCESS_TOKEN || '')
+}
 
 interface DispatchRequest {
   maintenanceId: string
@@ -21,6 +27,7 @@ interface DispatchRequest {
   scheduled_at: string
   estimated_cost?: number
   admin_note?: string
+  sendMode?: string
   operatorId?: string | null
   operatorRole?: string
 }
@@ -100,9 +107,12 @@ export async function POST(req: Request) {
       scheduled_at,
       estimated_cost,
       admin_note,
+      sendMode,
       operatorId,
       operatorRole
     } = body
+    
+    const LINE_TOKEN = getNotificationToken(sendMode)
 
     // Validate required fields
     if (!maintenanceId || !vendor_name || !worker_name || !scheduled_at) {

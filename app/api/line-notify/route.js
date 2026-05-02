@@ -1,6 +1,6 @@
 export async function POST(req) {
   try {
-    const { type, visitorName, time, location, visitorId } = await req.json();
+    const { type, visitorName, time, location, visitorId, sendMode } = await req.json();
 
     let message = '';
     switch (type) {
@@ -56,12 +56,25 @@ export async function POST(req) {
     const lineUserId = visitors[0].profiles.line_user_id;
     console.log('Sending LINE message to:', lineUserId);
 
+    const headerMode = req.headers.get('x-line-send-mode');
+    const modeRaw = (sendMode || headerMode || process.env.LINE_BOT_NOTIFICATION_MODE || 'official').toString().toLowerCase();
+    const mode = modeRaw === 'test' ? 'test' : 'official';
+    const accessToken = mode === 'test'
+      ? (process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN)
+      : process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
+    if (!accessToken) {
+      return new Response('LINE access token not configured', { status: 500 });
+    }
+
+    console.log(`[line-notify] 發送模式: ${mode === 'test' ? '測試 API (BOT2)' : '正式 API'}`);
+
     // 使用 fetch 呼叫 LINE Messaging API
     const lineResponse = await fetch('https://api.line.me/v2/bot/message/push', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+        'Authorization': `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         to: lineUserId,

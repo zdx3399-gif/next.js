@@ -535,6 +535,16 @@ async function getActiveMaintenanceDraft(userId) {
     return null;
   }
 
+  if (data) {
+    console.log('[報修] DB草稿查詢結果:', {
+      id: data.id,
+      hasLocation: !!data.location,
+      location: data.location,
+      hasDescription: !!data.description,
+      description: data.description
+    });
+  }
+
   return data || null;
 }
 
@@ -1356,12 +1366,14 @@ export async function POST(req) {
           const dbDraft = await getActiveMaintenanceDraft(userId);
           if (dbDraft) {
             currentSession = {
-              location: dbDraft.location || null,
-              description: dbDraft.description || null,
+              location: dbDraft.location,
+              description: dbDraft.description,
               startTime: Date.now()
             };
             repairSessions.set(userId, currentSession);
-            console.log('[報修] 使用資料庫草稿恢復 session:', dbDraft.id);
+            console.log('[報修] 使用資料庫草稿恢復 session:', { id: dbDraft.id, location: dbDraft.location, description: dbDraft.description });
+          } else {
+            console.log('[報修] DB草稿查詢結果為空，不恢復 session');
           }
         }
         
@@ -1369,7 +1381,8 @@ export async function POST(req) {
           userId, 
           hasSession: !!currentSession,
           location: currentSession?.location,
-          description: currentSession?.description
+          description: currentSession?.description,
+          isComplete: !!(currentSession?.location && currentSession?.description)
         });
 
         // 查詢我的報修記錄（必須完全匹配，避免與「我要報修」衝突）
@@ -2552,23 +2565,26 @@ export async function POST(req) {
           const dbDraft = await getActiveMaintenanceDraft(userId);
           if (dbDraft) {
             currentSession = {
-              location: dbDraft.location || null,
-              description: dbDraft.description || null,
+              location: dbDraft.location,
+              description: dbDraft.description,
               startTime: Date.now()
             };
             repairSessions.set(userId, currentSession);
-            console.log('[報修-圖片] 使用資料庫草稿恢復 session:', dbDraft.id);
+            console.log('[報修-圖片] 使用資料庫草稿恢復 session:', { id: dbDraft.id, location: dbDraft.location, description: dbDraft.description });
+          } else {
+            console.log('[報修-圖片] DB草稿查詢結果為空，無法恢復報修 session');
           }
         }
-        const hasLocation = currentSession?.location && currentSession.location.trim() !== '';
-        const hasDescription = currentSession?.description && currentSession.description.trim() !== '';
+        const hasLocation = currentSession?.location && String(currentSession.location).trim() !== '';
+        const hasDescription = currentSession?.description && String(currentSession.description).trim() !== '';
 
         console.log('[報修-圖片] Session 狀態:', {
           hasSession: !!currentSession,
           location: currentSession?.location,
           description: currentSession?.description,
           hasLocation,
-          hasDescription
+          hasDescription,
+          isComplete: hasLocation && hasDescription
         });
 
         // 報修流程的圖片上傳（完整 session 優先）

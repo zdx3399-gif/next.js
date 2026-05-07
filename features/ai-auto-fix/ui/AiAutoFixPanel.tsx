@@ -246,6 +246,7 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
           json.data?.embeddingUpdated ? "Embedding 已同步更新。" : "Embedding 未更新或資料表未提供欄位。"
         }${warningText}`,
       )
+      window.alert("寫入知識庫成功")
       await loadData()
     } catch (err) {
       setItemApplyMessage("error", err instanceof Error ? err.message : "寫入 Supabase 失敗。")

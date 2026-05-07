@@ -87,6 +87,10 @@ function statusLabel(status?: string): string {
   return RERUN_STATUS_LABEL[status] || status
 }
 
+function itemKey(item: AutoFixItem): string {
+  return `${item.clusterKey || ""}::${item.issueType || ""}`
+}
+
 export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -97,6 +101,9 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
   const [actionFilter, setActionFilter] = useState("all")
   const [confidenceFilter, setConfidenceFilter] = useState("0")
   const [keywordFilter, setKeywordFilter] = useState("")
+  const [editedAnswers, setEditedAnswers] = useState<Record<string, string>>({})
+  const [applyingKey, setApplyingKey] = useState<string | null>(null)
+  const [applyMessage, setApplyMessage] = useState<string | null>(null)
 
   const issueOptions = useMemo(() => {
     return Array.from(new Set(items.map((item) => item.issueType).filter(Boolean))).sort()
@@ -144,10 +151,92 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
       const payload = json.data as AutoFixPayload
       setSummary(payload.summary)
       setItems(payload.items || [])
+      setEditedAnswers(
+        (payload.items || []).reduce<Record<string, string>>((acc, item) => {
+          acc[itemKey(item)] = item.proposedAnswer || item.aiRerunAnswer || ""
+          return acc
+        }, {}),
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "讀取資料時發生未知錯誤")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function applyAnswer(item: AutoFixItem) {
+    if (readOnly) return
+
+    const key = itemKey(item)
+    const answer = (editedAnswers[key] || "").trim()
+    if (!answer) {
+      setApplyMessage("請先輸入要寫入資料庫的答案。")
+      return
+    }
+
+    if (!window.confirm("確定要把這段內容寫入 Supabase knowledge，並供後續 AI 檢索使用嗎？同問題會覆蓋舊知識。")) {
+      return
+    }
+
+    setApplyingKey(key)
+    setApplyMessage(null)
+
+    async function submit(force = false) {
+      const tenant = typeof window !== "undefined" ? localStorage.getItem("currentTenant") || "tenant_a" : "tenant_a"
+      const res = await fetch("/api/ai-auto-fix/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant,
+          clusterKey: item.clusterKey,
+          questionText: item.questionText,
+          issueType: item.issueType,
+          answer,
+          force,
+        }),
+      })
+      const json = await res.json()
+      return { res, json }
+    }
+
+    try {
+      let { res, json } = await submit(false)
+
+      if (res.status === 409 && json?.code === "knowledge_conflict") {
+        const conflicts = Array.isArray(json.data?.conflicts) ? json.data.conflicts : []
+        const preview = conflicts
+          .slice(0, 3)
+          .map((conflict: any, index: number) => {
+            const similarity = typeof conflict.similarity === "number" ? `，相似度 ${conflict.similarity.toFixed(2)}` : ""
+            return `${index + 1}. ID ${conflict.id}${similarity}\n${String(conflict.content || "").slice(0, 160)}`
+          })
+          .join("\n\n")
+        const confirmed = window.confirm(
+          `找到可能衝突的既有 knowledge：\n\n${preview}\n\n仍要寫入並覆蓋此 AI auto-fix 問題的知識嗎？`,
+        )
+
+        if (!confirmed) {
+          setApplyMessage("已取消寫入，knowledge 未變更。")
+          return
+        }
+
+        ;({ res, json } = await submit(true))
+      }
+
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || "寫入 Supabase 失敗。")
+      }
+
+      setApplyMessage(
+        `已寫入 knowledge（ID: ${json.data?.knowledgeId || "unknown"}）。${
+          json.data?.embeddingUpdated ? "Embedding 已同步更新。" : "Embedding 未更新或資料表未提供欄位。"
+        }`,
+      )
+      await loadData()
+    } catch (err) {
+      setApplyMessage(err instanceof Error ? err.message : "寫入 Supabase 失敗。")
+    } finally {
+      setApplyingKey(null)
     }
   }
 
@@ -193,6 +282,12 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
             重新載入
           </button>
         </div>
+
+        {applyMessage ? (
+          <div className="mt-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-card)] px-3 py-2 text-sm text-[var(--theme-text-primary)]">
+            {applyMessage}
+          </div>
+        ) : null}
 
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Field label="問題類型">
@@ -273,9 +368,12 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
             const feedbackList = Array.isArray(item.feedbackTopItems) ? item.feedbackTopItems.slice(0, 3) : []
             const feedbackCategoryList = Array.isArray(item.feedbackCategoryTopItems) ? item.feedbackCategoryTopItems.slice(0, 3) : []
             const totalFeedback = Math.max(1, item.feedbackTotal || 0)
+            const key = itemKey(item)
+            const editedAnswer = editedAnswers[key] ?? item.proposedAnswer ?? item.aiRerunAnswer ?? ""
+            const canApply = !readOnly && Boolean(editedAnswer.trim()) && applyingKey !== key
 
             return (
-              <div key={`${item.clusterKey}-${item.issueType}-${confidenceText}`} className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-primary)] p-4">
+              <div key={key} className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-primary)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className="text-base font-bold text-[var(--theme-text-primary)]">{item.clusterKey || "未命名群組"}</h4>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -309,6 +407,51 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
                   <AnswerPane title="AI 舊回答（常見版本）" content={item.aiOriginalAnswer || "目前沒有穩定舊回答。"} tone="old" />
                   <AnswerPane title="建議修改答案" content={item.proposedAnswer || "目前尚未產生建議答案。"} tone="new" />
                 </div>
+
+                {!readOnly ? (
+                  <div className="mt-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-card)] p-3">
+                    <label className="mb-2 block text-xs font-semibold text-[var(--theme-text-secondary)]">
+                      更改至資料庫內容
+                    </label>
+                    <textarea
+                      value={editedAnswer}
+                      onChange={(event) =>
+                        setEditedAnswers((prev) => ({
+                          ...prev,
+                          [key]: event.target.value,
+                        }))
+                      }
+                      rows={4}
+                      className="w-full resize-y rounded-md border border-[var(--theme-border)] bg-[var(--theme-bg-primary)] px-3 py-2 text-sm text-[var(--theme-text-primary)] outline-none focus:border-[var(--theme-accent)]"
+                      placeholder="可先修改建議答案，再一鍵寫回 Supabase。"
+                    />
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => applyAnswer(item)}
+                        disabled={!canApply}
+                        className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {applyingKey === key ? "寫入中..." : "寫入知識庫"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditedAnswers((prev) => ({
+                            ...prev,
+                            [key]: item.proposedAnswer || item.aiRerunAnswer || "",
+                          }))
+                        }
+                        className="rounded-lg border border-[var(--theme-border)] px-3 py-2 text-sm font-semibold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-primary)]"
+                      >
+                        還原建議內容
+                      </button>
+                      <span className="text-xs text-[var(--theme-text-secondary)]">
+                        同問題會覆蓋舊 knowledge，並同步嘗試建立 embedding。
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="mt-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-card)] p-3 text-sm text-[var(--theme-text-primary)] whitespace-pre-wrap">
                   AI 補跑答案：

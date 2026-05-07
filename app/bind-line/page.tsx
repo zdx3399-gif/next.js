@@ -453,7 +453,7 @@ export default function BindLinePage() {
             <p className="mt-4 font-bold text-xl">{profile.displayName}</p>
 
             {profile.statusMessage && (
-              <p className="text-sm text-gray-500 italic mt-1">"{profile.statusMessage}"</p>
+              <p className="text-sm text-gray-500 italic mt-1">&quot;{profile.statusMessage}&quot;</p>
             )}
 
             <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 w-full">

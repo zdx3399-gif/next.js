@@ -445,7 +445,7 @@ export default function AdminPage() {
                 <span className="material-icons">auto_fix_high</span>
                 AI 自動修正
               </h2>
-              <AiAutoFixPanel readOnly={effectiveRole !== "admin"} />
+              <AiAutoFixPanel readOnly={isPreviewMode} />
             </div>
           ) : currentSection === "audit-logs" ? (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">

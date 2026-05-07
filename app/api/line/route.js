@@ -1517,7 +1517,7 @@ export async function POST(req) {
               description: userText
             };
             repairSessions.set(userId, updatedSession);
-            await upsertMaintenanceDraft(userId, { description: userText });
+            await upsertMaintenanceDraft(userId, { location: currentSession.location, description: userText });
             console.log('[報修] 描述已儲存到 session 和 DB');
 
             console.log('[報修] 描述已儲存到 session');
@@ -2678,6 +2678,13 @@ export async function POST(req) {
 
         // 緊急事件流程的圖片上傳（僅在報修流程未命中時處理）
         try {
+          // 若使用者有任何報修草稿（含不完整），不跳進緊急事件處理
+          const maintenanceDraftCheck = await getActiveMaintenanceDraft(userId);
+          if (maintenanceDraftCheck || currentSession) {
+            console.log('[報修-圖片] ⚠️ 偵測到報修草稿或 session，跳過緊急事件圖片處理');
+            // 不進入緊急事件流程，讓後續邏輯處理（最近報修單補圖或提示）
+          } else {
+
           const { data: activeEmergencySession } = await supabase
             .from('emergency_incidents')
             .select('id, status, event_type, location, description')
@@ -2742,6 +2749,7 @@ export async function POST(req) {
             usedReplyTokens.add(replyToken);
             continue;
           }
+          } // close else (non-maintenance) block
         } catch (emergencyImageErr) {
           console.error('❌ 緊急事件圖片處理失敗:', emergencyImageErr);
           if (!usedReplyTokens.has(replyToken)) {

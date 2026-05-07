@@ -12,6 +12,13 @@ type KnowledgeConflict = {
   similarity: number | null
 }
 
+type KnowledgeWriteResult = {
+  id: number | string | null
+  mode: "created" | "updated"
+  embeddingUpdated: boolean
+  warning?: string
+}
+
 function normalizeQuestion(question: unknown): string {
   return String(question || "").trim().toLowerCase()
 }
@@ -91,6 +98,84 @@ async function findKnowledgeConflicts(
     .filter((row: KnowledgeConflict) => row.content)
 }
 
+function isMissingColumnError(error: any) {
+  const message = String(error?.message || "")
+  return message.includes("column") && message.includes("does not exist")
+}
+
+async function writeKnowledge(
+  supabase: any,
+  payload: Record<string, unknown>,
+  sourceKey: string,
+  embedding: number[] | null,
+): Promise<KnowledgeWriteResult> {
+  let embeddingUpdated = Boolean(embedding)
+  let warning: string | undefined
+
+  async function writePayload(targetId: number | string | null, nextPayload: Record<string, unknown>) {
+    if (targetId) {
+      return supabase.from("knowledge").update(nextPayload).eq("id", targetId).select("id").single()
+    }
+
+    return supabase.from("knowledge").insert([nextPayload]).select("id").single()
+  }
+
+  async function writeWithEmbeddingFallback(targetId: number | string | null, nextPayload: Record<string, unknown>) {
+    let result = await writePayload(targetId, nextPayload)
+
+    if (result.error && embedding) {
+      const fallbackPayload = { ...nextPayload }
+      delete fallbackPayload.embedding
+      result = await writePayload(targetId, fallbackPayload)
+      embeddingUpdated = false
+    }
+
+    return result
+  }
+
+  let targetId: number | string | null = null
+  const lookup = await supabase
+    .from("knowledge")
+    .select("id")
+    .eq("source", "ai_auto_fix")
+    .eq("source_key", sourceKey)
+    .maybeSingle()
+
+  if (lookup.error) {
+    if (!isMissingColumnError(lookup.error)) {
+      throw new Error(`查詢既有 knowledge 失敗：${lookup.error.message}`)
+    }
+
+    warning = "Supabase knowledge 尚未完整加入 source/source_key 欄位，這次改用新增模式，無法同問題覆蓋。"
+  } else if (lookup.data?.id) {
+    targetId = lookup.data.id
+  }
+
+  let result = await writeWithEmbeddingFallback(targetId, payload)
+
+  if (result.error && isMissingColumnError(result.error)) {
+    const fallbackPayload = { ...payload }
+    delete fallbackPayload.source
+    delete fallbackPayload.source_key
+    delete fallbackPayload.question
+    delete fallbackPayload.updated_at
+
+    result = await writeWithEmbeddingFallback(null, fallbackPayload)
+    warning = "Supabase knowledge 欄位尚未完整更新，已只寫入 content；請執行 migration 後才能同問題覆蓋。"
+  }
+
+  if (result.error) {
+    throw new Error(`寫入 knowledge 失敗：${result.error.message}`)
+  }
+
+  return {
+    id: result.data?.id || targetId || null,
+    mode: targetId ? "updated" : "created",
+    embeddingUpdated,
+    warning,
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null)
@@ -151,38 +236,15 @@ export async function POST(request: Request) {
       }
     }
 
-    let { data: inserted, error: insertError } = await supabase
-      .from("knowledge")
-      .upsert(insertPayload, { onConflict: "source,source_key" })
-      .select("id")
-      .single()
-
-    let embeddingUpdated = Boolean(embedding)
-
-    if (insertError && embedding) {
-      const fallbackPayload = { ...insertPayload }
-      delete fallbackPayload.embedding
-
-      const fallback = await supabase
-        .from("knowledge")
-        .upsert(fallbackPayload, { onConflict: "source,source_key" })
-        .select("id")
-        .single()
-
-      inserted = fallback.data
-      insertError = fallback.error
-      embeddingUpdated = false
-    }
-
-    if (insertError) {
-      throw new Error(`寫入 knowledge 失敗：${insertError.message}`)
-    }
+    const written = await writeKnowledge(supabase, insertPayload, sourceKey, embedding)
 
     return NextResponse.json({
       success: true,
       data: {
-        knowledgeId: inserted?.id || null,
-        embeddingUpdated,
+        knowledgeId: written.id,
+        mode: written.mode,
+        embeddingUpdated: written.embeddingUpdated,
+        warning: written.warning || null,
       },
     })
   } catch (error) {

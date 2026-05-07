@@ -699,6 +699,60 @@ export async function POST(req) {
           continue;
         }
 
+        // --- 2. 處理緊急聯絡人綁定 ---
+        if (event.type === 'message' && event.message.type === 'text') {
+          const normalizedPhone = userText.replace(/[^0-9]/g, '');
+          const phoneRegex = /^[0-9]{10}$/;
+          if (phoneRegex.test(normalizedPhone)) {
+            console.log('🚨 [緊急聯絡人] 檢測到手機號碼:', normalizedPhone);
+            try {
+              const { data: emergencyContact, error: queryError } = await supabase
+                .from('emergency_contacts')
+                .select('id, contact_name, contact_phone, contact_line_user_id')
+                .eq('contact_phone', normalizedPhone)
+                .or('contact_line_user_id.is.null,contact_line_user_id.eq.""')
+                .maybeSingle();
+
+              if (queryError) {
+                console.error('❌ [緊急聯絡人] 查詢失敗:', queryError);
+                await safeReplyMessage(replyToken, userId, { type: 'text', text: '❌ 查詢失敗，請稍後再試。' });
+                usedReplyTokens.add(replyToken);
+                continue;
+              }
+
+              if (!emergencyContact) {
+                await safeReplyMessage(replyToken, userId, { type: 'text', text: '❌ 找不到對應的緊急聯絡人記錄，請確認手機號碼是否正確。' });
+                usedReplyTokens.add(replyToken);
+                continue;
+              }
+
+              const { error: updateError } = await supabase
+                .from('emergency_contacts')
+                .update({ contact_line_user_id: userId, updated_at: new Date().toISOString() })
+                .eq('id', emergencyContact.id);
+
+              if (updateError) {
+                console.error('❌ [緊急聯絡人] 更新失敗:', updateError);
+                await safeReplyMessage(replyToken, userId, { type: 'text', text: '❌ 綁定失敗，請稍後再試。' });
+                usedReplyTokens.add(replyToken);
+                continue;
+              }
+
+              await safeReplyMessage(replyToken, userId, {
+                type: 'text',
+                text: `✅ 緊急聯絡人綁定成功！\n\n您的 LINE 帳號已與以下緊急聯絡人帳號綁定：\n👤 姓名：${emergencyContact.contact_name || '未提供'}\n📞 電話：${emergencyContact.contact_phone}\n\n當住戶發生緊急狀況時，您將收到通知。`
+              });
+              usedReplyTokens.add(replyToken);
+              continue;
+            } catch (err) {
+              console.error('❌ [緊急聯絡人] 綁定異常:', err);
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '❌ 系統錯誤，請稍後再試。' });
+              usedReplyTokens.add(replyToken);
+              continue;
+            }
+          }
+        }
+
         // ===== 設施預約流程（MVP） =====
         const facilitySession = facilityBookingSessions.get(userId);
 

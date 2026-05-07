@@ -1,131 +1,305 @@
-import { notifyEmergencyContact, supabaseServer } from '@/lib/server/line-emergency';
+import { Client } from '@line/bot-sdk';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseServerKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'dummy_key';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabase = createClient(
+  supabaseUrl,
+  supabaseServerKey,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+);
 
 export const runtime = 'nodejs';
+const BOT_TAG = 'IOT';
+const SOURCE_TABLE = 'iot_events';
+
+// --- 建立 LINE 推播目標（BOT2 優先，BOT1 備用，自動去重） ---
+const bot1Token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const bot2Token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
+function buildLineClient(channelAccessToken) {
+  if (!channelAccessToken) return null;
+  return new Client({ channelAccessToken });
+}
+
+const pushTargets = [
+  { tag: 'BOT2', token: bot2Token, client: buildLineClient(bot2Token) },
+  { tag: 'BOT1', token: bot1Token, client: buildLineClient(bot1Token) }
+].filter((target, index, self) => {
+  if (!target.client || !target.token) return false;
+  return self.findIndex((item) => item.token === target.token) === index;
+});
+
+// --- 輔助函式 ---
+function safeString(value, fallback = '未提供') {
+  if (value === null || value === undefined || value === '') return fallback;
+  return String(value);
+}
+
+function normalizeConfiguration(configuration) {
+  if (!configuration) return {};
+  if (typeof configuration === 'object') return configuration;
+  if (typeof configuration === 'string') {
+    try {
+      return JSON.parse(configuration);
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function isEmergencyEvent(record) {
+  return record.event_type === 'emergency';
+}
+
+function buildEventMessage(record, unitInfo, recipientProfile) {
+  const createdAt = record.created_at
+    ? new Date(record.created_at).toLocaleString('zh-TW', { hour12: false })
+    : new Date().toLocaleString('zh-TW', { hour12: false });
+  const roomName = unitInfo?.unit_number || unitInfo?.unit_code || '未提供';
+
+  const lines = [
+    '🚨 【IoT 緊急事件通知】',
+    '',
+    `事件類型：${safeString(record.event_type)}`,
+    `設備 ID：${safeString(record.device_id)}`,
+    `房號：${roomName}`,
+    `發生時間：${createdAt}`
+  ];
+
+  if (recipientProfile?.name) {
+    lines.push(`通知對象：${recipientProfile.name}`);
+  }
+
+  if (record.message) {
+    lines.push('', `詳細訊息：${safeString(record.message)}`);
+  }
+
+  lines.push('', '⚠️ 請立即確認並採取適當行動');
+
+  return { type: 'text', text: lines.join('\n') };
+}
+
+async function resolveRecipient(record) {
+  const eventData = normalizeConfiguration(record.event_data);
+
+  // 優先從 event_data 尋找明確的 LINE user ID
+  const explicitLineUserId =
+    eventData.line_user_id ||
+    eventData.notify_line_user_id ||
+    eventData.recipient_line_user_id;
+  if (explicitLineUserId) {
+    return { lineUserId: explicitLineUserId, profile: null };
+  }
+
+  // 優先使用專用 emergency_contact_id 關聯
+  if (record.emergency_contact_id) {
+    const { data: emergencyContact, error: contactError } = await supabase
+      .from('emergency_contacts')
+      .select('contact_line_user_id, resident_profile:resident_profile_id(name)')
+      .eq('id', record.emergency_contact_id)
+      .maybeSingle();
+
+    if (!contactError && emergencyContact?.contact_line_user_id) {
+      return {
+        lineUserId: emergencyContact.contact_line_user_id,
+        profile: emergencyContact.resident_profile
+      };
+    }
+  }
+
+  // 其次從 linked_record_id 關聯查詢
+  if (record.linked_record_type === 'emergency' && record.linked_record_id) {
+    const { data: emergencyRecord, error: emergencyError } = await supabase
+      .from('emergency_contacts')
+      .select('contact_line_user_id, resident_profile:resident_profile_id(name)')
+      .eq('id', record.linked_record_id)
+      .maybeSingle();
+
+    if (!emergencyError && emergencyRecord?.contact_line_user_id) {
+      return {
+        lineUserId: emergencyRecord.contact_line_user_id,
+        profile: emergencyRecord.resident_profile
+      };
+    }
+  }
+
+  return null;
+}
 
 const webhookSecret = process.env.IOT_WEBHOOK_SECRET;
 
 export async function POST(req) {
-  console.log('🚨 [IoT 緊急事件] Webhook 收到觸發');
+  console.log(`🚨 [${BOT_TAG}] [IoT 事件] Webhook 收到觸發`);
 
   try {
     const inboundSecret = req.headers.get('x-webhook-secret');
+
+    console.log(`🔍 [${BOT_TAG}] IOT_WEBHOOK_SECRET present: ${!!webhookSecret}`);
+    console.log(`🔍 [${BOT_TAG}] inbound header present: ${!!inboundSecret}`);
+    if (webhookSecret) {
+      try {
+        const masked =
+          String(webhookSecret).length > 10
+            ? String(webhookSecret).slice(0, 6) + '...' + String(webhookSecret).slice(-4)
+            : '[masked]';
+        console.log(`🔒 [${BOT_TAG}] IOT_WEBHOOK_SECRET masked: ${masked}`);
+      } catch {}
+    }
+
     if (!webhookSecret) {
-      console.error('[IoT 緊急事件] ❌ 未設定 IOT_WEBHOOK_SECRET');
+      console.error(`❌ [${BOT_TAG}] [IoT 事件] 未設定 IOT_WEBHOOK_SECRET`);
       return Response.json({ success: false, message: 'Server secret not configured' }, { status: 500 });
     }
 
     if (!inboundSecret || inboundSecret !== webhookSecret) {
-      console.warn('[IoT 緊急事件] ⚠️ secret 驗證失敗');
+      console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] secret 驗證失敗`);
       return Response.json({ success: false, message: 'Unauthorized webhook' }, { status: 401 });
     }
 
-    const body = await req.json();
-    console.log('[IoT 緊急事件] Webhook 內容:', JSON.stringify(body, null, 2));
+    const rawBody = await req.text();
+    console.log(`📥 [${BOT_TAG}] [IoT 事件] Webhook raw body length: ${rawBody.length}`);
+    console.log(`📥 [${BOT_TAG}] [IoT 事件] Webhook raw body preview: ${rawBody.slice(0, 1000)}`);
 
-    const { type, table, record } = body;
-
-    if (!record || typeof record !== 'object') {
-      return Response.json({ success: false, message: 'Missing webhook record' }, { status: 400 });
-    }
-
-    if (type !== 'INSERT' || table !== 'iot_events') {
-      return Response.json({ success: false, message: 'Invalid webhook data: only iot_events INSERT is supported' }, { status: 400 });
-    }
-
-    const eventType = record.event_type || record?.event_data?.event_type;
-
-    if (eventType !== 'emergency') {
-      return Response.json({ success: false, message: 'Not an emergency event' }, { status: 400 });
-    }
-
-    const operatorProfileId = record.operator_profile_id || record?.event_data?.operator_profile_id;
-    if (!operatorProfileId) {
-      return Response.json({ success: false, message: 'Missing operator profile ID' }, { status: 400 });
-    }
-
-    let incidentId = record.linked_record_type === 'emergency' ? record.linked_record_id : null;
-
-    if (!incidentId) {
-      const eventData = record.event_data || {};
-      const { data: incident, error: incidentError } = await supabaseServer
-        .from('emergency_incidents')
-        .insert([
-          {
-            source: 'system',
-            reporter_profile_id: operatorProfileId,
-            event_type: 'emergency',
-            location: eventData.location || record.device_id || 'IoT 裝置',
-            description: eventData.description || record.message || 'IoT 緊急事件',
-            status: 'submitted',
-            source_record_id: record.id,
-          },
-        ])
-        .select('id')
-        .single();
-
-      if (!incidentError && incident?.id) {
-        incidentId = incident.id;
-        await supabaseServer
-          .from('iot_events')
-          .update({
-            linked_record_type: 'emergency',
-            linked_record_id: incident.id,
-          })
-          .eq('id', record.id);
+    let body = {};
+    if (rawBody) {
+      try {
+        body = JSON.parse(rawBody);
+      } catch (parseErr) {
+        console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] JSON 解析失敗:`, parseErr.message);
+        return Response.json({ success: false, message: 'Invalid JSON payload' }, { status: 400 });
       }
     }
 
-    const notifyResult = await notifyEmergencyContact(operatorProfileId, 'IoT 緊急求助');
+    console.log(`📥 [${BOT_TAG}] [IoT 事件] Webhook 內容:`, JSON.stringify(body, null, 2));
 
-    const updatePayload = {
-      processed: !!notifyResult.success,
-      processed_at: notifyResult.success ? new Date().toISOString() : null,
-      message: notifyResult.success
-        ? `Emergency notification sent to ${notifyResult.contactName || 'unknown contact'}`
-        : `Failed to send emergency notification: ${notifyResult.message}`,
-      linked_record_type: incidentId ? 'emergency' : record.linked_record_type,
-      linked_record_id: incidentId || record.linked_record_id || null,
-    };
+    const isWrappedPayload =
+      body &&
+      typeof body === 'object' &&
+      (Object.prototype.hasOwnProperty.call(body, 'record') ||
+        Object.prototype.hasOwnProperty.call(body, 'type') ||
+        Object.prototype.hasOwnProperty.call(body, 'table'));
+    const type = isWrappedPayload ? body.type || 'INSERT' : 'INSERT';
+    const table = isWrappedPayload ? body.table || SOURCE_TABLE : SOURCE_TABLE;
+    const record = isWrappedPayload ? body.record || body.new || body.old || {} : body;
 
-    if (!notifyResult.success) {
-      await supabaseServer
-        .from('iot_events')
-        .update(updatePayload)
-        .eq('id', record.id);
+    if (!record || typeof record !== 'object') {
+      console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] 缺少 record 內容`);
+      return Response.json({ success: false, message: 'Missing webhook record' }, { status: 400 });
+    }
 
+    if (type !== 'INSERT' || table !== SOURCE_TABLE) {
+      console.log(`ℹ️ [${BOT_TAG}] [IoT 事件] 操作類型或表名不匹配，略過`);
+      return Response.json({ success: false, message: 'Invalid webhook data' }, { status: 400 });
+    }
+
+    if (!record.event_type || !record.device_id) {
+      console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] 缺少 event_type / device_id`);
+      return Response.json({ success: false, message: 'Missing event information' }, { status: 400 });
+    }
+
+    if (!isEmergencyEvent(record)) {
+      console.log(`ℹ️ [${BOT_TAG}] [IoT 事件] 非 emergency 事件，略過`);
+      return Response.json({ success: false, message: 'Not an emergency event' }, { status: 400 });
+    }
+
+    const recipient = await resolveRecipient(record);
+
+    if (!recipient || !recipient.lineUserId) {
+      console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] 找不到可推播的 LINE user ID`);
+      return Response.json({ success: false, message: 'No LINE recipient found' }, { status: 400 });
+    }
+
+    // 查詢房號資訊
+    let unitInfo = { unit_number: null, unit_code: null };
+    if (record.emergency_contact_id || (record.linked_record_id && record.linked_record_type)) {
+      try {
+        const contactId =
+          record.emergency_contact_id ||
+          (record.linked_record_type === 'emergency' ? record.linked_record_id : null);
+
+        if (contactId) {
+          const { data: emergencyData } = await supabase
+            .from('emergency_contacts')
+            .select('resident_profile:resident_profile_id(unit_id)')
+            .eq('id', contactId)
+            .maybeSingle();
+
+          if (emergencyData?.resident_profile?.unit_id) {
+            const { data: unitData } = await supabase
+              .from('units')
+              .select('unit_number, unit_code')
+              .eq('id', emergencyData.resident_profile.unit_id)
+              .maybeSingle();
+
+            if (unitData) unitInfo = unitData;
+          }
+        }
+      } catch (unitErr) {
+        console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] 查詢房號失敗:`, unitErr.message);
+      }
+    }
+
+    const message = buildEventMessage(record, unitInfo, recipient.profile);
+
+    const successTargets = [];
+    for (const target of pushTargets) {
+      try {
+        console.log(`📤 [${target.tag}] [IoT 事件] 發送消息給 LINE user:`, recipient.lineUserId);
+        await target.client.pushMessage(recipient.lineUserId, message);
+        successTargets.push(target.tag);
+      } catch (pushErr) {
+        console.warn(`⚠️ [${target.tag}] [IoT 事件] 推播失敗:`, pushErr.message);
+      }
+    }
+
+    if (successTargets.length === 0) {
       return Response.json(
-        {
-          success: false,
-          message: notifyResult.message,
-        },
-        { status: 500 },
+        { success: false, message: 'LINE push failed for all configured bots' },
+        { status: 502 }
       );
     }
 
-    await supabaseServer
-      .from('iot_events')
-      .update(updatePayload)
-      .eq('id', record.id);
+    // 標記該事件已處理
+    try {
+      await supabase
+        .from('iot_events')
+        .update({
+          processed: true,
+          processed_at: new Date().toISOString()
+        })
+        .eq('id', record.id);
+    } catch (updateErr) {
+      console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] 更新 processed 狀態失敗:`, updateErr.message);
+    }
 
     return Response.json(
       {
         success: true,
-        message: 'Emergency notification sent successfully',
-        iotLogId: record.id,
-        incidentId,
-        emergencyContactName: notifyResult.contactName,
+        message: 'IoT emergency event notification sent successfully',
+        eventId: record.id,
+        deviceId: record.device_id,
+        eventType: record.event_type,
+        recipientLineUserId: recipient.lineUserId,
+        pushedByBots: successTargets
       },
-      { status: 200 },
+      { status: 200 }
     );
   } catch (err) {
-    console.error('[IoT 緊急事件] ❌ Webhook 處理失敗:', err);
+    console.error(`❌ [${BOT_TAG}] [IoT 事件] Webhook 處理失敗:`, err);
     return Response.json(
       {
         success: false,
         message: 'Internal server error',
-        error: err?.message || 'unknown error',
+        error: err.message
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

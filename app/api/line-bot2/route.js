@@ -523,12 +523,90 @@ const usedReplyTokens = new Set();
 // 追蹤已處理的 webhook event（防止 LINE redelivery 造成重複訊息）
 const processedWebhookEvents = new Map();
 const WEBHOOK_EVENT_TTL_MS = 10 * 60 * 1000; // 10 分鐘
+const MAINTENANCE_SESSION_SOURCE = 'line_maintenance_session';
 
 function cleanupProcessedWebhookEvents(now = Date.now()) {
   for (const [eventId, ts] of processedWebhookEvents.entries()) {
     if (now - ts > WEBHOOK_EVENT_TTL_MS) {
       processedWebhookEvents.delete(eventId);
     }
+  }
+}
+
+async function getActiveMaintenanceDraft(userId) {
+  const { data, error } = await supabase
+    .from('emergency_incidents')
+    .select('id, location, description, updated_at')
+    .eq('source', MAINTENANCE_SESSION_SOURCE)
+    .eq('reporter_line_user_id', userId)
+    .eq('status', 'draft')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[報修] 查詢資料庫草稿失敗:', error);
+    return null;
+  }
+
+  return data || null;
+}
+
+async function upsertMaintenanceDraft(userId, patch = {}) {
+  const currentDraft = await getActiveMaintenanceDraft(userId);
+
+  if (currentDraft?.id) {
+    const { error } = await supabase
+      .from('emergency_incidents')
+      .update({
+        ...patch,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', currentDraft.id)
+      .eq('source', MAINTENANCE_SESSION_SOURCE)
+      .eq('status', 'draft');
+
+    if (error) {
+      console.error('[報修] 更新資料庫草稿失敗:', error);
+    }
+    return currentDraft?.id || null;
+  }
+
+  const { data, error } = await supabase
+    .from('emergency_incidents')
+    .insert([{
+      source: MAINTENANCE_SESSION_SOURCE,
+      reporter_line_user_id: userId,
+      status: 'draft',
+      event_type: 'maintenance',
+      location: patch.location || null,
+      description: patch.description || null,
+      updated_at: new Date().toISOString()
+    }])
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[報修] 建立資料庫草稿失敗:', error);
+    return null;
+  }
+
+  return data?.id || null;
+}
+
+async function closeMaintenanceDraft(userId, status = 'submitted') {
+  const { error } = await supabase
+    .from('emergency_incidents')
+    .update({
+      status,
+      updated_at: new Date().toISOString()
+    })
+    .eq('source', MAINTENANCE_SESSION_SOURCE)
+    .eq('reporter_line_user_id', userId)
+    .eq('status', 'draft');
+
+  if (error) {
+    console.error('[報修] 關閉資料庫草稿失敗:', error);
   }
 }
 
@@ -1287,6 +1365,8 @@ export async function POST(req) {
             description: null,
             startTime: Date.now()
           });
+          await closeMaintenanceDraft(userId, 'rejected');
+          await upsertMaintenanceDraft(userId, {});
 
           console.log('[報修] 新 session 已建立');
 
@@ -1309,7 +1389,19 @@ export async function POST(req) {
         }
         
         // 檢查用戶是否在報修流程中
-        const currentSession = repairSessions.get(userId);
+        let currentSession = repairSessions.get(userId);
+        if (!currentSession) {
+          const dbDraft = await getActiveMaintenanceDraft(userId);
+          if (dbDraft) {
+            currentSession = {
+              location: dbDraft.location || null,
+              description: dbDraft.description || null,
+              startTime: Date.now()
+            };
+            repairSessions.set(userId, currentSession);
+            console.log('[報修] 使用資料庫草稿恢復 session:', dbDraft.id);
+          }
+        }
         
         console.log('[報修] Session 狀態:', { 
           userId, 
@@ -1400,6 +1492,7 @@ export async function POST(req) {
           // 取消報修
           if (userText === '取消報修' || userText === '取消') {
             repairSessions.delete(userId);
+            await closeMaintenanceDraft(userId, 'rejected');
             
             await client.replyMessage(replyToken, {
               type: 'text',
@@ -1415,6 +1508,7 @@ export async function POST(req) {
               ...currentSession,
               location: userText
             });
+            await upsertMaintenanceDraft(userId, { location: userText });
 
             console.log('[報修] 地點已儲存到 session');
 
@@ -1439,6 +1533,7 @@ export async function POST(req) {
               ...currentSession,
               description: userText
             });
+            await upsertMaintenanceDraft(userId, { description: userText });
 
             console.log('[報修] 描述已儲存到 session');
 
@@ -1495,6 +1590,7 @@ export async function POST(req) {
             
             // 清除 session
             repairSessions.delete(userId);
+            await closeMaintenanceDraft(userId, 'submitted');
             
             const repair = completedRepair;
             await client.replyMessage(replyToken, {
@@ -2489,7 +2585,19 @@ export async function POST(req) {
         console.log('[報修-圖片] 所有 sessions:', Array.from(repairSessions.entries()));
 
         // 先檢查報修 session，避免被舊的緊急事件 draft 誤攔截
-        const currentSession = repairSessions.get(userId);
+        let currentSession = repairSessions.get(userId);
+        if (!currentSession) {
+          const dbDraft = await getActiveMaintenanceDraft(userId);
+          if (dbDraft) {
+            currentSession = {
+              location: dbDraft.location || null,
+              description: dbDraft.description || null,
+              startTime: Date.now()
+            };
+            repairSessions.set(userId, currentSession);
+            console.log('[報修-圖片] 使用資料庫草稿恢復 session:', dbDraft.id);
+          }
+        }
         const hasLocation = currentSession?.location && currentSession.location.trim() !== '';
         const hasDescription = currentSession?.description && currentSession.description.trim() !== '';
 
@@ -2545,6 +2653,7 @@ export async function POST(req) {
             const repair = completedRepair;
             console.log('[報修-圖片] ✅ 報修提交成功:', repair.id);
             repairSessions.delete(userId);
+            await closeMaintenanceDraft(userId, 'submitted');
 
             const photoNote = maintenanceImageUrl
               ? '📸 已附上照片'

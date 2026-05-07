@@ -584,6 +584,8 @@ async function upsertMaintenanceDraft(userId, patch = {}) {
 
   if (error) {
     console.error('[報修] 建立資料庫草稿失敗 (詳細):', JSON.stringify(error));
+    console.error('[報修] 可能原因：emergency_incidents.source CHECK constraint 不允許 line_maintenance_session');
+    console.error('[報修] 請執行 scripts/fix-emergency-incidents-source-constraint.sql 修正資料庫約束');
     return null;
   }
 

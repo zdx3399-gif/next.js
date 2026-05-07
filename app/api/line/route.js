@@ -1319,6 +1319,38 @@ export async function POST(req) {
         }
 
         // 🔧 報修系統
+
+        // ===== DEBUG 指令（測試用，可正式上線後移除）=====
+        if (userText === '報修debug' || userText === '報修Debug') {
+          const memSession = repairSessions.get(userId);
+          const dbDraft = await getActiveMaintenanceDraft(userId);
+
+          // 查所有 emergency_incidents draft 
+          const { data: allDrafts } = await supabase
+            .from('emergency_incidents')
+            .select('id, source, status, event_type, location, description, updated_at')
+            .eq('reporter_line_user_id', userId)
+            .eq('status', 'draft')
+            .order('updated_at', { ascending: false })
+            .limit(5);
+
+          const lines = [
+            '🔍 [DEBUG] 報修 Session 狀態',
+            '',
+            `📦 Memory session: ${memSession ? JSON.stringify(memSession) : 'null'}`,
+            '',
+            `🗄️ DB 草稿 (${MAINTENANCE_SESSION_SOURCE}): ${dbDraft ? `id=${dbDraft.id}, loc=${dbDraft.location}, desc=${dbDraft.description}` : 'null'}`,
+            '',
+            `📋 所有 draft 記錄 (共 ${allDrafts?.length ?? 0} 筆):`,
+            ...(allDrafts ?? []).map((d, i) =>
+              `  ${i+1}. id=${d.id.slice(0,8)} source=${d.source} loc=${d.location ?? '-'} desc=${d.description ?? '-'} updated=${d.updated_at?.slice(11,19)}`
+            )
+          ];
+
+          await client.replyMessage(replyToken, { type: 'text', text: lines.join('\n') });
+          usedReplyTokens.add(replyToken);
+          continue;
+        }
         
         // 啟動報修流程（最優先處理，避免被舊 session 干擾）
         if (userText === '報修' || userText === '我要報修' || userText === '新報修') {

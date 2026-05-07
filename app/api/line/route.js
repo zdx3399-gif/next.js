@@ -1331,14 +1331,16 @@ export async function POST(req) {
             console.log('[報修] 偵測到舊 session，將被覆蓋:', oldSession);
           }
           
-          // 初始化新的報修 session
+          // 清除舊的 DB 草稿
+          await closeMaintenanceDraft(userId, 'rejected');
+          
+          // 初始化新的報修 session (只在內存中，不創建空 DB 記錄)
           repairSessions.set(userId, {
             location: null,
             description: null,
-            startTime: Date.now()
+            startTime: Date.now(),
+            dbId: null
           });
-          await closeMaintenanceDraft(userId, 'rejected');
-          await upsertMaintenanceDraft(userId, {});
 
           console.log('[報修] 新 session 已建立');
 
@@ -1479,11 +1481,17 @@ export async function POST(req) {
           // 步驟1: 輸入地點
           if (!currentSession.location) {
             console.log('[報修] 步驟1: 儲存地點:', userText);
-            repairSessions.set(userId, {
+            const updatedSession = {
               ...currentSession,
               location: userText
-            });
-            await upsertMaintenanceDraft(userId, { location: userText });
+            };
+            repairSessions.set(userId, updatedSession);
+            
+            // 第一次輸入地點時創建 DB 草稿
+            const dbId = await upsertMaintenanceDraft(userId, { location: userText });
+            updatedSession.dbId = dbId;
+            repairSessions.set(userId, updatedSession);
+            console.log('[報修] DB草稿已創建或更新，ID:', dbId);
 
             console.log('[報修] 地點已儲存到 session');
 
@@ -1504,11 +1512,13 @@ export async function POST(req) {
           if (currentSession.location && !currentSession.description) {
             console.log('[報修] 步驟2: 儲存描述:', userText);
             console.log('[報修] 當前地點:', currentSession.location);
-            repairSessions.set(userId, {
+            const updatedSession = {
               ...currentSession,
               description: userText
-            });
+            };
+            repairSessions.set(userId, updatedSession);
             await upsertMaintenanceDraft(userId, { description: userText });
+            console.log('[報修] 描述已儲存到 session 和 DB');
 
             console.log('[報修] 描述已儲存到 session');
 
@@ -2561,20 +2571,28 @@ export async function POST(req) {
 
         // 先檢查報修 session，避免被舊的緊急事件 draft 誤攔截
         let currentSession = repairSessions.get(userId);
+        console.log('[報修-圖片] 內存 session:', { hasSession: !!currentSession, location: currentSession?.location, description: currentSession?.description });
+        
         if (!currentSession) {
+          console.log('[報修-圖片] 內存 session 為空，嘗試從 DB 恢復...');
           const dbDraft = await getActiveMaintenanceDraft(userId);
           if (dbDraft) {
+            console.log('[報修-圖片] 找到 DB 草稿:', { id: dbDraft.id, location: dbDraft.location, description: dbDraft.description });
             currentSession = {
               location: dbDraft.location,
               description: dbDraft.description,
-              startTime: Date.now()
+              startTime: Date.now(),
+              dbId: dbDraft.id
             };
             repairSessions.set(userId, currentSession);
-            console.log('[報修-圖片] 使用資料庫草稿恢復 session:', { id: dbDraft.id, location: dbDraft.location, description: dbDraft.description });
+            console.log('[報修-圖片] ✅ 使用資料庫草稿恢復 session');
           } else {
-            console.log('[報修-圖片] DB草稿查詢結果為空，無法恢復報修 session');
+            console.log('[報修-圖片] ⚠️ DB 中沒有找到報修草稿 (source=line_maintenance_session, status=draft)');
           }
+        } else {
+          console.log('[報修-圖片] ✅ 使用內存 session');
         }
+        
         const hasLocation = currentSession?.location && String(currentSession.location).trim() !== '';
         const hasDescription = currentSession?.description && String(currentSession.description).trim() !== '';
 

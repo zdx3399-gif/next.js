@@ -8,7 +8,8 @@
 /out/
 .next.zip
 
-
+#SQL
+scripts
 
 # production
 /build
@@ -40,3 +41,5 @@ next-env.d.ts
 /專題_extracted_clean.txt
 /專題_extracted_normalized.txt
 /所有功能清單.txt
+
+.gitignore

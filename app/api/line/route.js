@@ -1331,8 +1331,14 @@ export async function POST(req) {
             console.log('[報修] 偵測到舊 session，將被覆蓋:', oldSession);
           }
           
-          // 清除舊的 DB 草稿
+          // 清除舊的 DB 草稿（報修 + 緊急事件兩種，避免殘留干擾）
           await closeMaintenanceDraft(userId, 'rejected');
+          await supabase
+            .from('emergency_incidents')
+            .update({ status: 'rejected', updated_at: new Date().toISOString() })
+            .eq('source', 'line_session')
+            .eq('reporter_line_user_id', userId)
+            .eq('status', 'draft');
           
           // 初始化新的報修 session (只在內存中，不創建空 DB 記錄)
           repairSessions.set(userId, {
@@ -1576,6 +1582,13 @@ export async function POST(req) {
             // 清除 session
             repairSessions.delete(userId);
             await closeMaintenanceDraft(userId, 'submitted');
+            // 一並清除任何殘留的緊急事件草稿
+            await supabase
+              .from('emergency_incidents')
+              .update({ status: 'rejected', updated_at: new Date().toISOString() })
+              .eq('source', 'line_session')
+              .eq('reporter_line_user_id', userId)
+              .eq('status', 'draft');
             
             const repair = completedRepair;
             await client.replyMessage(replyToken, {
@@ -2650,6 +2663,13 @@ export async function POST(req) {
             console.log('[報修-圖片] ✅ 報修提交成功:', repair.id);
             repairSessions.delete(userId);
             await closeMaintenanceDraft(userId, 'submitted');
+            // 一並清除任何殘留的緊急事件草稿
+            await supabase
+              .from('emergency_incidents')
+              .update({ status: 'rejected', updated_at: new Date().toISOString() })
+              .eq('source', 'line_session')
+              .eq('reporter_line_user_id', userId)
+              .eq('status', 'draft');
 
             const photoNote = maintenanceImageUrl
               ? '📸 已附上照片'

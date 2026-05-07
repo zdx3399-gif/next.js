@@ -1339,15 +1339,18 @@ export async function POST(req) {
             .eq('reporter_line_user_id', userId)
             .eq('status', 'draft');
           
-          // 初始化新的報修 session (只在內存中，不創建空 DB 記錄)
+          // 立刻在 DB 建立空白草稿，確保 serverless 下請求之間 session 不會遺失
+          const newDbId = await upsertMaintenanceDraft(userId, {});
+          console.log('[報修] 空白 DB 草稿已建立，ID:', newDbId);
+
           repairSessions.set(userId, {
             location: null,
             description: null,
             startTime: Date.now(),
-            dbId: null
+            dbId: newDbId
           });
 
-          console.log('[報修] 新 session 已建立');
+          console.log('[報修] 新 session 已建立（Memory + DB）');
 
           try {
             await client.replyMessage(replyToken, {

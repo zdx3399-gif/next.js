@@ -61,7 +61,7 @@ const client = new Client(lineConfig);// LINE Bot SDK 客戶端
 const emergencyImageBucket = process.env.SUPABASE_EMERGENCY_IMAGE_BUCKET || 'emergency_images';
 const maintenanceImageBucket = process.env.SUPABASE_MAINTENANCE_IMAGE_BUCKET || 'maintenance_images';
 
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+if (process.env.NEXT_PHASE !== 'phase-production-build' && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.warn('⚠️ 未設定 SUPABASE_SERVICE_ROLE_KEY，Storage 上傳可能因權限被拒。');
 }
 

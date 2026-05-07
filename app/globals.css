@@ -1,10 +1,10 @@
+@import url("https://fonts.googleapis.com/icon?family=Material+Icons");
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap");
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
 /* Removed @custom-variant directive that's not valid in Tailwind CSS v4 */
-
-@import url("https://fonts.googleapis.com/icon?family=Material+Icons");
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap");
 
 /* Updated light mode to use softer Dcard-inspired colors */
 :root {

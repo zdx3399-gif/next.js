@@ -574,6 +574,7 @@ async function upsertMaintenanceDraft(userId, patch = {}) {
       source: MAINTENANCE_SESSION_SOURCE,
       reporter_line_user_id: userId,
       status: 'draft',
+      event_type: 'maintenance',
       location: patch.location || null,
       description: patch.description || null,
       updated_at: new Date().toISOString()
@@ -1371,18 +1372,15 @@ export async function POST(req) {
             .eq('reporter_line_user_id', userId)
             .eq('status', 'draft');
           
-          // 立刻在 DB 建立空白草稿，確保 serverless 下請求之間 session 不會遺失
-          const newDbId = await upsertMaintenanceDraft(userId, {});
-          console.log('[報修] 空白 DB 草稿已建立，ID:', newDbId);
-
+          // 初始化新的報修 session（只在內存中，DB 草稿在步驟1輸入地點時才建立）
           repairSessions.set(userId, {
             location: null,
             description: null,
             startTime: Date.now(),
-            dbId: newDbId
+            dbId: null
           });
 
-          console.log('[報修] 新 session 已建立（Memory + DB）');
+          console.log('[報修] 新 session 已建立');
 
           try {
             await client.replyMessage(replyToken, {

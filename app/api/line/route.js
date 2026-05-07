@@ -574,7 +574,6 @@ async function upsertMaintenanceDraft(userId, patch = {}) {
       source: MAINTENANCE_SESSION_SOURCE,
       reporter_line_user_id: userId,
       status: 'draft',
-      event_type: 'maintenance',
       location: patch.location || null,
       description: patch.description || null,
       updated_at: new Date().toISOString()
@@ -583,7 +582,7 @@ async function upsertMaintenanceDraft(userId, patch = {}) {
     .maybeSingle();
 
   if (error) {
-    console.error('[報修] 建立資料庫草稿失敗:', error);
+    console.error('[報修] 建立資料庫草稿失敗 (詳細):', JSON.stringify(error));
     return null;
   }
 
@@ -2696,80 +2695,91 @@ export async function POST(req) {
           continue;
         }
 
-        // 緊急事件流程的圖片上傳（僅在報修流程未命中時處理）
-        try {
-          // 若使用者有任何報修草稿（含不完整），不跳進緊急事件處理
-          const maintenanceDraftCheck = await getActiveMaintenanceDraft(userId);
-          if (maintenanceDraftCheck || currentSession) {
-            console.log('[報修-圖片] ⚠️ 偵測到報修草稿或 session，跳過緊急事件圖片處理');
-            // 不進入緊急事件流程，讓後續邏輯處理（最近報修單補圖或提示）
-          } else {
-
-          const { data: activeEmergencySession } = await supabase
-            .from('emergency_incidents')
-            .select('id, status, event_type, location, description')
-            .eq('source', 'line_session')
-            .eq('reporter_line_user_id', userId)
-            .eq('status', 'draft')
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (activeEmergencySession) {
-            const uploadedImageUrl = await uploadEmergencyImageFromLineMessage(messageId, userId);
-
-            const { error: saveImageErr } = await supabase
-              .from('emergency_incidents')
-              .update({
-                image_url: uploadedImageUrl,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', activeEmergencySession.id)
-              .eq('source', 'line_session')
-              .eq('status', 'draft');
-
-            if (saveImageErr) {
-              console.error('❌ 緊急事件圖片保存失敗:', saveImageErr);
-              await safeReplyMessage(replyToken, userId, {
-                type: 'text',
-                text: '❌ 圖片上傳失敗，請稍後再試。'
-              });
-              usedReplyTokens.add(replyToken);
-              continue;
-            }
-
-            let nextStepText = '✅ 圖片已附加到本次緊急事件。';
-            const emergencyDraftStep = getEmergencyDraftStep(activeEmergencySession);
-            if (emergencyDraftStep === 'event_type') {
-              nextStepText += '\n請先選擇或輸入事件類型。';
-            } else if (emergencyDraftStep === 'location') {
-              nextStepText += '\n請繼續輸入事件地點。';
-            } else if (emergencyDraftStep === 'description') {
-              nextStepText += '\n請繼續輸入事件描述。';
-            } else if (emergencyDraftStep === 'confirm') {
-              const confirmFlex = buildEmergencyConfirmFlex(
-                activeEmergencySession.id,
-                activeEmergencySession.event_type,
-                activeEmergencySession.location,
-                activeEmergencySession.description,
-                uploadedImageUrl
-              );
-              await safeReplyMessage(replyToken, userId, [
-                { type: 'text', text: nextStepText },
-                confirmFlex
-              ]);
-              usedReplyTokens.add(replyToken);
-              continue;
-            }
-
-            await safeReplyMessage(replyToken, userId, {
-              type: 'text',
-              text: nextStepText
-            });
+        // 報修流程但資料不完整 → 提示繼續，不往下走
+        if (currentSession) {
+          if (!hasLocation) {
+            await client.replyMessage(replyToken, { type: 'text', text: '📍 請先輸入報修地點，再上傳照片。' });
             usedReplyTokens.add(replyToken);
             continue;
           }
-          } // close else (non-maintenance) block
+          if (!hasDescription) {
+            await client.replyMessage(replyToken, { type: 'text', text: '📝 請先輸入問題描述，再上傳照片。' });
+            usedReplyTokens.add(replyToken);
+            continue;
+          }
+        }
+
+        // 緊急事件流程的圖片上傳
+        // 條件：無任何報修 session/草稿，且有進行中的緊急事件草稿（30分鐘內活動）
+        try {
+          const maintenanceDraftCheck = await getActiveMaintenanceDraft(userId);
+          console.log('[報修-圖片] maintenanceDraftCheck:', maintenanceDraftCheck ? `id=${maintenanceDraftCheck.id}` : 'null');
+
+          if (!maintenanceDraftCheck && !currentSession) {
+            // 加上時間過濾（30分鐘內），避免舊殘留草稿誤攔截
+            const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+            const { data: activeEmergencySession } = await supabase
+              .from('emergency_incidents')
+              .select('id, status, event_type, location, description')
+              .eq('source', 'line_session')
+              .eq('reporter_line_user_id', userId)
+              .eq('status', 'draft')
+              .gte('updated_at', thirtyMinAgo)
+              .order('updated_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (activeEmergencySession) {
+              console.log('[報修-圖片] 進入緊急事件圖片上傳, id:', activeEmergencySession.id);
+              const uploadedImageUrl = await uploadEmergencyImageFromLineMessage(messageId, userId);
+
+              const { error: saveImageErr } = await supabase
+                .from('emergency_incidents')
+                .update({
+                  image_url: uploadedImageUrl,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', activeEmergencySession.id)
+                .eq('source', 'line_session')
+                .eq('status', 'draft');
+
+              if (saveImageErr) {
+                console.error('❌ 緊急事件圖片保存失敗:', saveImageErr);
+                await safeReplyMessage(replyToken, userId, { type: 'text', text: '❌ 圖片上傳失敗，請稍後再試。' });
+                usedReplyTokens.add(replyToken);
+                continue;
+              }
+
+              let nextStepText = '✅ 圖片已附加到本次緊急事件。';
+              const emergencyDraftStep = getEmergencyDraftStep(activeEmergencySession);
+              if (emergencyDraftStep === 'event_type') {
+                nextStepText += '\n請先選擇或輸入事件類型。';
+              } else if (emergencyDraftStep === 'location') {
+                nextStepText += '\n請繼續輸入事件地點。';
+              } else if (emergencyDraftStep === 'description') {
+                nextStepText += '\n請繼續輸入事件描述。';
+              } else if (emergencyDraftStep === 'confirm') {
+                const confirmFlex = buildEmergencyConfirmFlex(
+                  activeEmergencySession.id,
+                  activeEmergencySession.event_type,
+                  activeEmergencySession.location,
+                  activeEmergencySession.description,
+                  uploadedImageUrl
+                );
+                await safeReplyMessage(replyToken, userId, [
+                  { type: 'text', text: nextStepText },
+                  confirmFlex
+                ]);
+                usedReplyTokens.add(replyToken);
+                continue;
+              }
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: nextStepText });
+              usedReplyTokens.add(replyToken);
+              continue;
+            }
+          } else {
+            console.log('[報修-圖片] 偵測到報修草稿或 session，跳過緊急事件圖片處理');
+          }
         } catch (emergencyImageErr) {
           console.error('❌ 緊急事件圖片處理失敗:', emergencyImageErr);
           if (!usedReplyTokens.has(replyToken)) {
@@ -2781,10 +2791,7 @@ export async function POST(req) {
             } else if (emergencyImageErr?.code === 'STORAGE_UPLOAD_FAILED') {
               emergencyImageErrorText = '❌ 圖片儲存失敗，請稍後再試；若持續發生請通知管理單位檢查上傳權限設定。';
             }
-            await safeReplyMessage(replyToken, userId, {
-              type: 'text',
-              text: emergencyImageErrorText
-            });
+            await safeReplyMessage(replyToken, userId, { type: 'text', text: emergencyImageErrorText });
             usedReplyTokens.add(replyToken);
           }
           continue;

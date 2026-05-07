@@ -1365,8 +1365,16 @@ export async function POST(req) {
             console.log('[報修] 偵測到舊 session，將被覆蓋:', oldSession);
           }
           
-          // 清除舊的 DB 草稿
+          // 清除舊的 DB 草稿（報修）
           await closeMaintenanceDraft(userId, 'rejected');
+
+          // 清除舊的緊急事件 draft（避免舊 line_session 攔截圖片）
+          await supabase
+            .from('emergency_incidents')
+            .update({ status: 'rejected', updated_at: new Date().toISOString() })
+            .eq('source', 'line_session')
+            .eq('reporter_line_user_id', userId)
+            .eq('status', 'draft');
           
           // 初始化新的報修 session (只在內存中，不創建空 DB 記錄)
           repairSessions.set(userId, {

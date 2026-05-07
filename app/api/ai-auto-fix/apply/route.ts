@@ -15,7 +15,7 @@ type KnowledgeConflict = {
 type KnowledgeWriteResult = {
   id: number | string | null
   mode: "created" | "updated"
-  embeddingUpdated: boolean
+  embeddingUpdated: true
   warning?: string
 }
 
@@ -98,18 +98,11 @@ async function findKnowledgeConflicts(
     .filter((row: KnowledgeConflict) => row.content)
 }
 
-function isMissingColumnError(error: any) {
-  const message = String(error?.message || "")
-  return message.includes("column") && message.includes("does not exist")
-}
-
 async function writeKnowledge(
   supabase: any,
   payload: Record<string, unknown>,
   sourceKey: string,
-  embedding: number[] | null,
 ): Promise<KnowledgeWriteResult> {
-  let embeddingUpdated = Boolean(embedding)
   let warning: string | undefined
 
   async function writePayload(targetId: number | string | null, nextPayload: Record<string, unknown>) {
@@ -118,19 +111,6 @@ async function writeKnowledge(
     }
 
     return supabase.from("knowledge").insert([nextPayload]).select("id").single()
-  }
-
-  async function writeWithEmbeddingFallback(targetId: number | string | null, nextPayload: Record<string, unknown>) {
-    let result = await writePayload(targetId, nextPayload)
-
-    if (result.error && embedding) {
-      const fallbackPayload = { ...nextPayload }
-      delete fallbackPayload.embedding
-      result = await writePayload(targetId, fallbackPayload)
-      embeddingUpdated = false
-    }
-
-    return result
   }
 
   let targetId: number | string | null = null
@@ -142,27 +122,12 @@ async function writeKnowledge(
     .maybeSingle()
 
   if (lookup.error) {
-    if (!isMissingColumnError(lookup.error)) {
-      throw new Error(`查詢既有 knowledge 失敗：${lookup.error.message}`)
-    }
-
-    warning = "Supabase knowledge 尚未完整加入 source/source_key 欄位，這次改用新增模式，無法同問題覆蓋。"
+    throw new Error(`查詢既有 knowledge 失敗：${lookup.error.message}`)
   } else if (lookup.data?.id) {
     targetId = lookup.data.id
   }
 
-  let result = await writeWithEmbeddingFallback(targetId, payload)
-
-  if (result.error && isMissingColumnError(result.error)) {
-    const fallbackPayload = { ...payload }
-    delete fallbackPayload.source
-    delete fallbackPayload.source_key
-    delete fallbackPayload.question
-    delete fallbackPayload.updated_at
-
-    result = await writeWithEmbeddingFallback(null, fallbackPayload)
-    warning = "Supabase knowledge 欄位尚未完整更新，已只寫入 content；請執行 migration 後才能同問題覆蓋。"
-  }
+  const result = await writePayload(targetId, payload)
 
   if (result.error) {
     throw new Error(`寫入 knowledge 失敗：${result.error.message}`)
@@ -171,7 +136,7 @@ async function writeKnowledge(
   return {
     id: result.data?.id || targetId || null,
     mode: targetId ? "updated" : "created",
-    embeddingUpdated,
+    embeddingUpdated: true,
     warning,
   }
 }
@@ -209,6 +174,10 @@ export async function POST(request: Request) {
 
     const knowledgeContent = [`問題：${questionText}`, `答案：${answer}`].join("\n")
     const embedding = await getEmbedding(knowledgeContent, "search_document")
+    if (!embedding) {
+      throw new Error("Embedding 產生失敗，knowledge 未寫入。請確認 Vercel 已設定 COHERE_API_KEY。")
+    }
+
     const insertPayload: Record<string, unknown> = {
       source: "ai_auto_fix",
       source_key: sourceKey,
@@ -236,7 +205,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const written = await writeKnowledge(supabase, insertPayload, sourceKey, embedding)
+    const written = await writeKnowledge(supabase, insertPayload, sourceKey)
 
     return NextResponse.json({
       success: true,

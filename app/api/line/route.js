@@ -2450,7 +2450,90 @@ export async function POST(req) {
         console.log('[報修-圖片] repairSessions 總數:', repairSessions.size);
         console.log('[報修-圖片] 所有 sessions:', Array.from(repairSessions.entries()));
 
-        // 緊急事件流程的圖片上傳（優先處理，避免誤判成報修）
+        // 先檢查報修 session，避免被舊的緊急事件 draft 誤攔截
+        const currentSession = repairSessions.get(userId);
+        const hasLocation = currentSession?.location && currentSession.location.trim() !== '';
+        const hasDescription = currentSession?.description && currentSession.description.trim() !== '';
+
+        console.log('[報修-圖片] Session 狀態:', {
+          hasSession: !!currentSession,
+          location: currentSession?.location,
+          description: currentSession?.description,
+          hasLocation,
+          hasDescription
+        });
+
+        // 報修流程的圖片上傳（完整 session 優先）
+        if (currentSession && hasLocation && hasDescription) {
+          console.log('[報修-圖片] ✅ Session 完整，開始提交報修');
+
+          // 嘗試上傳圖片，失敗時 fallback 無圖繼續提交
+          let maintenanceImageUrl = null;
+          try {
+            maintenanceImageUrl = await uploadMaintenanceImageFromLineMessage(messageId, userId);
+          } catch (imgErr) {
+            console.error('[報修-圖片] ⚠️ 圖片上傳失敗，改無圖提交:', imgErr.message);
+          }
+
+          try {
+            // 直接寫入 maintenance
+            const { data: completedRepair, error: insertError } = await supabase
+              .from('maintenance')
+              .insert([{
+                equipment: currentSession.location,
+                item: '一般報修',
+                status: 'open',
+                time: new Date().toISOString(),
+                description: currentSession.description,
+                image_url: maintenanceImageUrl,
+                reported_by_id: existingProfile?.id || null,
+                created_by: existingProfile?.id || null,
+                unit_id: existingProfile?.unit_id || null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }])
+              .select('id, equipment, description')
+              .maybeSingle();
+
+            if (insertError || !completedRepair) {
+              console.error('[報修-圖片] 提交報修單失敗:', insertError);
+              await client.replyMessage(replyToken, {
+                type: 'text',
+                text: '❌ 報修單提交失敗，請稍後再試'
+              });
+              continue;
+            }
+
+            const repair = completedRepair;
+            console.log('[報修-圖片] ✅ 報修提交成功:', repair.id);
+            repairSessions.delete(userId);
+
+            const photoNote = maintenanceImageUrl
+              ? '📸 已附上照片'
+              : '⚠️ 照片上傳失敗，報修已成功送出（無照片）';
+            await client.replyMessage(replyToken, {
+              type: 'text',
+              text: `✅ 報修已送出\n📌 編號：#${String(repair.id).slice(0, 8)}\n目前狀態：🟡 待處理\n\n📍 地點：${repair.equipment}\n📝 問題：${repair.description}\n${photoNote}\n\n管理單位會盡快處理，謝謝您的通報！`
+            });
+            usedReplyTokens.add(replyToken);
+            console.log('[報修-圖片] ✅ 訊息回覆成功');
+          } catch (err) {
+            console.error('[報修-圖片] ❌ 提交失敗:', err);
+            if (!usedReplyTokens.has(replyToken)) {
+              try {
+                await client.replyMessage(replyToken, { type: 'text', text: '❌ 報修單提交失敗，請稍後再試' });
+                usedReplyTokens.add(replyToken);
+              } catch (replyErr) {
+                console.error('[報修-圖片] 回覆錯誤訊息失敗:', replyErr.message);
+              }
+            } else {
+              console.warn('[報修-圖片] ⚠️ replyToken 已使用，無法回覆錯誤訊息');
+            }
+          }
+          continue;
+        }
+
+        // 緊急事件流程的圖片上傳（僅在報修流程未命中時處理）
         try {
           const { data: activeEmergencySession } = await supabase
             .from('emergency_incidents')
@@ -2532,88 +2615,6 @@ export async function POST(req) {
               text: emergencyImageErrorText
             });
             usedReplyTokens.add(replyToken);
-          }
-          continue;
-        }
-
-        // 檢查是否在報修流程中（已填寫地點和描述）
-        const currentSession = repairSessions.get(userId);
-
-        console.log('[報修-圖片] Session 狀態:', {
-          hasSession: !!currentSession,
-          location: currentSession?.location,
-          description: currentSession?.description
-        });
-
-        // 檢查 session 是否完整（地點和描述都存在）
-        const hasLocation = currentSession?.location && currentSession.location.trim() !== '';
-        const hasDescription = currentSession?.description && currentSession.description.trim() !== '';
-
-        if (currentSession && hasLocation && hasDescription) {
-          console.log('[報修-圖片] ✅ Session 完整，開始提交報修');
-
-          // 嘗試上傳圖片，失敗時 fallback 無圖繼續提交
-          let maintenanceImageUrl = null;
-          try {
-            maintenanceImageUrl = await uploadMaintenanceImageFromLineMessage(messageId, userId);
-          } catch (imgErr) {
-            console.error('[報修-圖片] ⚠️ 圖片上傳失敗，改無圖提交:', imgErr.message);
-          }
-
-          try {
-            // 直接寫入 maintenance
-            const { data: completedRepair, error: insertError } = await supabase
-              .from('maintenance')
-              .insert([{
-                equipment: currentSession.location,
-                item: '一般報修',
-                status: 'open',
-                time: new Date().toISOString(),
-                description: currentSession.description,
-                image_url: maintenanceImageUrl,
-                reported_by_id: existingProfile?.id || null,
-                created_by: existingProfile?.id || null,
-                unit_id: existingProfile?.unit_id || null,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }])
-              .select('id, equipment, description')
-              .maybeSingle();
-
-            if (insertError || !completedRepair) {
-              console.error('[報修-圖片] 提交報修單失敗:', insertError);
-              await client.replyMessage(replyToken, {
-                type: 'text',
-                text: '❌ 報修單提交失敗，請稍後再試'
-              });
-              continue;
-            }
-
-            const repair = completedRepair;
-            console.log('[報修-圖片] ✅ 報修提交成功:', repair.id);
-            repairSessions.delete(userId);
-
-            const photoNote = maintenanceImageUrl
-              ? '📸 已附上照片'
-              : '⚠️ 照片上傳失敗，報修已成功送出（無照片）';
-            await client.replyMessage(replyToken, {
-              type: 'text',
-              text: `✅ 報修已送出\n📌 編號：#${String(repair.id).slice(0, 8)}\n目前狀態：🟡 待處理\n\n📍 地點：${repair.equipment}\n📝 問題：${repair.description}\n${photoNote}\n\n管理單位會盡快處理，謝謝您的通報！`
-            });
-            usedReplyTokens.add(replyToken);
-            console.log('[報修-圖片] ✅ 訊息回覆成功');
-          } catch (err) {
-            console.error('[報修-圖片] ❌ 提交失敗:', err);
-            if (!usedReplyTokens.has(replyToken)) {
-              try {
-                await client.replyMessage(replyToken, { type: 'text', text: '❌ 報修單提交失敗，請稍後再試' });
-                usedReplyTokens.add(replyToken);
-              } catch (replyErr) {
-                console.error('[報修-圖片] 回覆錯誤訊息失敗:', replyErr.message);
-              }
-            } else {
-              console.warn('[報修-圖片] ⚠️ replyToken 已使用，無法回覆錯誤訊息');
-            }
           }
           continue;
         }

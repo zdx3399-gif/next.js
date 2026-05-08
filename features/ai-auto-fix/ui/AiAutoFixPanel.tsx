@@ -240,13 +240,19 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
 
       const modeText = json.data?.mode === "updated" ? "已更新既有 knowledge" : "已新增 knowledge"
       const warningText = json.data?.warning ? ` ${json.data.warning}` : ""
+      const resolvedText =
+        typeof json.data?.resolvedCount === "number" && json.data.resolvedCount > 0
+          ? ` 已從待修正區移除 ${json.data.resolvedCount} 筆相關回饋。`
+          : json.data?.resolvedError
+            ? ` 但待修正狀態更新失敗：${json.data.resolvedError}`
+            : " 未找到可移除的待修正回饋。"
       setItemApplyMessage(
         "success",
         `${modeText}（ID: ${json.data?.knowledgeId || "unknown"}）。${
           json.data?.embeddingUpdated ? "Embedding 已同步更新。" : "Embedding 未更新或資料表未提供欄位。"
-        }${warningText}`,
+        }${warningText}${resolvedText}`,
       )
-      window.alert("寫入知識庫成功，Embedding 已同步建立")
+      window.alert(`寫入知識庫成功，Embedding 已同步建立。${resolvedText}`)
       await loadData()
     } catch (err) {
       setItemApplyMessage("error", err instanceof Error ? err.message : "寫入 Supabase 失敗。")
@@ -442,7 +448,7 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
                         disabled={!canApply}
                         className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {applyingKey === key ? "寫入中..." : "寫入知識庫"}
+                        {applyingKey === key ? "寫入中..." : "寫入知識庫並標記已修改"}
                       </button>
                       <button
                         type="button"
@@ -457,7 +463,7 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
                         還原建議內容
                       </button>
                       <span className="text-xs text-[var(--theme-text-secondary)]">
-                        同問題會覆蓋舊 knowledge，並同步嘗試建立 embedding。
+                        同問題會覆蓋舊 knowledge，成功後會從待修正區移除。
                       </span>
                     </div>
                     {itemApplyMessage ? (

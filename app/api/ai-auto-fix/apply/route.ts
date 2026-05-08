@@ -19,12 +19,21 @@ type KnowledgeWriteResult = {
   warning?: string
 }
 
+type ResolvedResult = {
+  count: number
+  error?: string
+}
+
 function normalizeQuestion(question: unknown): string {
   return String(question || "").trim().toLowerCase()
 }
 
 function buildSourceKey(question: unknown): string {
   return normalizeQuestion(question).replace(/\s+/g, " ")
+}
+
+function uniqueValues<T>(values: T[]): T[] {
+  return Array.from(new Set(values))
 }
 
 function getSupabaseConfig(tenant: TenantId) {
@@ -141,6 +150,47 @@ async function writeKnowledge(
   }
 }
 
+async function markAutoFixClusterResolved(
+  supabase: any,
+  clusterKey: string,
+  issueType: string,
+): Promise<ResolvedResult> {
+  const { data, error } = await supabase
+    .from("chat_events")
+    .select("id, question, issue_type, review_status")
+    .eq("issue_type", issueType)
+    .neq("review_status", "resolved")
+
+  if (error) {
+    return { count: 0, error: error.message }
+  }
+
+  const ids = uniqueValues(
+    (data || [])
+      .filter((row: any) => normalizeQuestion(row.question) === clusterKey)
+      .map((row: any) => row.id)
+      .filter(Boolean),
+  )
+
+  if (ids.length === 0) {
+    return { count: 0 }
+  }
+
+  const update = await supabase
+    .from("chat_events")
+    .update({
+      needs_review: false,
+      review_status: "resolved",
+    })
+    .in("id", ids)
+
+  if (update.error) {
+    return { count: 0, error: update.error.message }
+  }
+
+  return { count: ids.length }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null)
@@ -206,6 +256,7 @@ export async function POST(request: Request) {
     }
 
     const written = await writeKnowledge(supabase, insertPayload, sourceKey)
+    const resolved = await markAutoFixClusterResolved(supabase, clusterKey, issueType)
 
     return NextResponse.json({
       success: true,
@@ -214,6 +265,8 @@ export async function POST(request: Request) {
         mode: written.mode,
         embeddingUpdated: written.embeddingUpdated,
         warning: written.warning || null,
+        resolvedCount: resolved.count,
+        resolvedError: resolved.error || null,
       },
     })
   } catch (error) {

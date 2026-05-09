@@ -278,8 +278,9 @@ export async function POST(req: NextRequest) {
       reporterRole = reporterProfile?.role || "unknown"
     }
 
-    // 測試模式：status=draft（DB constraint 不允許 'test'），正式模式一律 pending 等管委會審核後再廣播
-    const incidentStatus = sendMode === "test" ? "draft" : "pending"
+    // 測試模式：status=draft，正式模式：pending
+    // 統一用 effectiveMode（由 LINE_BOT_NOTIFICATION_MODE env var 决定）而不是前端傳入的 sendMode
+    const incidentStatus = getEffectiveMode() === "test" ? "draft" : "pending"
 
     const nowIso = new Date().toISOString()
 

@@ -3629,11 +3629,12 @@ export async function POST(req) {
               continue;
             }
 
-            if (emergencyEvent.status !== 'pending') {
+            if (emergencyEvent.status !== 'pending' && emergencyEvent.status !== 'draft') {
               const statusLabelMap = {
                 approved: '已發布',
                 rejected: '已駁回',
-                pending: '待審核'
+                pending: '待審核',
+                draft: '編輯中'
               };
               const currentStatusLabel = statusLabelMap[emergencyEvent.status] || emergencyEvent.status;
 

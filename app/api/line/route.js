@@ -3686,19 +3686,11 @@ export async function POST(req) {
                 : [{ type: 'text', text: broadcastText }];
 
               try {
-                const { data: allProfiles } = await supabase
-                  .from('profiles')
-                  .select('line_user_id')
-                  .not('line_user_id', 'is', null);
-                const targets = (allProfiles || []).map((p) => p.line_user_id).filter(Boolean);
-                if (targets.length > 0) {
-                  await client.multicast(targets, broadcastMsgs);
-                  console.log(`[${BOT_TAG}] [緊急廣播] multicast 成功，目標 ${targets.length} 人`);
-                } else {
-                  console.warn(`[${BOT_TAG}] [緊急廣播] 沒有可發送對象`);
-                }
+                console.log(`[${BOT_TAG}] [緊急廣播] 打 broadcast 給所有 BOT1 好友`);
+                await client.broadcast(broadcastMsgs);
+                console.log(`[${BOT_TAG}] [緊急廣播] broadcast 成功`);
               } catch (broadcastErr) {
-                console.error('[緊急廣播] multicast 失敗:', broadcastErr?.message);
+                console.error('[緊急廣播] multicast 失敗:', broadcastErr?.response?.data || broadcastErr?.message);
               }
 
               await safeReplyMessage(replyToken, userId, {

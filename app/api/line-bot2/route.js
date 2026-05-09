@@ -3381,7 +3381,7 @@ export async function POST(req) {
 
           try {
             const { mode, lineClient: notificationClient } = getNotificationClient();
-            console.log(`[${BOT_TAG}] [緊急事件審核推播] 目前通知通道: ${mode === 'official' ? '正式' : '測試 BOT2'}`);
+            console.log(`[${BOT_TAG}] [submit_emergency] sessionId=${sessionId} userId=${userId} notificationMode=${mode}`);
             const nowIso = new Date().toISOString();
 
             const { data: session, error: sessionErr } = await supabase
@@ -3397,11 +3397,14 @@ export async function POST(req) {
               .select('id, event_type, location, description, image_url')
               .maybeSingle();
 
+            console.log(`[${BOT_TAG}] [submit_emergency] session 查詢結果:`, session ? `id=${session.id}` : `未找到 (sessionErr=${sessionErr?.message})`);
+
             if (sessionErr) {
               throw sessionErr;
             }
 
             if (!session) {
+              console.warn(`[${BOT_TAG}] [submit_emergency] session 不存在或狀態非 draft，sessionId=${sessionId}`);
               await client.replyMessage(replyToken, {
                 type: 'text',
                 text: 'ℹ️ 這筆緊急事件已處理或已提交，請勿重複送出。'
@@ -3432,6 +3435,7 @@ export async function POST(req) {
             if (emergencyInsertError || !createdEmergency) {
               throw emergencyInsertError || new Error('寫入失敗');
             }
+            console.log(`[${BOT_TAG}] [submit_emergency] line_report 建立成功 id=${createdEmergency.id}`);
 
             // 查詢所有管委會（committee）
             const { data: admins, error: adminQueryError } = await supabase
@@ -3439,6 +3443,7 @@ export async function POST(req) {
               .select('line_user_id, name')
               .eq('role', 'committee')
               .not('line_user_id', 'is', null);
+            console.log(`[${BOT_TAG}] [submit_emergency] 管委會查詢結果: ${admins?.length ?? 0} 人 err=${adminQueryError?.message}`);
 
             if (adminQueryError) {
               console.error('⚠️ 查詢管理員失敗，但通報已建立:', adminQueryError);
@@ -3529,9 +3534,11 @@ export async function POST(req) {
 
             for (const adminLineId of adminTargets) {
               try {
+                console.log(`[${BOT_TAG}] [submit_emergency] push 審核卡片給管委會 ${adminLineId}`);
                 await notificationClient.pushMessage(adminLineId, reviewFlex);
+                console.log(`[${BOT_TAG}] [submit_emergency] push 成功 ${adminLineId}`);
               } catch (pushErr) {
-                console.error('⚠️ 推送管理員審核卡片失敗:', adminLineId, pushErr);
+                console.error('⚠️ 推送管理員審核卡片失敗:', adminLineId, pushErr?.response?.data || pushErr?.message);
               }
             }
 
@@ -3582,12 +3589,16 @@ export async function POST(req) {
         // ===== 處理緊急事件審核（committee） =====
         if ((action === 'approve' || action === 'reject') && emergencyEventId) {
           try {
+            console.log(`[${BOT_TAG}] [紧急審核] 步驟 1/6 開始 — action=${action} emergencyEventId=${emergencyEventId} userId=${userId}`);
+
             // 檢查操作者是否為管委會（committee）
             const { data: adminProfile, error: adminProfileErr } = await supabase
               .from('profiles')
               .select('id, name, role')
               .eq('line_user_id', userId)
               .maybeSingle();
+
+            console.log(`[${BOT_TAG}] [紧急審核] 步驟 2/6 adminProfile:`, adminProfile ? `id=${adminProfile.id} role=${adminProfile.role}` : '未找到', 'err:', adminProfileErr?.message);
 
             if (adminProfileErr) {
               console.error('[Emergency Review] 查詢 committee 身分失敗:', adminProfileErr);
@@ -3599,6 +3610,7 @@ export async function POST(req) {
             }
 
             if (!adminProfile || adminProfile.role !== 'committee') {
+              console.warn(`[${BOT_TAG}] [紧急審核] 權限拒絕： adminProfile=${JSON.stringify(adminProfile)}`);
               await safeReplyMessage(replyToken, userId, {
                 type: 'text',
                 text: '⛔ 您沒有審核權限。'
@@ -3613,6 +3625,8 @@ export async function POST(req) {
               .eq('id', emergencyEventId)
               .eq('source', 'line_report')
               .maybeSingle();
+
+            console.log(`[${BOT_TAG}] [紧急審核] 步驟 3/6 emergencyEvent:`, emergencyEvent ? `id=${emergencyEvent.id} status=${emergencyEvent.status}` : '未找到', 'err:', eventQueryErr?.message);
 
             if (eventQueryErr || !emergencyEvent) {
               console.error('[Emergency Review] 查詢事件失敗:', eventQueryErr);
@@ -3646,6 +3660,7 @@ export async function POST(req) {
             }
 
             const newStatus = action === 'approve' ? 'approved' : 'rejected';
+            console.log(`[${BOT_TAG}] [紧急審核] 步驟 4/6 更新 DB status=${newStatus}`);
             const { error: updateErr } = await supabase
               .from('emergency_incidents')
               .update({
@@ -3665,6 +3680,7 @@ export async function POST(req) {
               });
               continue;
             }
+            console.log(`[${BOT_TAG}] [紧急審核] 步驟 4/6 DB 更新成功`);
 
             // 確認發布 -> 廣播給所有住戶
             if (action === 'approve') {
@@ -3683,19 +3699,11 @@ export async function POST(req) {
                 : [{ type: 'text', text: broadcastText }];
 
               try {
-                const { data: allProfiles } = await supabase
-                  .from('profiles')
-                  .select('line_user_id')
-                  .not('line_user_id', 'is', null);
-                const targets = (allProfiles || []).map((p) => p.line_user_id).filter(Boolean);
-                if (targets.length > 0) {
-                  await client.multicast(targets, broadcastMsgs);
-                  console.log(`[${BOT_TAG}] [緊急廣播] multicast 成功，目標 ${targets.length} 人`);
-                } else {
-                  console.warn(`[${BOT_TAG}] [緊急廣播] 沒有可發送對象`);
-                }
+                console.log(`[${BOT_TAG}] [緊急審核] 步驟 5/6 打 broadcast 給所有 BOT2 好友`);
+                await client.broadcast(broadcastMsgs);
+                console.log(`[${BOT_TAG}] [緊急審核] 步驟 6/6 broadcast 成功`);
               } catch (broadcastErr) {
-                console.error('[緊急廣播] multicast 失敗:', broadcastErr?.message);
+                console.error(`[${BOT_TAG}] [緊急審核] 步驟 6/6 broadcast 失敗:`, broadcastErr?.response?.data || broadcastErr?.message);
               }
 
               await safeReplyMessage(replyToken, userId, {

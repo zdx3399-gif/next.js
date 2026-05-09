@@ -278,9 +278,9 @@ export async function POST(req: NextRequest) {
       reporterRole = reporterProfile?.role || "unknown"
     }
 
-    // 測試模式：status=draft，正式模式：pending
-    // 統一用 effectiveMode（由 LINE_BOT_NOTIFICATION_MODE env var 决定）而不是前端傳入的 sendMode
-    const incidentStatus = getEffectiveMode() === "test" ? "draft" : "pending"
+    // 不管測試或正式模式，事件建立後都是 pending（等管委會審核）
+    // test/official 只決定用哪支 BOT 發通知，不影響事件生命週期
+    const incidentStatus = "pending"
 
     const nowIso = new Date().toISOString()
 

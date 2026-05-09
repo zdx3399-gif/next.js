@@ -15,6 +15,8 @@ const supabase = createClient(
 );
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 const BOT_TAG = 'IOT';
 const SOURCE_TABLE = 'iot_events';
 
@@ -195,8 +197,9 @@ export async function POST(req) {
     }
 
     if (type !== 'INSERT' || table !== SOURCE_TABLE) {
+      // 返回 200：告知 Supabase webhook 已收到，不需重試
       console.log(`ℹ️ [${BOT_TAG}] [IoT 事件] 操作類型或表名不匹配，略過`);
-      return Response.json({ success: false, message: 'Invalid webhook data' }, { status: 400 });
+      return Response.json({ success: true, message: 'Event skipped (not target table/type)' }, { status: 200 });
     }
 
     if (!record.event_type || !record.device_id) {
@@ -205,15 +208,28 @@ export async function POST(req) {
     }
 
     if (!isEmergencyEvent(record)) {
+      // 返回 200：不是緊急事件，正常略過，不需 Supabase 重試
       console.log(`ℹ️ [${BOT_TAG}] [IoT 事件] 非 emergency 事件，略過`);
-      return Response.json({ success: false, message: 'Not an emergency event' }, { status: 400 });
+      return Response.json({ success: true, message: 'Event skipped (not emergency)' }, { status: 200 });
     }
 
     const recipient = await resolveRecipient(record);
 
+    // 若找不到特定住戶的緊急聯絡人，改為廣播給 admin / guard / committee
+    let broadcastFallback = false;
+    let broadcastTargets = [];
     if (!recipient || !recipient.lineUserId) {
-      console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] 找不到可推播的 LINE user ID`);
-      return Response.json({ success: false, message: 'No LINE recipient found' }, { status: 400 });
+      console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] 找不到特定收件人，改為廣播給管理角色`);
+      broadcastFallback = true;
+      const { data: adminProfiles } = await supabase
+        .from('profiles')
+        .select('line_user_id')
+        .in('role', ['admin', 'guard', 'committee'])
+        .not('line_user_id', 'is', null);
+      broadcastTargets = (adminProfiles || []).map((p) => p.line_user_id).filter(Boolean);
+      if (broadcastTargets.length === 0) {
+        console.warn(`⚠️ [${BOT_TAG}] [IoT 事件] 管理角色也無綁定 LINE，嘗試 broadcast`);
+      }
     }
 
     // 查詢房號資訊
@@ -246,16 +262,35 @@ export async function POST(req) {
       }
     }
 
-    const message = buildEventMessage(record, unitInfo, recipient.profile);
+    const message = buildEventMessage(record, unitInfo, recipient?.profile || null);
 
     const successTargets = [];
-    for (const target of pushTargets) {
-      try {
-        console.log(`📤 [${target.tag}] [IoT 事件] 發送消息給 LINE user:`, recipient.lineUserId);
-        await target.client.pushMessage(recipient.lineUserId, message);
-        successTargets.push(target.tag);
-      } catch (pushErr) {
-        console.warn(`⚠️ [${target.tag}] [IoT 事件] 推播失敗:`, pushErr.message);
+    if (broadcastFallback) {
+      // 找不到特定收件人 → 廣播或 multicast 給管理角色
+      for (const target of pushTargets) {
+        try {
+          if (broadcastTargets.length > 0) {
+            console.log(`📤 [${target.tag}] [IoT 事件] multicast 給 ${broadcastTargets.length} 位管理員`);
+            await target.client.multicast(broadcastTargets, message);
+          } else {
+            console.log(`📤 [${target.tag}] [IoT 事件] broadcast 給所有追蹤者`);
+            await target.client.broadcast(message);
+          }
+          successTargets.push(target.tag);
+        } catch (pushErr) {
+          console.warn(`⚠️ [${target.tag}] [IoT 事件] 廣播失敗:`, pushErr.message);
+        }
+      }
+    } else {
+      // 有特定收件人 → pushMessage
+      for (const target of pushTargets) {
+        try {
+          console.log(`📤 [${target.tag}] [IoT 事件] 發送給 LINE user:`, recipient.lineUserId);
+          await target.client.pushMessage(recipient.lineUserId, message);
+          successTargets.push(target.tag);
+        } catch (pushErr) {
+          console.warn(`⚠️ [${target.tag}] [IoT 事件] 推播失敗:`, pushErr.message);
+        }
       }
     }
 

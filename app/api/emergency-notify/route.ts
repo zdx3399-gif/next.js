@@ -416,7 +416,7 @@ export async function POST(req: NextRequest) {
                 action: {
                   type: "postback",
                   label: "✅ 確認發布",
-                  data: `action=emergency_approve&incident_id=${incidentId}`,
+                  data: `action=approve&event_id=${incidentId}`,
                   displayText: `確認發布事件 ${incidentId}`,
                 },
               },
@@ -426,7 +426,7 @@ export async function POST(req: NextRequest) {
                 action: {
                   type: "postback",
                   label: "❌ 駁回",
-                  data: `action=emergency_reject&incident_id=${incidentId}`,
+                  data: `action=reject&event_id=${incidentId}`,
                   displayText: `駁回事件 ${incidentId}`,
                 },
               },

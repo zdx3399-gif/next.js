@@ -3611,12 +3611,11 @@ export async function POST(req) {
               continue;
             }
 
-            // 讀取事件
+            // 讀取事件（支援 LINE 和 WEB 兩種來源）
             const { data: emergencyEvent, error: eventQueryErr } = await supabase
               .from('emergency_incidents')
               .select('id, event_type, location, description, image_url, status')
               .eq('id', emergencyEventId)
-              .eq('source', 'line_report')
               .maybeSingle();
 
             console.log(`[${BOT_TAG}] [紧急審核] 步驟 3/6 emergencyEvent:`, emergencyEvent ? `id=${emergencyEvent.id} status=${emergencyEvent.status}` : '未找到', 'err:', eventQueryErr?.message);
@@ -3662,8 +3661,7 @@ export async function POST(req) {
                 reviewed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
-              .eq('id', emergencyEventId)
-              .eq('source', 'line_report');
+              .eq('id', emergencyEventId); // 不過濾 source，支援 LINE 和 WEB 兩種來源
 
             if (updateErr) {
               console.error('[Emergency Review] 更新狀態失敗:', updateErr);

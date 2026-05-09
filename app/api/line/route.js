@@ -3610,12 +3610,11 @@ export async function POST(req) {
               continue;
             }
 
-            // 讀取事件
+            // 讀取事件（支援 LINE 和 WEB 兩種來源）
             const { data: emergencyEvent, error: eventQueryErr } = await supabase
               .from('emergency_incidents')
               .select('id, event_type, location, description, image_url, status')
               .eq('id', emergencyEventId)
-              .eq('source', 'line_report')
               .maybeSingle();
 
             if (eventQueryErr || !emergencyEvent) {
@@ -3658,8 +3657,7 @@ export async function POST(req) {
                 reviewed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
-              .eq('id', emergencyEventId)
-              .eq('source', 'line_report');
+              .eq('id', emergencyEventId); // 不過濃 source，支援 LINE 和 WEB 兩種來源
 
             if (updateErr) {
               console.error('[Emergency Review] 更新狀態失敗:', updateErr);
@@ -3689,9 +3687,23 @@ export async function POST(req) {
               try {
                 console.log(`[${BOT_TAG}] [緊急廣播] 打 broadcast 給所有 BOT1 好友`);
                 await client.broadcast(broadcastMsgs);
-                console.log(`[${BOT_TAG}] [緊急廣播] broadcast 成功`);
+                console.log(`[${BOT_TAG}] [緊急廣播] BOT1 broadcast 成功`);
               } catch (broadcastErr) {
-                console.error('[緊急廣播] multicast 失敗:', broadcastErr?.response?.data || broadcastErr?.message);
+                console.error('[緊急廣播] BOT1 broadcast 失敗:', broadcastErr?.response?.data || broadcastErr?.message);
+              }
+
+              // 同時用 BOT2 廣播，確保追蹤 BOT2 的住戶也能收到
+              try {
+                const bot2Token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2;
+                const bot2Secret = process.env.LINE_CHANNEL_SECRET_BOT2 || process.env.LINE_CHANNEL_SECRET;
+                if (bot2Token) {
+                  const { Client: LineClient } = require('@line/bot-sdk');
+                  const bot2Client = new LineClient({ channelAccessToken: bot2Token, channelSecret: bot2Secret || 'unused' });
+                  await bot2Client.broadcast(broadcastMsgs);
+                  console.log(`[${BOT_TAG}] [緊急廣播] BOT2 broadcast 成功`);
+                }
+              } catch (bot2Err) {
+                console.error('[緊急廣播] BOT2 broadcast 失敗:', bot2Err?.response?.data || bot2Err?.message);
               }
 
               await safeReplyMessage(replyToken, userId, {

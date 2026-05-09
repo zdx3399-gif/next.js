@@ -3,10 +3,11 @@
 import { useState } from "react"
 import { useFacilitiesAdmin } from "../hooks/useFacilities"
 import type { Facility } from "../api/facilities"
+import { resetAllUserPoints } from "../api/facilities"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { RefreshCw, Plus, Search } from "lucide-react"
+import { RefreshCw, Plus, Search, RotateCcw } from "lucide-react"
 
 interface FacilityFormModalProps {
   isOpen: boolean
@@ -232,6 +233,22 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
   const [currentImageFile, setCurrentImageFile] = useState<File | null>(null)
   const [searchTermFacility, setSearchTermFacility] = useState("")
   const [searchTermBooking, setSearchTermBooking] = useState("")
+  const [isResettingPoints, setIsResettingPoints] = useState(false)
+
+  const handleResetPoints = async () => {
+    if (isPreviewMode) return
+    const confirmed = window.confirm(
+      `確定要將所有住戶點數重置為 100 點？\n\n此操作會：\n• 艆蓋所有帳號\n• 點數直接覆寫為 100\n• 寫入 monthly_allocation 交易明細\n\n建議每月第一天執行一次。`,
+    )
+    if (!confirmed) return
+    setIsResettingPoints(true)
+    try {
+      const result = await resetAllUserPoints()
+      alert(result.message)
+    } finally {
+      setIsResettingPoints(false)
+    }
+  }
 
   const handleAdd = () => {
     setFormData({
@@ -384,6 +401,16 @@ export function FacilityManagementAdmin({ isPreviewMode = false }: FacilityManag
             <Button variant="outline" onClick={reload} disabled={loading || isPreviewMode}>
               <RefreshCw className="w-4 h-4 mr-2" />
               重新整理
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleResetPoints}
+              disabled={isResettingPoints || isPreviewMode}
+              className="border-amber-500/50 text-amber-500 hover:bg-amber-500/10"
+              title="將所有住戶點數重置為 100"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              {isResettingPoints ? "重置中..." : "每月點數重置"}
             </Button>
             <Button onClick={handleAdd}>
               <Plus className="w-4 h-4 mr-2" />

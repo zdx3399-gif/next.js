@@ -8,6 +8,7 @@ import {
   updateAnnouncement,
   deleteAnnouncement,
   uploadAnnouncementImage,
+  fetchAnnouncementReadCounts,
 } from "../api/announcements"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
@@ -243,6 +244,7 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [readCounts, setReadCounts] = useState<Record<string, number>>({})
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null)
   const [formData, setFormData] = useState<Partial<Announcement>>({})
@@ -253,16 +255,21 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
 
   const loadAnnouncements = async () => {
     setLoading(true)
-    const { data, error } = await fetchAllAnnouncements()
+    const [{ data, error }, counts] = await Promise.all([
+      fetchAllAnnouncements(),
+      fetchAnnouncementReadCounts(),
+    ])
     if (!error && data) {
       setAnnouncements(data)
     }
+    setReadCounts(counts)
     setLoading(false)
   }
 
   useEffect(() => {
     if (isPreviewMode) {
       setAnnouncements(PREVIEW_ANNOUNCEMENTS as Announcement[])
+      setReadCounts({ "preview-1": 5, "preview-2": 3, "preview-3": 0 })
       setLoading(false)
     } else {
       loadAnnouncements()
@@ -557,6 +564,22 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
                     />
                   </div>
                 </th>
+                <th className="w-[8%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
+                  <div className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span>已讀數</span>
+                    <HelpHint
+                      title="已讀數欄"
+                      description="顯示有多少住戶已點閱此公告。數字越高表示觸及率越好；若已讀數偏低可考慮再次推播提醒。"
+                      workflow={[
+                        "查看已讀數評估公告觸及率。",
+                        "若觸及率偏低，可重新推播或在 LINE 補充提醒。",
+                      ]}
+                      logic={[
+                        "已讀數來自住戶端點閱並標記已讀的累計次數。",
+                      ]}
+                    />
+                  </div>
+                </th>
                 <th className="w-[13%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap">
                   <div className="inline-flex items-center gap-2 whitespace-nowrap">
                     <span>操作</span>
@@ -605,6 +628,12 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
                       {new Date(announcement.created_at).toLocaleDateString("zh-TW")}
                     </td>
                     <td className="p-3 border-b border-[var(--theme-border)] whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 text-xs font-semibold">
+                        <span className="material-icons text-xs">visibility</span>
+                        {readCounts[announcement.id] ?? 0}
+                      </span>
+                    </td>
+                    <td className="p-3 border-b border-[var(--theme-border)] whitespace-nowrap">
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleEdit(announcement)}
@@ -626,7 +655,7 @@ export function AnnouncementManagementAdmin({ isPreviewMode = false }: Announcem
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                  <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
                     {searchTerm ? "沒有符合條件的公告資料" : "目前沒有公告資料"}
                   </td>
                 </tr>

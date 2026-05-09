@@ -63,7 +63,7 @@ export async function getMeetings(): Promise<Meeting[]> {
   const { data, error } = await supabase.from("meetings").select("*").order("time", { ascending: false })
 
   if (error) {
-    console.error("Error fetching meetings:", error)
+    console.error("Error fetching meetings:", error.message, error.code, error.details)
     return []
   }
   return data || []
@@ -230,4 +230,57 @@ export async function uploadMeetingPDF(file: File): Promise<string> {
   }
 
   return payload.url
+}
+
+export async function markMeetingAsRead(meetingId: string, userId: string) {
+  const supabase = getSupabaseClient()
+  if (!supabase) return { error: null }
+
+  const { error } = await supabase
+    .from("meeting_reads")
+    .upsert([{ meeting_id: meetingId, user_id: userId }], {
+      onConflict: "meeting_id,user_id",
+    })
+
+  if (error) {
+    // meeting_reads 資料表尚未建立時靜默忘略
+    return { error: null }
+  }
+  return { error: null }
+}
+
+export async function fetchUserReadMeetings(userId: string): Promise<Set<string>> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return new Set()
+
+  const { data, error } = await supabase
+    .from("meeting_reads")
+    .select("meeting_id")
+    .eq("user_id", userId)
+
+  if (error) {
+    // meeting_reads 資料表尚未建立時靜默忘略
+    return new Set()
+  }
+  return new Set(data?.map((r: any) => r.meeting_id) || [])
+}
+
+export async function fetchMeetingReadCounts(): Promise<Record<string, number>> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return {}
+
+  const { data, error } = await supabase
+    .from("meeting_reads")
+    .select("meeting_id")
+
+  if (error || !data) {
+    // meeting_reads 資料表尚未建立時靜默忘略
+    return {}
+  }
+
+  const counts: Record<string, number> = {}
+  data.forEach((r: any) => {
+    counts[r.meeting_id] = (counts[r.meeting_id] || 0) + 1
+  })
+  return counts
 }

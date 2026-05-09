@@ -39,15 +39,15 @@ export function useEmergencies(isAdmin = false) {
     userName?: string,
     location?: string,
     description?: string,
+    sendMode?: "test" | "official",
+    imageUrl?: string,
   ) => {
     try {
-      const result = await apiTriggerEmergency(type, note, userId, userName, location, description)
-      if (result.iotSent) {
-        const lineSummary = result.lineSent > 0 ? `，LINE 已通知 ${result.lineSent} 人` : "，LINE 尚未成功推播"
-        alert(`已送出緊急事件：${type}\n系統已通知管理員和相關單位（含 IOT${lineSummary}）。`)
+      const result = await apiTriggerEmergency(type, note, userId, userName, location, description, sendMode, imageUrl)
+      if (sendMode === "test") {
+        alert(`[測試] 已送出通知給管委會與管理員，不會廣播給住戶。\nLINE 已通知 ${result.lineSent} 人`)
       } else {
-        const lineSummary = result.lineSent > 0 ? `，LINE 已通知 ${result.lineSent} 人` : "，LINE 尚未成功推播"
-        alert(`已送出緊急事件：${type}\n資料已建立，但 IOT 發送失敗：${result.iotError || "未知錯誤"}${lineSummary}`)
+        alert(`已送出「${type}」通報。\n已通知管委會進行審核，審核通過後將自動廣播給住戶（LINE + IoT）。`)
       }
       if (isAdmin) {
         loadEmergencies()

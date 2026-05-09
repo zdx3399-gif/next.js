@@ -2867,6 +2867,120 @@ export async function POST(req) {
         
         console.log('[DEBUG Postback] action:', action);
 
+        // ===== 處理 Web 端緊急事件審核（emergency_approve / emergency_reject postback）=====
+        if (action === 'emergency_approve' || action === 'emergency_reject') {
+          const incidentId = params.get('incident_id');
+          const isApprove = action === 'emergency_approve';
+          console.log(`[${BOT_TAG}] [Emergency Review] action=${action} incidentId=${incidentId} userId=${userId}`);
+
+          try {
+            // 1. 驗證審核者身分
+            const { data: reviewer, error: reviewerErr } = await supabase
+              .from('profiles')
+              .select('id, name, role')
+              .eq('line_user_id', userId)
+              .maybeSingle();
+
+            console.log(`[${BOT_TAG}] [Emergency Review] reviewer:`, reviewer?.role, 'err:', reviewerErr?.message);
+
+            if (reviewerErr || !reviewer || !['committee', 'admin'].includes(reviewer.role)) {
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '⛔ 您沒有審核緊急事件的權限。' });
+              continue;
+            }
+
+            if (!incidentId) {
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '⚠️ 無法識別事件編號，請至後台操作。' });
+              continue;
+            }
+
+            // 2. 查詢事件
+            const { data: incident, error: incidentErr } = await supabase
+              .from('emergency_incidents')
+              .select('id, event_type, location, description, image_url, status')
+              .eq('id', incidentId)
+              .maybeSingle();
+
+            console.log(`[${BOT_TAG}] [Emergency Review] incident status:`, incident?.status, 'err:', incidentErr?.message);
+
+            if (incidentErr || !incident) {
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '⚠️ 找不到此緊急事件，可能已被處理。' });
+              continue;
+            }
+
+            if (!['pending', 'draft'].includes(incident.status)) {
+              const label = incident.status === 'approved' ? '已發布' : incident.status === 'rejected' ? '已駁回' : incident.status;
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: `ℹ️ 此事件目前為「${label}」，無法重複審核。` });
+              continue;
+            }
+
+            // 3. 更新 DB 狀態
+            const newStatus = isApprove ? 'approved' : 'rejected';
+            const { error: updateErr } = await supabase
+              .from('emergency_incidents')
+              .update({
+                status: newStatus,
+                reviewed_by: reviewer.id,
+                reviewed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', incidentId);
+
+            if (updateErr) {
+              console.error('[Emergency Review] 更新狀態失敗:', updateErr);
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '❌ 審核更新失敗，請稍後再試。' });
+              continue;
+            }
+
+            console.log(`[${BOT_TAG}] [Emergency Review] DB 更新成功 → ${newStatus}`);
+
+            if (isApprove) {
+              // 4. 廣播：用 broadcast() 推給所有追蹤 BOT2 的用戶（住戶 + 管委會皆包含）
+              const broadcastText =
+                `🚨【緊急事件通知】\n` +
+                `類型：${incident.event_type || '未指定'}\n` +
+                `地點：${incident.location || '未指定'}\n` +
+                `描述：${incident.description || '未提供'}\n\n` +
+                `請住戶留意安全並配合現場指示。`;
+
+              try {
+                if (incident.image_url) {
+                  await client.broadcast([
+                    { type: 'text', text: broadcastText },
+                    { type: 'image', originalContentUrl: incident.image_url, previewImageUrl: incident.image_url }
+                  ]);
+                } else {
+                  await client.broadcast({ type: 'text', text: broadcastText });
+                }
+                console.log(`[${BOT_TAG}] [緊急廣播] broadcast 成功`);
+              } catch (broadcastErr) {
+                console.error('[緊急廣播] broadcast 失敗:', broadcastErr?.message);
+              }
+
+              // IoT E 指令
+              try {
+                const iotBase = process.env.IOT_DEVICE_BASE_URL?.replace(/\/$/, '');
+                if (iotBase) {
+                  await fetch(`${iotBase}/cmd`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cmd: 'E' }),
+                    signal: AbortSignal.timeout(5000)
+                  }).catch(() => {});
+                }
+              } catch {}
+
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '✅ 已確認發布，緊急事件通知已廣播給所有住戶。' });
+            } else {
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: `❌ 已駁回此緊急事件，不會進行廣播。\n類型：${incident.event_type}` });
+            }
+            continue;
+          } catch (err) {
+            console.error('[Emergency Review] 處理失敗:', err?.message, err?.stack);
+            await safeReplyMessage(replyToken, userId, { type: 'text', text: '❌ 審核處理失敗，請稍後再試。' });
+            continue;
+          }
+        }
+
         // ===== 設施預約（MVP） =====
         if (action === 'facility_start_booking') {
           const { data: facilities, error: facilityQueryErr } = await supabase

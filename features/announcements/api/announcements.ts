@@ -414,3 +414,25 @@ export async function fetchUserReadAnnouncements(userId: string): Promise<Set<st
 export function getAuthorName(announcement: Announcement): string {
   return announcement.author_name || "管理員"
 }
+
+export async function fetchAnnouncementReadCounts(): Promise<Record<string, number>> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return {}
+
+  const { data, error } = await supabase
+    .from("announcement_reads")
+    .select("announcement_id")
+
+  if (error || !data) {
+    if (error && (error as any).code !== "42P01") {
+      console.error("Error fetching announcement read counts:", error)
+    }
+    return {}
+  }
+
+  const counts: Record<string, number> = {}
+  data.forEach((r: any) => {
+    counts[r.announcement_id] = (counts[r.announcement_id] || 0) + 1
+  })
+  return counts
+}

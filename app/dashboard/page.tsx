@@ -399,7 +399,7 @@ export default function DashboardPage() {
           {currentSection === "maintenance" && <MaintenanceList userId={currentUser?.id} userName={getNameString(currentUser?.name)} />}
           {currentSection === "finance" && <FinanceList userRoom={currentUser?.room} userUnitId={currentUser?.unit_id} />}
           {currentSection === "visitors" && <VisitorList userRoom={currentUser?.room} currentUser={currentUser} />}
-          {currentSection === "meetings" && <MeetingList />}
+          {currentSection === "meetings" && <MeetingList currentUser={currentUser} />}
           {currentSection === "emergencies" && (
             <EmergencyButtons userId={currentUser?.id} userName={getNameString(currentUser?.name)} variant="full" />
           )}

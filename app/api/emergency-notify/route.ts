@@ -112,6 +112,16 @@ function getLineClient() {
   return new Client({ channelAccessToken, channelSecret: channelSecret || "unused" })
 }
 
+function getLineClientForMode(sendMode: "test" | "official") {
+  if (sendMode === "test") {
+    const token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN
+    const secret = process.env.LINE_CHANNEL_SECRET_BOT2 || process.env.LINE_CHANNEL_SECRET
+    if (!token) throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN_BOT2")
+    return new Client({ channelAccessToken: token, channelSecret: secret || "unused" })
+  }
+  return getLineClient()
+}
+
 async function getEmergencyLineTargets(supabase: any) {
   return getLineTargetsByRoles(supabase, ["admin", "guard", "committee"])
 }
@@ -187,6 +197,8 @@ export async function POST(req: NextRequest) {
     const iotDeviceId = String(body?.iot_device_id || "emergency-broadcast").trim() || "emergency-broadcast"
     const reportedByIdRaw = body?.reported_by_id ? String(body.reported_by_id).trim() : null
     const reportedByName = String(body?.reported_by_name || "未知").trim()
+    const sendMode = (String(body?.sendMode || "official").trim() === "test" ? "test" : "official") as "test" | "official"
+    const imageUrl = body?.image_url ? String(body.image_url).trim() : null
     const routing = resolveNotificationRouting(type, note)
 
     if (routing.category === "emergency" && (!rawLocation || !rawDescription)) {
@@ -253,8 +265,8 @@ export async function POST(req: NextRequest) {
       reporterRole = reporterProfile?.role || "unknown"
     }
 
-    const requiresCommitteeReview = reporterRole === "resident"
-    const incidentStatus = requiresCommitteeReview ? "pending" : "submitted"
+    // 測試模式：status=draft（DB constraint 不允許 'test'），正式模式一律 pending 等管委會審核後再廣播
+    const incidentStatus = sendMode === "test" ? "draft" : "pending"
 
     const nowIso = new Date().toISOString()
 
@@ -264,6 +276,7 @@ export async function POST(req: NextRequest) {
       event_type: type,
       location,
       description: incidentDescription,
+      image_url: imageUrl || null,
       status: incidentStatus,
       created_at: nowIso,
       updated_at: nowIso,
@@ -305,48 +318,9 @@ export async function POST(req: NextRequest) {
       notificationEventError = err instanceof Error ? err.message : "notification event insert failed"
     }
 
-    let iotSent = false
-    let iotError = ""
-
-    try {
-      const iotUrl = new URL("/api/iot", req.url)
-      const commandPayload = { cmd: routing.iotCommand, emergencyIncidentId: insertedEmergency?.id, location }
-      const iotRes = await fetch(iotUrl.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(commandPayload),
-      })
-      const iotData = await iotRes.json().catch(() => null)
-      iotSent = !!(iotRes.ok && iotData?.success)
-      if (!iotSent) {
-        iotError = iotData?.error || `IOT 命令失敗（${iotRes.status}）`
-      }
-
-      await logIotCommand(
-        supabase,
-        insertedEmergency?.id,
-        routing.iotCommand,
-        reportedById,
-        iotDeviceId,
-        iotSent ? "sent" : "failed",
-        commandPayload,
-        iotData,
-      )
-    } catch (err: unknown) {
-      iotSent = false
-      iotError = err instanceof Error ? err.message : "IOT 連線失敗"
-
-      await logIotCommand(
-        supabase,
-        insertedEmergency?.id,
-        routing.iotCommand,
-        reportedById,
-        iotDeviceId,
-        "failed",
-        { cmd: routing.iotCommand, emergencyIncidentId: insertedEmergency?.id, location },
-        { error: iotError },
-      )
-    }
+    // IoT 延遲到審核通過後再發送
+    const iotSent = false
+    const iotError = ""
 
     let lineSent = 0
     let lineFailed = 0
@@ -354,30 +328,102 @@ export async function POST(req: NextRequest) {
     let lineTargetCount = 0
 
     try {
-      const lineClient = getLineClient()
-      const { ids: lineTargets } = requiresCommitteeReview
-        ? await getLineTargetsByRoles(supabase, ["committee"])
-        : await getEmergencyLineTargets(supabase)
+      const lineClient = getLineClientForMode(sendMode)
+      // 測試模式：僅通知 admin+committee，加 [測試] 字首
+      // 正式模式：將審核請求僅傳給管委會待批准
+      const { ids: lineTargets } = sendMode === "test"
+        ? await getLineTargetsByRoles(supabase, ["admin", "committee"])
+        : await getLineTargetsByRoles(supabase, ["committee"])
       lineTargetCount = lineTargets.length
 
-      const message = requiresCommitteeReview
-        ? `📝 住戶緊急通報待管委會驗證\n` +
-          `類型：${type}\n` +
-          `發起人：${resolvedReportedByName || "未知"}\n` +
-          `地點：${location}\n` +
-          `時間：${new Date(nowIso).toLocaleString("zh-TW", { hour12: false })}\n` +
-          `內容：${incidentDescription || "（無）"}\n\n` +
-          `請至後台緊急事件管理進行審核。`
-        : `${routing.category === "emergency" ? "🚨" : routing.category === "package" ? "📦" : "👤"} ${routing.title}\n` +
-          `類型：${type}\n` +
-          `發起人：${resolvedReportedByName || "未知"}\n` +
-          `地點：${location}\n` +
-          `時間：${new Date(nowIso).toLocaleString("zh-TW", { hour12: false })}\n` +
-          `備註：${incidentDescription || "（無）"}`
+      const timeStr = new Date(nowIso).toLocaleString("zh-TW", { hour12: false })
+      const isTest = sendMode === "test"
+      const headerText = isTest ? "🧪 緊急事件（測試）" : "⚠️ 緊急事件待審核"
+      const footerText = isTest
+        ? "測試模式：確認後僅廣播給管理員 + 管委會"
+        : "請確認是否發布通知"
+
+      // Flex Message 卡片（postback 按鈕，透過 LINE Webhook 觸發審核）
+      const incidentId = insertedEmergency?.id || ""
+
+      const buildFlexCard = (): any => ({
+        type: "flex",
+        altText: `${isTest ? "[測試] " : ""}緊急事件通報：${type}`,
+        contents: {
+          type: "bubble",
+          ...(imageUrl ? {
+            hero: {
+              type: "image",
+              url: imageUrl,
+              size: "full",
+              aspectRatio: "20:13",
+              aspectMode: "cover",
+            },
+          } : {}),
+          body: {
+            type: "box",
+            layout: "vertical",
+            spacing: "md",
+            contents: [
+              {
+                type: "text",
+                text: headerText,
+                weight: "bold",
+                size: "lg",
+                color: isTest ? "#1565C0" : "#B71C1C",
+              },
+              { type: "separator" },
+              {
+                type: "box",
+                layout: "vertical",
+                spacing: "sm",
+                margin: "md",
+                contents: [
+                  { type: "text", text: `類型：${type}`, size: "sm", color: "#333333" },
+                  { type: "text", text: `地點：${location || "未提供"}`, size: "sm", color: "#333333" },
+                  { type: "text", text: `描述：${incidentDescription || "（無）"}`, size: "sm", color: "#333333", wrap: true },
+                  { type: "text", text: `附圖：${imageUrl ? "有" : "無"}`, size: "sm", color: "#666666" },
+                  { type: "text", text: `發報人：${resolvedReportedByName || "未知"}`, size: "sm", color: "#666666" },
+                ],
+              },
+              { type: "separator" },
+              { type: "text", text: footerText, size: "xs", color: "#888888" },
+            ],
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            spacing: "sm",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                color: isTest ? "#1565C0" : "#B71C1C",
+                action: {
+                  type: "postback",
+                  label: "✅ 確認發布",
+                  data: `action=emergency_approve&incident_id=${incidentId}`,
+                  displayText: `確認發布事件 ${incidentId}`,
+                },
+              },
+              {
+                type: "button",
+                style: "secondary",
+                action: {
+                  type: "postback",
+                  label: "❌ 駁回",
+                  data: `action=emergency_reject&incident_id=${incidentId}`,
+                  displayText: `駁回事件 ${incidentId}`,
+                },
+              },
+            ],
+          },
+        },
+      })
 
       for (const to of lineTargets) {
         try {
-          await lineClient.pushMessage(to, { type: "text", text: message })
+          await lineClient.pushMessage(to, buildFlexCard())
           lineSent++
         } catch {
           lineFailed++
@@ -387,9 +433,9 @@ export async function POST(req: NextRequest) {
       lineError = err instanceof Error ? err.message : "LINE 通知失敗"
     }
 
-    const lineDeliveryOk = !lineError && (lineTargetCount === 0 || lineSent > 0)
-    const overallSuccess = lineDeliveryOk || iotSent
-    const responseStatus = overallSuccess ? 200 : 502
+    // 事件建立成功即為 200，LINE 失敗只是警告不影響主流程
+    const overallSuccess = true
+    const responseStatus = 200
     const lineNotBound = lineTargetCount - lineSent
 
     await writeServerAuditLog({
@@ -409,7 +455,7 @@ export async function POST(req: NextRequest) {
         location,
         description,
         reporter_role: reporterRole,
-        requires_committee_review: requiresCommitteeReview,
+        requires_committee_review: true,
         incident_status: incidentStatus,
         notification_category: routing.category,
         iot_command: routing.iotCommand,
@@ -430,14 +476,14 @@ export async function POST(req: NextRequest) {
         reportedById: reportedById || undefined,
         reportedByName: resolvedReportedByName || "未知",
         reporterRole,
-        requiresCommitteeReview,
+        requiresCommitteeReview: true,
         incidentStatus,
         iotSent,
         iotError: iotError || undefined,
         lineSent,
         lineSkipped: lineNotBound,
         lineFailed,
-        lineMessage: lineDeliveryOk && lineSent > 0
+        lineMessage: lineSent > 0
           ? `✅ ${routing.title}已推播\n已發送給 ${lineSent} 位管理員${lineNotBound > 0 ? `\n（${lineNotBound} 人 LINE 未綁定，已跳過）` : ""}`
           : `⚠️ LINE 推播未完成\n${lineError || "無可推播對象"}`,
       },

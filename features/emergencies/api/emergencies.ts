@@ -109,6 +109,8 @@ export async function triggerEmergency(
   userName?: string,
   location?: string,
   description?: string,
+  sendMode?: "test" | "official",
+  imageUrl?: string,
 ): Promise<TriggerEmergencyResult> {
   const res = await fetch("/api/emergency-notify", {
     method: "POST",
@@ -120,6 +122,8 @@ export async function triggerEmergency(
       description,
       reported_by_id: userId || null,
       reported_by_name: userName || "未知",
+      sendMode: sendMode || "official",
+      image_url: imageUrl || null,
     }),
   })
 

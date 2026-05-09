@@ -41,6 +41,7 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
   const [draftLocation, setDraftLocation] = useState<string>("")
   const [draftDescription, setDraftDescription] = useState<string>("")
   const [submitting, setSubmitting] = useState(false)
+  const [sendModeDialogOpen, setSendModeDialogOpen] = useState(false)
 
   const openCreateForm = (type: string, note: string) => {
     setFormMode("create")
@@ -81,7 +82,12 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
       alert("請填寫地點與事件描述")
       return
     }
+    // 開啟 sendMode 選擇 dialog
+    setSendModeDialogOpen(true)
+  }
 
+  const doSubmitCreate = async (sendMode: "test" | "official") => {
+    setSendModeDialogOpen(false)
     setSubmitting(true)
     try {
       await triggerEmergency(
@@ -91,6 +97,7 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
         currentUserName || "管理員",
         draftLocation.trim(),
         draftDescription.trim(),
+        sendMode,
       )
       resetForm()
       reload()
@@ -199,7 +206,7 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={resetForm} disabled={submitting}>取消</Button>
               {formMode === "create" ? (
-                <Button onClick={submitCreateForm} disabled={submitting}>送出事件</Button>
+                <Button onClick={submitCreateForm} disabled={submitting}>選擇發送模式</Button>
               ) : (
                 <Button onClick={submitEditForm} disabled={submitting}>儲存編輯</Button>
               )}
@@ -300,6 +307,45 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
           </table>
         </div>
       </div>
+
+      {/* sendMode Dialog */}
+      {sendModeDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="border-b border-[var(--theme-border)] p-5">
+              <h3 className="text-lg font-bold text-[var(--theme-accent)]">🚨 選擇發送模式</h3>
+              <p className="text-sm text-[var(--theme-text-secondary)] mt-3">請選擇要使用測試或正式模式發送緊急通報</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <button
+                type="button"
+                onClick={() => doSubmitCreate("test")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
+              >
+                🧪 測試傳送
+                <div className="text-xs font-normal mt-1 opacity-80">僅通知管委會 + 管理員，加 [測試] 標記</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => doSubmitCreate("official")}
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-red-500/20 border border-red-500 text-red-600 hover:bg-red-500/30 transition-colors"
+              >
+                🚨 正式發布
+                <div className="text-xs font-normal mt-1 opacity-80">審核通過後廣播給所有住戶</div>
+              </button>
+            </div>
+            <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">
+              <button
+                type="button"
+                onClick={() => setSendModeDialogOpen(false)}
+                className="w-full px-4 py-2 rounded-lg text-[var(--theme-text-secondary)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-primary)] transition-colors text-sm font-medium"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

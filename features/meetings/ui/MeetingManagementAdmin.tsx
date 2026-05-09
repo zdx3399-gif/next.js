@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useMeetings } from "../hooks/useMeetings"
 import type { Meeting } from "../api/meetings"
-import { uploadMeetingPDF } from "../api/meetings"
+import { uploadMeetingPDF, fetchMeetingReadCounts } from "../api/meetings"
 import { HelpHint } from "@/components/ui/help-hint"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -280,9 +280,18 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
   const { meetings: realMeetings, loading, addMeeting, editMeeting, removeMeeting, reload } = useMeetings()
   const [isSaving, setIsSaving] = useState(false)
   const [savingStage, setSavingStage] = useState<"idle" | "uploading" | "saving">("idle")
+  const [readCounts, setReadCounts] = useState<Record<string, number>>({})
 
   // 預覽模式使用模擬資料
   const meetings = isPreviewMode ? PREVIEW_MEETINGS : realMeetings
+
+  useEffect(() => {
+    if (isPreviewMode) {
+      setReadCounts({ "preview-1": 8, "preview-2": 2 })
+      return
+    }
+    fetchMeetingReadCounts().then(setReadCounts)
+  }, [isPreviewMode])
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -474,6 +483,7 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
                 <div className="inline-flex items-center gap-2 whitespace-nowrap"><span>重點摘要</span><HelpHint title="重點摘要欄" description="顯示重點項目數量。" workflow={["先看項目數判斷摘要完整度。","需要內容時再進詳情頁查看。"]} logic={["此欄顯示數量指標，不直接顯示全文。"]} /></div>
               </th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>PDF</span><HelpHint title="PDF 欄" description="顯示是否已上傳完整會議檔。" workflow={["看圖示確認附件是否齊全。","缺附件時進編輯補上 PDF。"]} logic={["PDF 欄可快速盤點哪些會議仍缺正式附件。"]} /></div></th>
+              <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>已讀數</span><HelpHint title="已讀數欄" description="顯示有多少住戶已開啟閱讀此會議。數字越高表示觸及率越好；若偏低可考慮再次推播提醒。" workflow={["查看已讀數評估住戶關注度。","若觸及率偏低，可重新推播或在 LINE 補充提醒。"]} logic={["已讀數來自住戶端點開會議詳情後自動記錄，非手動標記。"]} /></div></th>
               <th className="p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>操作</span><HelpHint title="操作欄" description="可編輯或刪除會議資料。" workflow={["點編輯更新會議內容。","確認不再需要時再執行刪除。","操作後回列表確認結果。"]} logic={["刪除屬高風險操作，建議先確認是否需保留歷史紀錄。"]} /></div></th>
             </tr>
           </thead>
@@ -502,6 +512,12 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
                       <span className="material-icons text-gray-400">cancel</span>
                     )}
                   </td>
+                  <td className="p-3 border-b border-[var(--theme-border)] whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-500/10 text-blue-500 text-xs font-semibold">
+                      <span className="material-icons text-xs">visibility</span>
+                      {readCounts[meeting.id!] ?? 0}
+                    </span>
+                  </td>
                   <td className="p-3 border-b border-[var(--theme-border)]">
                     <div className="flex gap-2">
                       <button
@@ -524,7 +540,7 @@ export function MeetingManagementAdmin({ isPreviewMode = false }: MeetingManagem
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-[var(--theme-text-secondary)]">
+                <td colSpan={7} className="p-8 text-center text-[var(--theme-text-secondary)]">
                   {searchTerm ? "沒有符合條件的會議/活動" : "目前沒有會議/活動"}
                 </td>
               </tr>

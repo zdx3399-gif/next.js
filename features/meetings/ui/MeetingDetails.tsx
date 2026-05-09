@@ -1,20 +1,24 @@
 ﻿"use client"
 
 import { useState, useEffect } from "react"
-import { getMeetingById, type Meeting } from "../api/meetings"
+import { getMeetingById, markMeetingAsRead, type Meeting } from "../api/meetings"
 import { exportMeetingToPDF, exportMeetingPDFViaAPI } from "@/lib/export-pdf"
 import { HelpHint } from "@/components/ui/help-hint"
 
 interface MeetingDetailsProps {
   meetingId: string
   onBack: () => void
+  currentUser?: { id?: string } | null
+  initialIsRead?: boolean
+  onMarkRead?: (meetingId: string) => void
 }
 
-export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
+export function MeetingDetails({ meetingId, onBack, currentUser, initialIsRead = false, onMarkRead }: MeetingDetailsProps) {
   const [meeting, setMeeting] = useState<Meeting | null>(null)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [exportMessage, setExportMessage] = useState("")
+  const [isRead, setIsRead] = useState(initialIsRead)
 
   useEffect(() => {
     const loadMeeting = async () => {
@@ -99,20 +103,29 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
         <h2 className="flex gap-2 items-center text-[var(--theme-accent)] text-xl">
           <span className="material-icons">event</span>
           會議詳情
-          <HelpHint
-            title="住戶端會議詳情"
-            description="此頁可查看會議時間地點、重點摘要、備註與完整記錄檔案。"
-            workflow={[
-              "先確認會議主題、時間與地點。",
-              "再閱讀重點摘要與備註掌握決議內容。",
-              "需要留存時下載或匯出 PDF。",
-            ]}
-            logic={[
-              "詳情頁整合會議核心資訊，便於一次查閱。",
-              "附件與匯出功能用於後續保存與分享。",
-            ]}
-          />
         </h2>
+        {currentUser?.id && (
+          <span
+            className={`px-2 py-0.5 rounded-full text-xs ${
+              isRead ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"
+            }`}
+          >
+            {isRead ? "已讀" : "未讀"}
+          </span>
+        )}
+        <HelpHint
+          title="住戶端會議詳情"
+          description="此頁可查看會議時間地點、重點摘要、備註與完整記錄檔案。"
+          workflow={[
+            "先確認會議主題、時間與地點。",
+            "再閱讀重點摘要與備註掌握決議內容。",
+            "需要留存時下載或匯出 PDF。",
+          ]}
+          logic={[
+            "詳情頁整合會議核心資訊，便於一次查閱。",
+            "附件與匯出功能用於後續保存與分享。",
+          ]}
+        />
       </div>
 
       {/* Meeting Info */}
@@ -129,6 +142,31 @@ export function MeetingDetails({ meetingId, onBack }: MeetingDetailsProps) {
               <span>{meeting.location}</span>
             </div>
           </div>
+
+          {/* 標記已讀按鈕 */}
+          {currentUser?.id && (
+            <div className="mt-3">
+              <button
+                disabled={isRead}
+                onClick={async () => {
+                  if (!meeting.id || !currentUser?.id || isRead) return
+                  const result = await markMeetingAsRead(meeting.id, currentUser.id)
+                  if (!result.error) {
+                    setIsRead(true)
+                    onMarkRead?.(meeting.id)
+                  }
+                }}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
+                  isRead
+                    ? "bg-emerald-500/15 text-emerald-400 cursor-default"
+                    : "bg-[var(--theme-bg-secondary)] text-emerald-400 hover:bg-emerald-500/10"
+                }`}
+              >
+                <span className="material-icons text-base">done</span>
+                {isRead ? "已讀" : "標記已讀"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Key Takeaways Section */}

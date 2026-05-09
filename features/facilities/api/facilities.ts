@@ -1350,3 +1350,63 @@ export async function getAllBookings(): Promise<FacilityBooking[]> {
 
   return enrichBookingsWithProfileAndUnit(supabase, rows)
 }
+
+// ==================== 管理員每月點數重置 ====================
+
+export async function resetAllUserPoints(): Promise<{ success: boolean; message: string; count: number }> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return { success: false, message: "系統錯誤", count: 0 }
+
+  // 取得所有有 points_balance 欄位的住戶帳號
+  const { data: profiles, error: fetchError } = await supabase
+    .from("profiles")
+    .select("id, points_balance")
+
+  if (fetchError || !profiles) {
+    return { success: false, message: "載入住戶資料失敗：" + (fetchError?.message || ""), count: 0 }
+  }
+
+  const userIds = profiles.map((p: any) => p.id as string)
+  if (userIds.length === 0) return { success: true, message: "沒有住戶帳號需要重置", count: 0 }
+
+  // 批次更新所有帳號的 points_balance 為 100
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ points_balance: INITIAL_FACILITY_POINTS })
+    .in("id", userIds)
+
+  if (updateError) {
+    await logFacilityAudit({
+      action: "reset_all_user_points",
+      targetId: "all",
+      reason: updateError.message,
+      status: "failed",
+      errorCode: updateError.message,
+    })
+    return { success: false, message: "點數重置失敗：" + updateError.message, count: 0 }
+  }
+
+  // 寫入交易明細（monthly_allocation）
+  const txRows = userIds.map((id) => ({
+    user_id: id,
+    amount: INITIAL_FACILITY_POINTS,
+    transaction_type: "monthly_allocation" as const,
+    description: `每月點數重置 ${new Date().toLocaleDateString("zh-TW")}`,
+  }))
+
+  // 分批 insert （Supabase 單次 insert 上限約 500 筆）
+  const BATCH_SIZE = 400
+  for (let i = 0; i < txRows.length; i += BATCH_SIZE) {
+    await supabase.from("points_transactions").insert(txRows.slice(i, i + BATCH_SIZE))
+  }
+
+  await logFacilityAudit({
+    action: "reset_all_user_points",
+    targetId: "all",
+    reason: `每月點數重置，共 ${userIds.length} 位住戶`,
+    status: "success",
+    afterState: { count: userIds.length, reset_to: INITIAL_FACILITY_POINTS },
+  })
+
+  return { success: true, message: `已將 ${userIds.length} 位住戶點數重置為 ${INITIAL_FACILITY_POINTS} 點`, count: userIds.length }
+}

@@ -1,14 +1,30 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useMeetings } from "../hooks/useMeetings"
+import { fetchUserReadMeetings } from "../api/meetings"
 import { MeetingDetails } from "./MeetingDetails"
 import { HelpHint } from "@/components/ui/help-hint"
 
-export function MeetingList() {
+interface MeetingListProps {
+  currentUser?: { id?: string } | null
+}
+
+export function MeetingList({ currentUser }: MeetingListProps = {}) {
   const { meetings, loading, error } = useMeetings()
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [readMeetings, setReadMeetings] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetchUserReadMeetings(currentUser.id).then(setReadMeetings)
+    }
+  }, [currentUser?.id])
+
+  const handleMarkRead = (meetingId: string) => {
+    setReadMeetings((prev) => new Set([...prev, meetingId]))
+  }
 
   const filteredMeetings = meetings.filter((meeting) => {
     if (!searchTerm) return true
@@ -22,7 +38,15 @@ export function MeetingList() {
   })
 
   if (selectedMeetingId) {
-    return <MeetingDetails meetingId={selectedMeetingId} onBack={() => setSelectedMeetingId(null)} />
+    return (
+      <MeetingDetails
+        meetingId={selectedMeetingId}
+        onBack={() => setSelectedMeetingId(null)}
+        currentUser={currentUser}
+        initialIsRead={readMeetings.has(selectedMeetingId)}
+        onMarkRead={handleMarkRead}
+      />
+    )
   }
 
   if (loading) {
@@ -95,7 +119,20 @@ export function MeetingList() {
               onClick={() => setSelectedMeetingId(meeting.id!)}
               className="w-full bg-[var(--theme-bg-secondary)] hover:bg-[var(--theme-accent-light)] border border-[var(--theme-border)] p-4 rounded-xl transition-all text-left cursor-pointer"
             >
-              <h3 className="text-lg font-bold text-[var(--theme-text-primary)] mb-2">{meeting.topic}</h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-bold text-[var(--theme-text-primary)]">{meeting.topic}</h3>
+                {currentUser?.id && (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs ${
+                      readMeetings.has(meeting.id!)
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "bg-amber-500/15 text-amber-400"
+                    }`}
+                  >
+                    {readMeetings.has(meeting.id!) ? "已讀" : "未讀"}
+                  </span>
+                )}
+              </div>
               <div className="flex flex-col gap-1 text-sm">
                 <p className="text-[var(--theme-text-secondary)] flex items-center gap-2">
                   <span className="material-icons text-sm">place</span>

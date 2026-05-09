@@ -101,7 +101,8 @@ export function EmergencyButtons({ userId, userName, onTrigger, variant = "full"
 
     setSubmitting(true)
     try {
-      await triggerEmergency(type, note, userId, userName || "未知", "管理室/社區入口", `${note}（快速通報）`)
+      // 不傳 sendMode，讓後端依 LINE_BOT_NOTIFICATION_MODE 環境變數決定
+      await triggerEmergency(type, note, userId, userName || "未知", "管理室/社區入口", `${note}（快速通報）`, undefined)
       onTrigger?.()
       if (userId) {
         await reload(userId)

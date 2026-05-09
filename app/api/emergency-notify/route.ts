@@ -5,6 +5,7 @@ import { writeServerAuditLog } from "@/lib/audit-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+export const maxDuration = 60 // Vercel Pro: 最長 60s；Hobby 上限仍為 10s
 
 type NotificationCategory = "emergency" | "visitor" | "package"
 
@@ -112,13 +113,20 @@ function getLineClient() {
   return new Client({ channelAccessToken, channelSecret: channelSecret || "unused" })
 }
 
-function getLineClientForMode(sendMode: "test" | "official") {
-  // 優先以 LINE_BOT_NOTIFICATION_MODE 環境變數決定通知 BOT，
-  // 與 line/route.js 和 line-bot2/route.js 的 getNotificationClient() 一致
-  const envMode = (process.env.LINE_BOT_NOTIFICATION_MODE || "").toLowerCase()
-  const effectiveMode = envMode === "test" ? "test" : envMode === "official" ? "official" : sendMode
+/** 由 LINE_BOT_NOTIFICATION_MODE 環境變數决定用哪支 BOT：
+ *  - 'test'     → BOT2
+ *  - 'official' → BOT1
+ *  - 未設定    → 預設 BOT2（測試環境安全倶倣）
+ */
+function getEffectiveMode(): "test" | "official" {
+  const env = (process.env.LINE_BOT_NOTIFICATION_MODE || "").toLowerCase()
+  return env === "official" ? "official" : "test"
+}
 
-  if (effectiveMode === "test") {
+function getLineClientForMode() {
+  const mode = getEffectiveMode()
+  console.log(`[emergency-notify] 有效通知通道: ${mode === "test" ? "BOT2" : "BOT1"} (LINE_BOT_NOTIFICATION_MODE=${process.env.LINE_BOT_NOTIFICATION_MODE || '未設定'})`)
+  if (mode === "test") {
     const token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN
     const secret = process.env.LINE_CHANNEL_SECRET_BOT2 || process.env.LINE_CHANNEL_SECRET
     if (!token) throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN_BOT2")
@@ -333,16 +341,17 @@ export async function POST(req: NextRequest) {
     let lineTargetCount = 0
 
     try {
-      const lineClient = getLineClientForMode(sendMode)
-      // 測試模式：僅通知 admin+committee，加 [測試] 字首
-      // 正式模式：將審核請求僅傳給管委會待批准
-      const { ids: lineTargets } = sendMode === "test"
+      const effectiveMode = getEffectiveMode()
+      const lineClient = getLineClientForMode()
+      // effectiveMode='test': 通知 admin+committee；effectiveMode='official': 僅通知管委會
+      const { ids: lineTargets } = effectiveMode === "test"
         ? await getLineTargetsByRoles(supabase, ["admin", "committee"])
         : await getLineTargetsByRoles(supabase, ["committee"])
       lineTargetCount = lineTargets.length
+      console.log(`[emergency-notify] 目標管委數量: ${lineTargetCount}，effectiveMode=${effectiveMode}`)
 
       const timeStr = new Date(nowIso).toLocaleString("zh-TW", { hour12: false })
-      const isTest = sendMode === "test"
+      const isTest = effectiveMode === "test"
       const headerText = isTest ? "🧪 緊急事件（測試）" : "⚠️ 緊急事件待審核"
       const footerText = isTest
         ? "測試模式：確認後僅廣播給管理員 + 管委會"
@@ -430,8 +439,11 @@ export async function POST(req: NextRequest) {
         try {
           await lineClient.pushMessage(to, buildFlexCard())
           lineSent++
-        } catch {
+          console.log(`[emergency-notify] pushMessage 成功: ${to}`)
+        } catch (pushErr: unknown) {
           lineFailed++
+          const msg = pushErr instanceof Error ? pushErr.message : String(pushErr)
+          console.error(`[emergency-notify] pushMessage 失敗 to=${to}:`, msg)
         }
       }
     } catch (err: unknown) {

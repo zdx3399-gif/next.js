@@ -3617,7 +3617,7 @@ export async function POST(req) {
               continue;
             }
 
-            if (!adminProfile || adminProfile.role !== 'committee') {
+            if (!adminProfile || !['committee', 'admin'].includes(adminProfile.role)) {
               console.warn(`[${BOT_TAG}] [紧急審核] 權限拒絕： adminProfile=${JSON.stringify(adminProfile)}`);
               await safeReplyMessage(replyToken, userId, {
                 type: 'text',

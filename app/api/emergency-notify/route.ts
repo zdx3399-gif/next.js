@@ -118,15 +118,17 @@ function getLineClient() {
  *  - 'official' → BOT1
  *  - 未設定    → 預設 BOT2（測試環境安全倶倣）
  */
-function getEffectiveMode(): "test" | "official" {
+function getEffectiveMode(requestSendMode?: "test" | "official"): "test" | "official" {
+  // 優先使用前端明確傳入的 sendMode；若未傳，fallback 到 env var；env var 未設定預設 test
+  if (requestSendMode === "test" || requestSendMode === "official") return requestSendMode
   const env = (process.env.LINE_BOT_NOTIFICATION_MODE || "").toLowerCase()
   return env === "official" ? "official" : "test"
 }
 
-function getLineClientForMode() {
-  const mode = getEffectiveMode()
-  console.log(`[emergency-notify] 有效通知通道: ${mode === "test" ? "BOT2" : "BOT1"} (LINE_BOT_NOTIFICATION_MODE=${process.env.LINE_BOT_NOTIFICATION_MODE || '未設定'})`)
-  if (mode === "test") {
+function getLineClientForMode(mode?: "test" | "official") {
+  const effectiveMode = mode ?? getEffectiveMode()
+  console.log(`[emergency-notify] 有效通知通道: ${effectiveMode === "test" ? "BOT2" : "BOT1"} (sendMode=${effectiveMode}, LINE_BOT_NOTIFICATION_MODE=${process.env.LINE_BOT_NOTIFICATION_MODE || '未設定'})`)
+  if (effectiveMode === "test") {
     const token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN
     const secret = process.env.LINE_CHANNEL_SECRET_BOT2 || process.env.LINE_CHANNEL_SECRET
     if (!token) throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN_BOT2")
@@ -342,8 +344,8 @@ export async function POST(req: NextRequest) {
     let lineTargetCount = 0
 
     try {
-      const effectiveMode = getEffectiveMode()
-      const lineClient = getLineClientForMode()
+      const effectiveMode = getEffectiveMode(sendMode)
+      const lineClient = getLineClientForMode(sendMode)
       // effectiveMode='test': 通知 admin+committee；effectiveMode='official': 僅通知管委會
       const { ids: lineTargets } = effectiveMode === "test"
         ? await getLineTargetsByRoles(supabase, ["admin", "committee"])

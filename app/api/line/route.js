@@ -3602,7 +3602,7 @@ export async function POST(req) {
               continue;
             }
 
-            if (!adminProfile || adminProfile.role !== 'committee') {
+            if (!adminProfile || !['committee', 'admin'].includes(adminProfile.role)) {
               await safeReplyMessage(replyToken, userId, {
                 type: 'text',
                 text: '⛔ 您沒有審核權限。'

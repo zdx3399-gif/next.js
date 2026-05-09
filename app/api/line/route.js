@@ -3671,8 +3671,6 @@ export async function POST(req) {
 
             // 確認發布 -> 廣播給所有住戶
             if (action === 'approve') {
-              const { mode, lineClient: notificationClient } = getNotificationClient();
-              console.log(`[${BOT_TAG}] [緊急廣播] 目前通知通道: ${mode === 'test' ? '測試 BOT2' : '正式'}`);
               const broadcastText =
                 `🚨【緊急事件通知】\n` +
                 `類型：${emergencyEvent.event_type || '未指定'}\n` +
@@ -3680,18 +3678,29 @@ export async function POST(req) {
                 `描述：${emergencyEvent.description || '未提供'}\n\n` +
                 `請住戶留意安全並配合現場指示。`;
 
-              if (emergencyEvent.image_url) {
-                await notificationClient.broadcast([
-                  { type: 'text', text: broadcastText },
-                  {
-                    type: 'image',
-                    originalContentUrl: emergencyEvent.image_url,
-                    previewImageUrl: emergencyEvent.image_url
-                  }
-                ]);
-              } else {
-                await notificationClient.broadcast({ type: 'text', text: broadcastText });
+              const broadcastMsgs = emergencyEvent.image_url
+                ? [
+                    { type: 'text', text: broadcastText },
+                    { type: 'image', originalContentUrl: emergencyEvent.image_url, previewImageUrl: emergencyEvent.image_url }
+                  ]
+                : [{ type: 'text', text: broadcastText }];
+
+              try {
+                const { data: allProfiles } = await supabase
+                  .from('profiles')
+                  .select('line_user_id')
+                  .not('line_user_id', 'is', null);
+                const targets = (allProfiles || []).map((p) => p.line_user_id).filter(Boolean);
+                if (targets.length > 0) {
+                  await client.multicast(targets, broadcastMsgs);
+                  console.log(`[${BOT_TAG}] [緊急廣播] multicast 成功，目標 ${targets.length} 人`);
+                } else {
+                  console.warn(`[${BOT_TAG}] [緊急廣播] 沒有可發送對象`);
+                }
+              } catch (broadcastErr) {
+                console.error('[緊急廣播] multicast 失敗:', broadcastErr?.message);
               }
+
               await safeReplyMessage(replyToken, userId, {
                 type: 'text',
                 text: '✅ 已確認發布，緊急事件通知已廣播給所有住戶。'

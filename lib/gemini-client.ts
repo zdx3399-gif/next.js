@@ -52,7 +52,8 @@ function getModelOrder(availableModels: string[]) {
 }
 
 export async function generateGeminiContent({ apiKey, payload, debugLabel }: GenerateGeminiContentParams): Promise<GeminiGenerateResult> {
-  const availableModels = await listGenerateModels(apiKey)
+  // 若已透過 GEMINI_MODEL 指定模型，直接跳過 listGenerateModels（省一次 API 呼叫）
+  const availableModels = process.env.GEMINI_MODEL?.trim() ? [] : await listGenerateModels(apiKey)
   const modelOrder = getModelOrder(availableModels)
   const versions: Array<"v1beta" | "v1"> = ["v1beta", "v1"]
   const errors: string[] = []

@@ -18,6 +18,8 @@ const supabase = createClient(
 import { chat } from '@/lib/ai-chat';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Vercel Pro: 最長 60 秒；Hobby 方案上限仍為 10 秒
 const BOT_TAG = 'BOT2';
 
 const lineConfig = {
@@ -2951,19 +2953,10 @@ export async function POST(req) {
                 : [{ type: 'text', text: broadcastText }];
 
               try {
-                const { data: allProfiles } = await supabase
-                  .from('profiles')
-                  .select('line_user_id')
-                  .not('line_user_id', 'is', null);
-                const targets = (allProfiles || []).map((p) => p.line_user_id).filter(Boolean);
-                if (targets.length > 0) {
-                  await client.multicast(targets, broadcastMsgs);
-                  console.log(`[${BOT_TAG}] [緊急廣播] multicast 成功，目標 ${targets.length} 人`);
-                } else {
-                  console.warn(`[${BOT_TAG}] [緊急廣播] 沒有可發送對象`);
-                }
+                await client.broadcast(broadcastMsgs);
+                console.log(`[${BOT_TAG}] [緊急廣播] broadcast 成功`);
               } catch (broadcastErr) {
-                console.error('[緊急廣播] multicast 失敗:', broadcastErr?.message);
+                console.error('[緊急廣播] broadcast 失敗:', broadcastErr?.message);
               }
 
               // IoT E 指令

@@ -18,6 +18,8 @@ const supabase = createClient(
 import { chat } from '@/lib/ai-chat';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Vercel Pro: 最長 60 秒；Hobby 方案上限仍為 10 秒
 const BOT_TAG = 'BOT1';
 
 const lineConfig = {
@@ -3532,9 +3534,8 @@ export async function POST(req) {
             console.log(`[${BOT_TAG}] [Emergency Review] DB 更新成功 → ${newStatus}`);
 
             if (isApprove) {
-              // 4. 廣播：使用 notificationClient（遵守 LINE_BOT_NOTIFICATION_MODE 設定）
-              const { mode: notifyMode, lineClient: notificationClient } = getNotificationClient();
-              console.log(`[${BOT_TAG}] [緊急廣播] 目前通知通道: ${notifyMode === 'test' ? '測試 BOT2' : '正式'}`);
+              // 4. 廣播：直接用 BOT1 自己的 client.broadcast()，發送給所有 BOT1 追蹤者
+              console.log(`[${BOT_TAG}] [緊急廣播] 使用 BOT1 broadcast`);
 
               const broadcastText =
                 `🚨【緊急事件通知】\n` +
@@ -3545,12 +3546,12 @@ export async function POST(req) {
 
               try {
                 if (incident.image_url) {
-                  await notificationClient.broadcast([
+                  await client.broadcast([
                     { type: 'text', text: broadcastText },
                     { type: 'image', originalContentUrl: incident.image_url, previewImageUrl: incident.image_url }
                   ]);
                 } else {
-                  await notificationClient.broadcast({ type: 'text', text: broadcastText });
+                  await client.broadcast([{ type: 'text', text: broadcastText }]);
                 }
                 console.log(`[${BOT_TAG}] [緊急廣播] broadcast 成功`);
               } catch (broadcastErr) {

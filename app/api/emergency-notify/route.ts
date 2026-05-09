@@ -113,7 +113,12 @@ function getLineClient() {
 }
 
 function getLineClientForMode(sendMode: "test" | "official") {
-  if (sendMode === "test") {
+  // 優先以 LINE_BOT_NOTIFICATION_MODE 環境變數決定通知 BOT，
+  // 與 line/route.js 和 line-bot2/route.js 的 getNotificationClient() 一致
+  const envMode = (process.env.LINE_BOT_NOTIFICATION_MODE || "").toLowerCase()
+  const effectiveMode = envMode === "test" ? "test" : envMode === "official" ? "official" : sendMode
+
+  if (effectiveMode === "test") {
     const token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2 || process.env.LINE_CHANNEL_ACCESS_TOKEN
     const secret = process.env.LINE_CHANNEL_SECRET_BOT2 || process.env.LINE_CHANNEL_SECRET
     if (!token) throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN_BOT2")

@@ -2954,9 +2954,24 @@ export async function POST(req) {
 
               try {
                 await client.broadcast(broadcastMsgs);
-                console.log(`[${BOT_TAG}] [緊急廣播] broadcast 成功`);
+                console.log(`[${BOT_TAG}] [緊急廣播] BOT2 broadcast 成功`);
               } catch (broadcastErr) {
-                console.error('[緊急廣播] broadcast 失敗:', broadcastErr?.message);
+                console.error('[緊急廣播] BOT2 broadcast 失敗:', broadcastErr?.message);
+              }
+
+              // BOT1 cross-broadcast：同時廣播給所有 BOT1（官方）追蹤者
+              const bot1Token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+              if (bot1Token) {
+                const bot1Client = new Client({
+                  channelAccessToken: bot1Token,
+                  channelSecret: process.env.LINE_CHANNEL_SECRET || 'unused'
+                });
+                try {
+                  await bot1Client.broadcast(broadcastMsgs);
+                  console.log(`[${BOT_TAG}] [緊急廣播] BOT1 cross-broadcast 成功`);
+                } catch (crossErr) {
+                  console.error('[緊急廣播] BOT1 cross-broadcast 失敗:', crossErr?.message);
+                }
               }
 
               // IoT E 指令
@@ -3693,9 +3708,25 @@ export async function POST(req) {
               try {
                 console.log(`[${BOT_TAG}] [緊急審核] 步驟 5/6 打 broadcast 給所有 BOT2 好友`);
                 await client.broadcast(broadcastMsgs);
-                console.log(`[${BOT_TAG}] [緊急審核] 步驟 6/6 broadcast 成功`);
+                console.log(`[${BOT_TAG}] [緊急審核] 步驟 6/6 BOT2 broadcast 成功`);
               } catch (broadcastErr) {
-                console.error(`[${BOT_TAG}] [緊急審核] 步驟 6/6 broadcast 失敗:`, broadcastErr?.response?.data || broadcastErr?.message);
+                console.error(`[${BOT_TAG}] [緊急審核] 步驟 6/6 BOT2 broadcast 失敗:`, broadcastErr?.response?.data || broadcastErr?.message);
+              }
+
+              // BOT1 cross-broadcast：同時廣播給所有 BOT1（官方）追蹤者
+              const bot1Token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+              if (bot1Token) {
+                const bot1Client = new Client({
+                  channelAccessToken: bot1Token,
+                  channelSecret: process.env.LINE_CHANNEL_SECRET || 'unused'
+                });
+                try {
+                  console.log(`[${BOT_TAG}] [緊急審核] BOT1 cross-broadcast 開始`);
+                  await bot1Client.broadcast(broadcastMsgs);
+                  console.log(`[${BOT_TAG}] [緊急審核] BOT1 cross-broadcast 成功`);
+                } catch (crossErr) {
+                  console.error(`[${BOT_TAG}] [緊急審核] BOT1 cross-broadcast 失敗:`, crossErr?.response?.data || crossErr?.message);
+                }
               }
 
               await safeReplyMessage(replyToken, userId, {

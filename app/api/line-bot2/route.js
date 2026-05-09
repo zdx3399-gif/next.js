@@ -3445,13 +3445,13 @@ export async function POST(req) {
             }
             console.log(`[${BOT_TAG}] [submit_emergency] line_report 建立成功 id=${createdEmergency.id}`);
 
-            // 查詢所有管委會（committee）
+            // 查詢所有管委會（committee）+ 管理員（admin）
             const { data: admins, error: adminQueryError } = await supabase
               .from('profiles')
               .select('line_user_id, name')
-              .eq('role', 'committee')
+              .in('role', ['committee', 'admin'])
               .not('line_user_id', 'is', null);
-            console.log(`[${BOT_TAG}] [submit_emergency] 管委會查詢結果: ${admins?.length ?? 0} 人 err=${adminQueryError?.message}`);
+            console.log(`[${BOT_TAG}] [submit_emergency] 管委會+管理員查詢結果: ${admins?.length ?? 0} 人 err=${adminQueryError?.message}`);
 
             if (adminQueryError) {
               console.error('⚠️ 查詢管理員失敗，但通報已建立:', adminQueryError);
@@ -3644,6 +3644,8 @@ export async function POST(req) {
               continue;
             }
 
+            console.log(`[${BOT_TAG}] [紧急審核] 步驟 3.5/6 Guard 檢查: status=${JSON.stringify(emergencyEvent.status)} typeof=${typeof emergencyEvent.status} isPending=${emergencyEvent.status === 'pending'} isDraft=${emergencyEvent.status === 'draft'} guardBlock=${emergencyEvent.status !== 'pending' && emergencyEvent.status !== 'draft'}`);
+
             if (emergencyEvent.status !== 'pending' && emergencyEvent.status !== 'draft') {
               const statusLabelMap = {
                 approved: '已發布',
@@ -3653,6 +3655,7 @@ export async function POST(req) {
               };
               const currentStatusLabel = statusLabelMap[emergencyEvent.status] || emergencyEvent.status;
 
+              console.log(`[${BOT_TAG}] [紧急審核] 進入 guard block: status=${emergencyEvent.status} currentStatusLabel=${currentStatusLabel}`);
               let duplicateReviewMessage = `ℹ️ 此事件目前為「${currentStatusLabel}」，無法重複審核。`;
               if (action === 'approve' && emergencyEvent.status === 'approved') {
                 duplicateReviewMessage = 'ℹ️ 此事件已發布，無需重複確認。';

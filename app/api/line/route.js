@@ -3321,11 +3321,11 @@ export async function POST(req) {
               throw emergencyInsertError || new Error('寫入失敗');
             }
 
-            // 查詢所有管委會（committee）
+            // 查詢所有管委會（committee）+ 管理員（admin）
             const { data: admins, error: adminQueryError } = await supabase
               .from('profiles')
               .select('line_user_id, name')
-              .eq('role', 'committee')
+              .in('role', ['committee', 'admin'])
               .not('line_user_id', 'is', null);
 
             if (adminQueryError) {
@@ -3626,6 +3626,8 @@ export async function POST(req) {
               continue;
             }
 
+            console.log(`[BOT1] [緊急審核] Guard 檢查: status=${JSON.stringify(emergencyEvent.status)} typeof=${typeof emergencyEvent.status} isPending=${emergencyEvent.status === 'pending'} isDraft=${emergencyEvent.status === 'draft'} guardBlock=${emergencyEvent.status !== 'pending' && emergencyEvent.status !== 'draft'}`);
+
             if (emergencyEvent.status !== 'pending' && emergencyEvent.status !== 'draft') {
               const statusLabelMap = {
                 approved: '已發布',
@@ -3635,6 +3637,7 @@ export async function POST(req) {
               };
               const currentStatusLabel = statusLabelMap[emergencyEvent.status] || emergencyEvent.status;
 
+              console.log(`[BOT1] [緊急審核] 進入 guard block: status=${emergencyEvent.status} currentStatusLabel=${currentStatusLabel}`);
               let duplicateReviewMessage = `ℹ️ 此事件目前為「${currentStatusLabel}」，無法重複審核。`;
               if (action === 'approve' && emergencyEvent.status === 'approved') {
                 duplicateReviewMessage = 'ℹ️ 此事件已發布，無需重複確認。';

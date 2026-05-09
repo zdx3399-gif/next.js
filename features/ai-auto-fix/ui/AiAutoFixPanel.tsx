@@ -103,7 +103,7 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
   const [keywordFilter, setKeywordFilter] = useState("")
   const [editedAnswers, setEditedAnswers] = useState<Record<string, string>>({})
   const [applyingKey, setApplyingKey] = useState<string | null>(null)
-  const [applyMessage, setApplyMessage] = useState<string | null>(null)
+  const [applyMessages, setApplyMessages] = useState<Record<string, { tone: "success" | "error" | "info"; text: string }>>({})
 
   const issueOptions = useMemo(() => {
     return Array.from(new Set(items.map((item) => item.issueType).filter(Boolean))).sort()
@@ -168,9 +168,16 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
     if (readOnly) return
 
     const key = itemKey(item)
+    const setItemApplyMessage = (tone: "success" | "error" | "info", text: string) => {
+      setApplyMessages((prev) => ({
+        ...prev,
+        [key]: { tone, text },
+      }))
+    }
+
     const answer = (editedAnswers[key] || "").trim()
     if (!answer) {
-      setApplyMessage("請先輸入要寫入資料庫的答案。")
+      setItemApplyMessage("error", "請先輸入要寫入資料庫的答案。")
       return
     }
 
@@ -179,7 +186,11 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
     }
 
     setApplyingKey(key)
-    setApplyMessage(null)
+    setApplyMessages((prev) => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
 
     async function submit(force = false) {
       const tenant = typeof window !== "undefined" ? localStorage.getItem("currentTenant") || "tenant_a" : "tenant_a"
@@ -216,7 +227,7 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
         )
 
         if (!confirmed) {
-          setApplyMessage("已取消寫入，knowledge 未變更。")
+          setItemApplyMessage("info", "已取消寫入，knowledge 未變更。")
           return
         }
 
@@ -227,14 +238,24 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
         throw new Error(json?.error || "寫入 Supabase 失敗。")
       }
 
-      setApplyMessage(
-        `已寫入 knowledge（ID: ${json.data?.knowledgeId || "unknown"}）。${
+      const modeText = json.data?.mode === "updated" ? "已更新既有 knowledge" : "已新增 knowledge"
+      const warningText = json.data?.warning ? ` ${json.data.warning}` : ""
+      const resolvedText =
+        typeof json.data?.resolvedCount === "number" && json.data.resolvedCount > 0
+          ? ` 已從待修正區移除 ${json.data.resolvedCount} 筆相關回饋。`
+          : json.data?.resolvedError
+            ? ` 但待修正狀態更新失敗：${json.data.resolvedError}`
+            : " 未找到可移除的待修正回饋。"
+      setItemApplyMessage(
+        "success",
+        `${modeText}（ID: ${json.data?.knowledgeId || "unknown"}）。${
           json.data?.embeddingUpdated ? "Embedding 已同步更新。" : "Embedding 未更新或資料表未提供欄位。"
-        }`,
+        }${warningText}${resolvedText}`,
       )
+      window.alert(`寫入知識庫成功，Embedding 已同步建立。${resolvedText}`)
       await loadData()
     } catch (err) {
-      setApplyMessage(err instanceof Error ? err.message : "寫入 Supabase 失敗。")
+      setItemApplyMessage("error", err instanceof Error ? err.message : "寫入 Supabase 失敗。")
     } finally {
       setApplyingKey(null)
     }
@@ -282,12 +303,6 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
             重新載入
           </button>
         </div>
-
-        {applyMessage ? (
-          <div className="mt-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-card)] px-3 py-2 text-sm text-[var(--theme-text-primary)]">
-            {applyMessage}
-          </div>
-        ) : null}
 
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Field label="問題類型">
@@ -371,6 +386,7 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
             const key = itemKey(item)
             const editedAnswer = editedAnswers[key] ?? item.proposedAnswer ?? item.aiRerunAnswer ?? ""
             const canApply = !readOnly && Boolean(editedAnswer.trim()) && applyingKey !== key
+            const itemApplyMessage = applyMessages[key]
 
             return (
               <div key={key} className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-primary)] p-4">
@@ -432,7 +448,7 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
                         disabled={!canApply}
                         className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {applyingKey === key ? "寫入中..." : "寫入知識庫"}
+                        {applyingKey === key ? "寫入中..." : "寫入知識庫並標記已修改"}
                       </button>
                       <button
                         type="button"
@@ -447,9 +463,22 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
                         還原建議內容
                       </button>
                       <span className="text-xs text-[var(--theme-text-secondary)]">
-                        同問題會覆蓋舊 knowledge，並同步嘗試建立 embedding。
+                        同問題會覆蓋舊 knowledge，成功後會從待修正區移除。
                       </span>
                     </div>
+                    {itemApplyMessage ? (
+                      <div
+                        className={`mt-2 rounded-md border px-3 py-2 text-sm ${
+                          itemApplyMessage.tone === "success"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            : itemApplyMessage.tone === "error"
+                              ? "border-red-200 bg-red-50 text-red-800"
+                              : "border-[var(--theme-border)] bg-[var(--theme-bg-primary)] text-[var(--theme-text-primary)]"
+                        }`}
+                      >
+                        {itemApplyMessage.text}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 

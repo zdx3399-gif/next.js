@@ -12,12 +12,28 @@ type KnowledgeConflict = {
   similarity: number | null
 }
 
+type KnowledgeWriteResult = {
+  id: number | string | null
+  mode: "created" | "updated"
+  embeddingUpdated: true
+  warning?: string
+}
+
+type ResolvedResult = {
+  count: number
+  error?: string
+}
+
 function normalizeQuestion(question: unknown): string {
   return String(question || "").trim().toLowerCase()
 }
 
 function buildSourceKey(question: unknown): string {
   return normalizeQuestion(question).replace(/\s+/g, " ")
+}
+
+function uniqueValues<T>(values: T[]): T[] {
+  return Array.from(new Set(values))
 }
 
 function getSupabaseConfig(tenant: TenantId) {
@@ -91,6 +107,90 @@ async function findKnowledgeConflicts(
     .filter((row: KnowledgeConflict) => row.content)
 }
 
+async function writeKnowledge(
+  supabase: any,
+  payload: Record<string, unknown>,
+  sourceKey: string,
+): Promise<KnowledgeWriteResult> {
+  let warning: string | undefined
+
+  async function writePayload(targetId: number | string | null, nextPayload: Record<string, unknown>) {
+    if (targetId) {
+      return supabase.from("knowledge").update(nextPayload).eq("id", targetId).select("id").single()
+    }
+
+    return supabase.from("knowledge").insert([nextPayload]).select("id").single()
+  }
+
+  let targetId: number | string | null = null
+  const lookup = await supabase
+    .from("knowledge")
+    .select("id")
+    .eq("source", "ai_auto_fix")
+    .eq("source_key", sourceKey)
+    .maybeSingle()
+
+  if (lookup.error) {
+    throw new Error(`查詢既有 knowledge 失敗：${lookup.error.message}`)
+  } else if (lookup.data?.id) {
+    targetId = lookup.data.id
+  }
+
+  const result = await writePayload(targetId, payload)
+
+  if (result.error) {
+    throw new Error(`寫入 knowledge 失敗：${result.error.message}`)
+  }
+
+  return {
+    id: result.data?.id || targetId || null,
+    mode: targetId ? "updated" : "created",
+    embeddingUpdated: true,
+    warning,
+  }
+}
+
+async function markAutoFixClusterResolved(
+  supabase: any,
+  clusterKey: string,
+  issueType: string,
+): Promise<ResolvedResult> {
+  const { data, error } = await supabase
+    .from("chat_events")
+    .select("id, question, issue_type, review_status")
+    .eq("issue_type", issueType)
+    .neq("review_status", "resolved")
+
+  if (error) {
+    return { count: 0, error: error.message }
+  }
+
+  const ids = uniqueValues(
+    (data || [])
+      .filter((row: any) => normalizeQuestion(row.question) === clusterKey)
+      .map((row: any) => row.id)
+      .filter(Boolean),
+  )
+
+  if (ids.length === 0) {
+    return { count: 0 }
+  }
+
+  const update = await supabase
+    .from("chat_events")
+    .update({
+      needs_review: false,
+      review_status: "resolved",
+    })
+    .in("id", ids)
+
+  if (update.error) {
+    return { count: 0, error: update.error.message }
+  }
+
+  return { count: ids.length }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null)
@@ -124,6 +224,10 @@ export async function POST(request: Request) {
 
     const knowledgeContent = [`問題：${questionText}`, `答案：${answer}`].join("\n")
     const embedding = await getEmbedding(knowledgeContent, "search_document")
+    if (!embedding) {
+      throw new Error("Embedding 產生失敗，knowledge 未寫入。請確認 Vercel 已設定 COHERE_API_KEY。")
+    }
+
     const insertPayload: Record<string, unknown> = {
       source: "ai_auto_fix",
       source_key: sourceKey,
@@ -151,38 +255,18 @@ export async function POST(request: Request) {
       }
     }
 
-    let { data: inserted, error: insertError } = await supabase
-      .from("knowledge")
-      .upsert(insertPayload, { onConflict: "source,source_key" })
-      .select("id")
-      .single()
-
-    let embeddingUpdated = Boolean(embedding)
-
-    if (insertError && embedding) {
-      const fallbackPayload = { ...insertPayload }
-      delete fallbackPayload.embedding
-
-      const fallback = await supabase
-        .from("knowledge")
-        .upsert(fallbackPayload, { onConflict: "source,source_key" })
-        .select("id")
-        .single()
-
-      inserted = fallback.data
-      insertError = fallback.error
-      embeddingUpdated = false
-    }
-
-    if (insertError) {
-      throw new Error(`寫入 knowledge 失敗：${insertError.message}`)
-    }
+    const written = await writeKnowledge(supabase, insertPayload, sourceKey)
+    const resolved = await markAutoFixClusterResolved(supabase, clusterKey, issueType)
 
     return NextResponse.json({
       success: true,
       data: {
-        knowledgeId: inserted?.id || null,
-        embeddingUpdated,
+        knowledgeId: written.id,
+        mode: written.mode,
+        embeddingUpdated: written.embeddingUpdated,
+        warning: written.warning || null,
+        resolvedCount: resolved.count,
+        resolvedError: resolved.error || null,
       },
     })
   } catch (error) {

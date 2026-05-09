@@ -8,6 +8,7 @@ type ChatHistoryRow = {
   feedback: string | null
   needs_review: boolean | null
   issue_type: string | null
+  review_status?: string | null
   reporter_id?: string | null
 }
 
@@ -675,7 +676,7 @@ async function loadRecentRows(supabase: any, config: DryRunConfig): Promise<Chat
     const from = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString()
     const { data, error } = await supabase
       .from("chat_events")
-      .select("source, source_pk, created_at, question, answer, feedback, needs_review, issue_type, user_id")
+      .select("source, source_pk, created_at, question, answer, feedback, needs_review, issue_type, review_status, user_id")
       .gte("created_at", from)
 
     if (error) {
@@ -690,7 +691,7 @@ async function loadRecentRows(supabase: any, config: DryRunConfig): Promise<Chat
     unifiedRows = await fetchRows(config.fallbackWindowDays)
   }
 
-  return unifiedRows.map((row: any) => {
+  return unifiedRows.filter((row: any) => row.review_status !== "resolved").map((row: any) => {
     return {
       id: String(row.source_pk || row.id || ""),
       created_at: row.created_at,
@@ -699,6 +700,7 @@ async function loadRecentRows(supabase: any, config: DryRunConfig): Promise<Chat
       feedback: row.feedback || null,
       needs_review: Boolean(row.needs_review),
       issue_type: row.issue_type || null,
+      review_status: row.review_status || null,
       reporter_id: row.user_id || null,
     }
   })

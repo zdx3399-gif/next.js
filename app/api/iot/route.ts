@@ -1,97 +1,52 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-export const runtime = "nodejs"
-export const dynamic = "force-dynamic"
+// 1. Initialize Supabase Client
+// Ensure these two variables are in your Next.js .env or .env.local file!
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-const VALID_COMMANDS = new Set(["V", "P", "E", "C"])
+const VALID_COMMANDS = new Set(["V", "P", "E", "C"]);
 
-function getBaseUrl() {
-  const baseUrl = process.env.IOT_DEVICE_BASE_URL
-  if (!baseUrl) {
-    throw new Error("缺少 IOT_DEVICE_BASE_URL 環境變數")
-  }
-  return baseUrl.replace(/\/$/, "")
-}
-
-async function requestWithTimeout(url: string, init?: RequestInit, timeoutMs = 5000) {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...init, signal: controller.signal })
-  } finally {
-    clearTimeout(timeoutId)
-  }
-}
-
+// 2. Handle GET: Your frontend calls this when clicking "Wi-Fi" mode to check connection
 export async function GET() {
-  try {
-    const baseUrl = getBaseUrl()
-    const res = await requestWithTimeout(`${baseUrl}/ping`, { method: "GET" })
-
-    if (!res.ok) {
-      return NextResponse.json(
-        { success: false, error: `IOT 無回應，狀態碼 ${res.status}` },
-        { status: 502 },
-      )
-    }
-
-    const text = (await res.text()).trim()
-    return NextResponse.json({ success: true, message: text || "OK" })
-  } catch (error) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "IOT 連線檢查失敗",
-      },
-      { status: 500 },
-    )
-  }
+  // We just return success since the "connection" is now just checking the database
+  return NextResponse.json({ success: true, message: "Cloud mailbox ready!" });
 }
 
-export async function POST(req: NextRequest) {
+// 3. Handle POST: Your frontend calls this when a button (like "Visitor") is clicked
+export async function POST(request: Request) {
   try {
-    const { cmd } = await req.json()
-    const normalizedCmd = String(cmd || "").trim().toUpperCase()
+    const { cmd } = await request.json();
+    const normalizedCmd = String(cmd || "").trim().toUpperCase();
 
     if (!VALID_COMMANDS.has(normalizedCmd)) {
       return NextResponse.json(
         { success: false, error: "無效指令，只允許 V/P/E/C" },
         { status: 400 },
-      )
+      );
     }
 
-    const baseUrl = getBaseUrl()
-    const res = await requestWithTimeout(`${baseUrl}/cmd`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ cmd: normalizedCmd }),
-    })
+    // Update Row #1 in our Supabase mailbox table with the new command
+    const { error } = await supabase
+      .from('iot_commands')
+      .update({ current_command: normalizedCmd })
+      .eq('id', 1);
 
-    if (!res.ok) {
-      const bodyText = await res.text()
-      return NextResponse.json(
-        { success: false, error: bodyText || `IOT 命令失敗，狀態碼 ${res.status}` },
-        { status: 502 },
-      )
+    if (error) {
+      console.error("Supabase Error:", error);
+      throw error;
     }
 
-    let payload: unknown = null
-    try {
-      payload = await res.json()
-    } catch {
-      payload = await res.text()
-    }
-
-    return NextResponse.json({ success: true, cmd: normalizedCmd, device: payload })
+    // Return the exact format your ArduinoConsole.tsx expects
+    return NextResponse.json({ success: true, cmd: normalizedCmd, device: "Mailbox updated" });
+    
   } catch (error) {
+    console.error(error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "轉發命令失敗",
-      },
-      { status: 500 },
-    )
+      { success: false, error: 'Failed to send command to mailbox' }, 
+      { status: 500 }
+    );
   }
 }

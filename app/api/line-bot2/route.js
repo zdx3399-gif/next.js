@@ -2910,7 +2910,7 @@ export async function POST(req) {
             }
 
             // 正規化舊版中文或 submitted 狀態
-            const incidentStatusNorm = { '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', 'submitted': 'pending' }[incident.status] ?? incident.status;
+            const incidentStatusNorm = { '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', 'submitted': 'pending', 'pending': 'pending', 'draft': 'draft', 'approved': 'approved', 'rejected': 'rejected' }[String(incident.status || '').trim().normalize('NFC')] ?? (String(incident.status || '').trim().normalize('NFC') || 'unknown');
             if (!['pending', 'draft'].includes(incidentStatusNorm)) {
               const label = incidentStatusNorm === 'approved' ? '已發布' : incidentStatusNorm === 'rejected' ? '已駁回' : incident.status;
               await safeReplyMessage(replyToken, userId, { type: 'text', text: `ℹ️ 此事件目前為「${label}」，無法重複審核。` });
@@ -3647,9 +3647,15 @@ export async function POST(req) {
             }
 
             // 正規化舊版中文 status 值（資料庫尚未套用 CHECK constraint 前的歷史資料）
-            const statusNormMap = { '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', '草稿': 'draft', 'submitted': 'pending' };
-            const normalizedStatus = statusNormMap[emergencyEvent.status] ?? emergencyEvent.status;
-            console.log(`[${BOT_TAG}] [紧急審核] 步驟 3.5/6 Guard 檢查: rawStatus=${JSON.stringify(emergencyEvent.status)} normalizedStatus=${normalizedStatus} guardBlock=${normalizedStatus !== 'pending' && normalizedStatus !== 'draft'}`);
+            const statusNormMap = {
+              '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', '草稿': 'draft',
+              'submitted': 'pending', 'pending': 'pending', 'draft': 'draft', 'approved': 'approved', 'rejected': 'rejected'
+            };
+            const rawStatus = emergencyEvent.status;
+            // trim + normalize 防範 Unicode 空白或字型编碼差異導致 key lookup 失敗
+            const trimmedStatus = (rawStatus != null) ? String(rawStatus).trim().normalize('NFC') : null;
+            const normalizedStatus = (trimmedStatus != null && trimmedStatus !== '') ? (statusNormMap[trimmedStatus] ?? trimmedStatus) : 'unknown';
+            console.log(`[${BOT_TAG}] [紧急審核] 步驟 3.5/6 Guard 檢查: rawStatus=${JSON.stringify(rawStatus)} trimmed=${JSON.stringify(trimmedStatus)} normalizedStatus=${JSON.stringify(normalizedStatus)} guardBlock=${normalizedStatus !== 'pending' && normalizedStatus !== 'draft'}`);
 
             if (normalizedStatus !== 'pending' && normalizedStatus !== 'draft') {
               const statusLabelMap = {

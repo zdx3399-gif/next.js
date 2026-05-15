@@ -344,11 +344,11 @@ export async function POST(req: NextRequest) {
     let lineTargetCount = 0
 
     try {
-      // ====== 統一使用 LINE_BOT_NOTIFICATION_MODE 決定發送通道（與 LINE申報 邏輯一致）======
-      // 忽略前端傳來的 sendMode 作為 bot 選擇依據，改讀環境變數，確保 WEB申報與 LINE申報
-      // 使用同一支 bot 發送審核卡片，postback 才能正確路由到對應 webhook 並廣播
-      const notifyMode = (process.env.LINE_BOT_NOTIFICATION_MODE || "").toLowerCase() === "test" ? "test" : "official"
-      const lineClient = getLineClientForMode(notifyMode as "test" | "official")
+      // ====== 使用 getEffectiveMode 決定發送通道 ======
+      // 優先使用前端傳來的 sendMode（'test'/'official'）；若未傳，fallback 到環境變數
+      // BOT1 / BOT2 各自的 webhook 均已實作 approve handler，postback 會自動路由至發送卡片的 bot
+      const notifyMode = getEffectiveMode(sendMode)
+      const lineClient = getLineClientForMode(notifyMode)
 
       // 統一發給管委會 + 管理員（與 LINE申報 的 submit_emergency 一致）
       const { ids: lineTargets } = await getLineTargetsByRoles(supabase, ["admin", "committee"])

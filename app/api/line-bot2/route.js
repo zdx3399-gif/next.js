@@ -3635,55 +3635,10 @@ export async function POST(req) {
               .eq('id', emergencyEventId)
               .maybeSingle();
 
-            console.log(`[${BOT_TAG}] [紧急審核] 步驟 3/6 emergencyEvent:`, emergencyEvent ? `id=${emergencyEvent.id} status=${emergencyEvent.status}` : '未找到', 'err:', eventQueryErr?.message);
-
-            if (eventQueryErr || !emergencyEvent) {
-              console.error('[Emergency Review] 查詢事件失敗:', eventQueryErr);
-              await safeReplyMessage(replyToken, userId, {
-                type: 'text',
-                text: '⚠️ 找不到此緊急事件，可能已被處理。'
-              });
-              continue;
-            }
-
-            // 正規化舊版中文 status 值（資料庫尚未套用 CHECK constraint 前的歷史資料）
-            const statusNormMap = {
-              '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', '草稿': 'draft',
-              'submitted': 'pending', 'pending': 'pending', 'draft': 'draft', 'approved': 'approved', 'rejected': 'rejected'
-            };
-            const rawStatus = emergencyEvent.status;
-            // trim + normalize 防範 Unicode 空白或字型编碼差異導致 key lookup 失敗
-            const trimmedStatus = (rawStatus != null) ? String(rawStatus).trim().normalize('NFC') : null;
-            const normalizedStatus = (trimmedStatus != null && trimmedStatus !== '') ? (statusNormMap[trimmedStatus] ?? trimmedStatus) : 'unknown';
-            console.log(`[${BOT_TAG}] [紧急審核] 步驟 3.5/6 Guard 檢查: rawStatus=${JSON.stringify(rawStatus)} trimmed=${JSON.stringify(trimmedStatus)} normalizedStatus=${JSON.stringify(normalizedStatus)} guardBlock=${normalizedStatus !== 'pending' && normalizedStatus !== 'draft'}`);
-
-            if (normalizedStatus !== 'pending' && normalizedStatus !== 'draft') {
-              const statusLabelMap = {
-                approved: '已發布',
-                rejected: '已駁回',
-                pending: '待審核',
-                draft: '編輯中'
-              };
-              const currentStatusLabel = statusLabelMap[normalizedStatus] || emergencyEvent.status;
-
-              console.log(`[${BOT_TAG}] [紧急審核] 進入 guard block: status=${emergencyEvent.status} currentStatusLabel=${currentStatusLabel}`);
-              let duplicateReviewMessage = `ℹ️ 此事件目前為「${currentStatusLabel}」，無法重複審核。`;
-              if (action === 'approve' && normalizedStatus === 'approved') {
-                duplicateReviewMessage = 'ℹ️ 此事件已發布，無需重複確認。';
-              } else if (action === 'reject' && normalizedStatus === 'rejected') {
-                duplicateReviewMessage = 'ℹ️ 此事件已駁回，無需重複操作。';
-              }
-
-              await safeReplyMessage(replyToken, userId, {
-                type: 'text',
-                text: duplicateReviewMessage
-              });
-              continue;
-            }
-
+            // 原子條件更新：直接在 DB 層做 status 過濾，完全避免 JS 字元編碼問題 + 防競爭條件
             const newStatus = action === 'approve' ? 'approved' : 'rejected';
-            console.log(`[${BOT_TAG}] [紧急審核] 步驟 4/6 更新 DB status=${newStatus}`);
-            const { error: updateErr } = await supabase
+            console.log(`[${BOT_TAG}] [紧急審核] 步驟 4/6 原子條件更新 DB status=${newStatus}`);
+            const { data: updatedRows, error: updateErr } = await supabase
               .from('emergency_incidents')
               .update({
                 status: newStatus,
@@ -3691,7 +3646,12 @@ export async function POST(req) {
                 reviewed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
-              .eq('id', emergencyEventId); // 不過濾 source，支援 LINE 和 WEB 兩種來源
+              .eq('id', emergencyEventId)
+              .neq('status', 'approved')
+              .neq('status', 'rejected')
+              .select('id, event_type, location, description, image_url');
+
+            console.log(`[${BOT_TAG}] [紧急審核] 原子更新結果: rows=${updatedRows?.length ?? 0} err=${updateErr?.message}`);
 
             if (updateErr) {
               console.error('[Emergency Review] 更新狀態失敗:', updateErr);
@@ -3701,6 +3661,27 @@ export async function POST(req) {
               });
               continue;
             }
+
+            if (!updatedRows || updatedRows.length === 0) {
+              // 0 rows → 狀態已非可審核，查詢當前狀態給出明確提示
+              const { data: cur } = await supabase
+                .from('emergency_incidents')
+                .select('status')
+                .eq('id', emergencyEventId)
+                .maybeSingle();
+              if (!cur) {
+                await safeReplyMessage(replyToken, userId, { type: 'text', text: '⚠️ 找不到此緊急事件，可能已被處理。' });
+              } else {
+                const st = String(cur.status || '');
+                let dupMsg = `ℹ️ 此事件目前狀態「${st}」，無法重複審核。`;
+                if (action === 'approve' && (st === 'approved' || st === '已發布')) dupMsg = 'ℹ️ 此事件已發布，無需重複確認。';
+                else if (action === 'reject' && (st === 'rejected' || st === '已駁回')) dupMsg = 'ℹ️ 此事件已駁回，無需重複操作。';
+                await safeReplyMessage(replyToken, userId, { type: 'text', text: dupMsg });
+              }
+              continue;
+            }
+
+            const emergencyEvent = updatedRows[0];
             console.log(`[${BOT_TAG}] [紧急審核] 步驟 4/6 DB 更新成功`);
 
             // 確認發布 -> 廣播給所有住戶

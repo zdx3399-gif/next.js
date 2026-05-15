@@ -109,9 +109,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "找不到事件" }, { status: 404 })
     }
 
-    if (incident.status !== "pending" && incident.status !== "draft") {
+    const statusNormMap: Record<string, string> = { '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', 'submitted': 'pending' }
+    const normalizedIncidentStatus = statusNormMap[incident.status] ?? incident.status
+    if (normalizedIncidentStatus !== "pending" && normalizedIncidentStatus !== "draft") {
       return NextResponse.json(
-        { success: false, error: `目前狀態為 ${incident.status}，不可再審核` },
+        { success: false, error: `目前狀態為 ${normalizedIncidentStatus}，不可再審核` },
         { status: 409 },
       )
     }

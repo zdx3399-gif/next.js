@@ -2909,8 +2909,10 @@ export async function POST(req) {
               continue;
             }
 
-            if (!['pending', 'draft'].includes(incident.status)) {
-              const label = incident.status === 'approved' ? '已發布' : incident.status === 'rejected' ? '已駁回' : incident.status;
+            // 正規化舊版中文或 submitted 狀態
+            const incidentStatusNorm = { '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', 'submitted': 'pending' }[incident.status] ?? incident.status;
+            if (!['pending', 'draft'].includes(incidentStatusNorm)) {
+              const label = incidentStatusNorm === 'approved' ? '已發布' : incidentStatusNorm === 'rejected' ? '已駁回' : incident.status;
               await safeReplyMessage(replyToken, userId, { type: 'text', text: `ℹ️ 此事件目前為「${label}」，無法重複審核。` });
               continue;
             }
@@ -3644,22 +3646,25 @@ export async function POST(req) {
               continue;
             }
 
-            console.log(`[${BOT_TAG}] [紧急審核] 步驟 3.5/6 Guard 檢查: status=${JSON.stringify(emergencyEvent.status)} typeof=${typeof emergencyEvent.status} isPending=${emergencyEvent.status === 'pending'} isDraft=${emergencyEvent.status === 'draft'} guardBlock=${emergencyEvent.status !== 'pending' && emergencyEvent.status !== 'draft'}`);
+            // 正規化舊版中文 status 值（資料庫尚未套用 CHECK constraint 前的歷史資料）
+            const statusNormMap = { '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', '草稿': 'draft', 'submitted': 'pending' };
+            const normalizedStatus = statusNormMap[emergencyEvent.status] ?? emergencyEvent.status;
+            console.log(`[${BOT_TAG}] [紧急審核] 步驟 3.5/6 Guard 檢查: rawStatus=${JSON.stringify(emergencyEvent.status)} normalizedStatus=${normalizedStatus} guardBlock=${normalizedStatus !== 'pending' && normalizedStatus !== 'draft'}`);
 
-            if (emergencyEvent.status !== 'pending' && emergencyEvent.status !== 'draft') {
+            if (normalizedStatus !== 'pending' && normalizedStatus !== 'draft') {
               const statusLabelMap = {
                 approved: '已發布',
                 rejected: '已駁回',
                 pending: '待審核',
                 draft: '編輯中'
               };
-              const currentStatusLabel = statusLabelMap[emergencyEvent.status] || emergencyEvent.status;
+              const currentStatusLabel = statusLabelMap[normalizedStatus] || emergencyEvent.status;
 
               console.log(`[${BOT_TAG}] [紧急審核] 進入 guard block: status=${emergencyEvent.status} currentStatusLabel=${currentStatusLabel}`);
               let duplicateReviewMessage = `ℹ️ 此事件目前為「${currentStatusLabel}」，無法重複審核。`;
-              if (action === 'approve' && emergencyEvent.status === 'approved') {
+              if (action === 'approve' && normalizedStatus === 'approved') {
                 duplicateReviewMessage = 'ℹ️ 此事件已發布，無需重複確認。';
-              } else if (action === 'reject' && emergencyEvent.status === 'rejected') {
+              } else if (action === 'reject' && normalizedStatus === 'rejected') {
                 duplicateReviewMessage = 'ℹ️ 此事件已駁回，無需重複操作。';
               }
 

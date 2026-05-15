@@ -344,103 +344,87 @@ export async function POST(req: NextRequest) {
     let lineTargetCount = 0
 
     try {
-      const effectiveMode = getEffectiveMode(sendMode)
-      const lineClient = getLineClientForMode(sendMode)
-      // effectiveMode='test': 通知 admin+committee；effectiveMode='official': 僅通知管委會
-      const { ids: lineTargets } = effectiveMode === "test"
-        ? await getLineTargetsByRoles(supabase, ["admin", "committee"])
-        : await getLineTargetsByRoles(supabase, ["committee"])
+      // ====== 統一使用 LINE_BOT_NOTIFICATION_MODE 決定發送通道（與 LINE申報 邏輯一致）======
+      // 忽略前端傳來的 sendMode 作為 bot 選擇依據，改讀環境變數，確保 WEB申報與 LINE申報
+      // 使用同一支 bot 發送審核卡片，postback 才能正確路由到對應 webhook 並廣播
+      const notifyMode = (process.env.LINE_BOT_NOTIFICATION_MODE || "").toLowerCase() === "test" ? "test" : "official"
+      const lineClient = getLineClientForMode(notifyMode as "test" | "official")
+
+      // 統一發給管委會 + 管理員（與 LINE申報 的 submit_emergency 一致）
+      const { ids: lineTargets } = await getLineTargetsByRoles(supabase, ["admin", "committee"])
       lineTargetCount = lineTargets.length
-      console.log(`[emergency-notify] 目標管委數量: ${lineTargetCount}，effectiveMode=${effectiveMode}`)
+      console.log(`[emergency-notify] 目標管委+管理員數量: ${lineTargetCount}，notifyMode=${notifyMode}`)
 
-      const timeStr = new Date(nowIso).toLocaleString("zh-TW", { hour12: false })
-      const isTest = effectiveMode === "test"
-      const headerText = isTest ? "🧪 緊急事件（測試）" : "⚠️ 緊急事件待審核"
-      const footerText = isTest
-        ? "測試模式：確認後僅廣播給管理員 + 管委會"
-        : "請確認是否發布通知"
-
-      // Flex Message 卡片（postback 按鈕，透過 LINE Webhook 觸發審核）
       const incidentId = insertedEmergency?.id || ""
 
-      const buildFlexCard = (): any => ({
-        type: "flex",
-        altText: `${isTest ? "[測試] " : ""}緊急事件通報：${type}`,
-        contents: {
-          type: "bubble",
-          ...(imageUrl ? {
-            hero: {
-              type: "image",
-              url: imageUrl,
-              size: "full",
-              aspectRatio: "20:13",
-              aspectMode: "cover",
-            },
-          } : {}),
-          body: {
-            type: "box",
-            layout: "vertical",
-            spacing: "md",
-            contents: [
-              {
-                type: "text",
-                text: headerText,
-                weight: "bold",
-                size: "lg",
-                color: isTest ? "#1565C0" : "#B71C1C",
-              },
-              { type: "separator" },
-              {
-                type: "box",
-                layout: "vertical",
-                spacing: "sm",
-                margin: "md",
-                contents: [
-                  { type: "text", text: `類型：${type}`, size: "sm", color: "#333333" },
-                  { type: "text", text: `地點：${location || "未提供"}`, size: "sm", color: "#333333" },
-                  { type: "text", text: `描述：${incidentDescription || "（無）"}`, size: "sm", color: "#333333", wrap: true },
-                  { type: "text", text: `附圖：${imageUrl ? "有" : "無"}`, size: "sm", color: "#666666" },
-                  { type: "text", text: `發報人：${resolvedReportedByName || "未知"}`, size: "sm", color: "#666666" },
-                ],
-              },
-              { type: "separator" },
-              { type: "text", text: footerText, size: "xs", color: "#888888" },
-            ],
-          },
-          footer: {
-            type: "box",
-            layout: "vertical",
-            spacing: "sm",
-            contents: [
-              {
-                type: "button",
-                style: "primary",
-                color: isTest ? "#1565C0" : "#B71C1C",
-                action: {
-                  type: "postback",
-                  label: "✅ 確認發布",
-                  data: `action=approve&event_id=${incidentId}`,
-                  displayText: `確認發布事件 ${incidentId}`,
-                },
-              },
-              {
-                type: "button",
-                style: "secondary",
-                action: {
-                  type: "postback",
-                  label: "❌ 駁回",
-                  data: `action=reject&event_id=${incidentId}`,
-                  displayText: `駁回事件 ${incidentId}`,
-                },
-              },
-            ],
-          },
+      // 使用與 LINE申報（submit_emergency）完全相同格式的 Flex 審核卡片
+      // postback data 格式相同 → 由 route.js 的 (action=approve && emergencyEventId) 處理 → 廣播給所有住戶
+      const reviewBubble: any = {
+        type: "bubble",
+        body: {
+          type: "box",
+          layout: "vertical",
+          spacing: "md",
+          contents: [
+            { type: "text", text: "⚠️ 緊急事件待審核", weight: "bold", size: "lg" },
+            { type: "separator", margin: "sm" },
+            { type: "text", text: `類型：${type}`, wrap: true },
+            { type: "text", text: `地點：${location || "未提供"}`, wrap: true },
+            { type: "text", text: `描述：${incidentDescription || "（無）"}`, wrap: true },
+            { type: "text", text: `附圖：${imageUrl ? "有" : "無"}`, wrap: true },
+            { type: "text", text: `發報人：${resolvedReportedByName || "未知"}`, wrap: true },
+            { type: "text", text: "請確認是否發布通知", color: "#666666", size: "sm", wrap: true },
+          ],
         },
-      })
+        footer: {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            {
+              type: "button",
+              style: "primary",
+              color: "#1E88E5",
+              action: {
+                type: "postback",
+                label: "✅ 確認發布",
+                data: `action=approve&event_id=${incidentId}`,
+                displayText: `確認發布事件 ${incidentId}`,
+              },
+            },
+            {
+              type: "button",
+              style: "secondary",
+              action: {
+                type: "postback",
+                label: "❌ 駁回",
+                data: `action=reject&event_id=${incidentId}`,
+                displayText: `駁回事件 ${incidentId}`,
+              },
+            },
+          ],
+        },
+      }
+
+      if (imageUrl) {
+        reviewBubble.hero = {
+          type: "image",
+          url: imageUrl,
+          size: "full",
+          aspectRatio: "20:13",
+          aspectMode: "cover",
+        }
+      }
+
+      const reviewFlex = {
+        type: "flex",
+        altText: "⚠️ 緊急事件待審核",
+        contents: reviewBubble,
+      }
 
       for (const to of lineTargets) {
         try {
-          await lineClient.pushMessage(to, buildFlexCard())
+          await lineClient.pushMessage(to, reviewFlex)
           lineSent++
           console.log(`[emergency-notify] pushMessage 成功: ${to}`)
         } catch (pushErr: unknown) {

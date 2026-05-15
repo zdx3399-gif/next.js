@@ -76,6 +76,9 @@
     "url": "latest",
     "vaul": "^1.1.2"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["core-js", "sharp", "unrs-resolver"]
+  },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4.1.18",

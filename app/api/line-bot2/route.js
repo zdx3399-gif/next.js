@@ -1700,12 +1700,14 @@ export async function POST(req) {
         }
 
         // ===== 檢查是否有進行中的緊急事件會話 =====
+        const emergencySessionTTL = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
         const { data: activeSession, error: sessionCheckErr } = await supabase
           .from('emergency_incidents')
           .select('id, event_type, location, description, status, image_url')
           .eq('source', 'line_session')
           .eq('reporter_line_user_id', userId)
           .eq('status', 'draft')
+          .gte('updated_at', emergencySessionTTL)
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -1851,7 +1853,7 @@ export async function POST(req) {
               })
               .eq('source', 'line_session')
               .eq('reporter_line_user_id', userId)
-              .eq('status', 'draft');
+              .in('status', ['draft', 'submitted']);
 
             // 建立新會話
             const { error: sessionErr } = await supabase
@@ -3447,6 +3449,15 @@ export async function POST(req) {
             }
             console.log(`[${BOT_TAG}] [submit_emergency] line_report 建立成功 id=${createdEmergency.id}`);
 
+            // 清理同一用戶其他孤兒草稿（競爭條件下可能存在多份）
+            await supabase
+              .from('emergency_incidents')
+              .update({ status: 'rejected', updated_at: nowIso })
+              .eq('source', 'line_session')
+              .eq('reporter_line_user_id', userId)
+              .eq('status', 'draft')
+              .neq('id', sessionId);
+
             // 查詢所有管委會（committee）+ 管理員（admin）
             const { data: admins, error: adminQueryError } = await supabase
               .from('profiles')
@@ -3627,13 +3638,6 @@ export async function POST(req) {
               });
               continue;
             }
-
-            // 讀取事件（支援 LINE 和 WEB 兩種來源）
-            const { data: emergencyEvent, error: eventQueryErr } = await supabase
-              .from('emergency_incidents')
-              .select('id, event_type, location, description, image_url, status')
-              .eq('id', emergencyEventId)
-              .maybeSingle();
 
             // 原子條件更新：直接在 DB 層做 status 過濾，完全避免 JS 字元編碼問題 + 防競爭條件
             const newStatus = action === 'approve' ? 'approved' : 'rejected';

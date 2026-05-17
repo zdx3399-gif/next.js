@@ -190,85 +190,8 @@ export async function POST(req) {
       afterState: { status: "reserved", reservation_time, unit_id: unit_id || null },
     })
 
-    // 發送 LINE 通知
-    if (unit_id) {
-      const { lineUserId, lineDisplayName } = await findLineUserByUnit(supabase, unit_id)
-
-      if (lineUserId) {
-        const flexMessage = {
-          type: "flex",
-          altText: `👤 訪客預約通知 - ${name}`,
-          contents: {
-            type: "bubble",
-            hero: {
-              type: "box",
-              layout: "vertical",
-              contents: [
-                {
-                  type: "text",
-                  text: "👤 訪客預約通知",
-                  weight: "bold",
-                  size: "xl",
-                  color: "#ffffff",
-                },
-              ],
-              backgroundColor: "#0084ff",
-              paddingAll: "20px",
-            },
-            body: {
-              type: "box",
-              layout: "vertical",
-              contents: [
-                {
-                  type: "text",
-                  text: `訪客：${name}`,
-                  margin: "md",
-                  size: "md",
-                  weight: "bold",
-                },
-                {
-                  type: "text",
-                  text: `電話：${phone}`,
-                  margin: "sm",
-                  color: "#666666",
-                },
-                { type: "separator", margin: "md" },
-                {
-                  type: "text",
-                  text: `到訪目的：${purpose || "未指定"}`,
-                  margin: "md",
-                  color: "#333333",
-                },
-                {
-                  type: "text",
-                  text: `預約時間：${new Date(reservation_time).toLocaleString("zh-TW", { hour12: false })}`,
-                  margin: "sm",
-                  color: "#666666",
-                  size: "sm",
-                },
-                { type: "separator", margin: "md" },
-                {
-                  type: "text",
-                  text: "訪客將在此時間到達管理室簽到",
-                  margin: "md",
-                  color: "#0084ff",
-                  weight: "bold",
-                  align: "center",
-                },
-              ],
-            },
-          },
-        }
-
-        try {
-          await client.pushMessage(lineUserId, flexMessage)
-          console.log(`[Visitor LINE] Reservation notification sent to ${lineDisplayName || lineUserId}`)
-        } catch (e) {
-          console.error("[Visitor LINE] Failed to send reservation notification:", e)
-        }
-      }
-    }
-
+    // 預約建立時不發送 LINE 通知，避免與簽到通知重複
+    // 住戶將在訪客實際簽到（check_in）時收到通知即可
     // 預約建立時不觸發 IoT（到實際簽到 check_in 時才觸發）
     return Response.json({ success: true, id: visitor.id, message: "✅ 訪客預約成功" })
   } catch (err) {

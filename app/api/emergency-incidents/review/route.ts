@@ -38,20 +38,22 @@ async function broadcastApproved(supabase: any, incident: any, sendMode = "offic
     (isTest ? "（此為測試通知，僅管理人員收到）" : "請住戶留意安全並配合現場指示。")
 
   // 測試模式：只廣播 BOT2（測試 BOT），不觸發 BOT1 和 IoT
-  // 正式模式：廣播 BOT2 + BOT1，並觸發 IoT 警報
+  // 正式模式：只廣播 BOT1（正式 BOT），並觸發 IoT 警報
+  // 各模式只對應一個 BOT，避免追蹤兩個 BOT 的用戶收到重複通知
 
-  // 1. BOT2 廣播（測試/正式都執行）
-  try {
-    const bot2Token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2
-    if (bot2Token) {
-      const bot2Client = new Client({ channelAccessToken: bot2Token, channelSecret: process.env.LINE_CHANNEL_SECRET_BOT2 || "unused" })
-      await bot2Client.broadcast({ type: "text", text: broadcastText }).catch(() => {})
-    }
-  } catch {}
+  if (isTest) {
+    // 測試模式：僅 BOT2
+    try {
+      const bot2Token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2
+      if (bot2Token) {
+        const bot2Client = new Client({ channelAccessToken: bot2Token, channelSecret: process.env.LINE_CHANNEL_SECRET_BOT2 || "unused" })
+        await bot2Client.broadcast({ type: "text", text: broadcastText }).catch(() => {})
+      }
+    } catch {}
+    return
+  }
 
-  if (isTest) return  // 測試模式到此為止
-
-  // 2. BOT1 交叉廣播（正式模式）
+  // 正式模式：僅 BOT1
   try {
     const bot1Token = process.env.LINE_CHANNEL_ACCESS_TOKEN
     if (bot1Token) {
@@ -137,6 +139,10 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", incidentId)
+      .neq("status", "approved")
+      .neq("status", "已發布")
+      .neq("status", "rejected")
+      .neq("status", "已駁回")
       .select("id")
 
     if (updateError) {

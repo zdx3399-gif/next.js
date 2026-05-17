@@ -14,33 +14,49 @@ function getSupabase() {
 
 const VALID_COMMANDS = new Set(["V", "P", "E", "C"]);
 
-// GET：Arduino 輪詢此端點取得指令，Server 同步清除 NONE（read-and-clear）
+// GET：Arduino 輪詢此端點取得指令，兩步原子讀取清除（防止並發重複響聲）
 export async function GET() {
   try {
     const supabase = getSupabase()
 
-    // 1. 讀取當前指令
-    const { data, error } = await supabase
+    // 步驟 1：讀取當前指令
+    const { data, error: readErr } = await supabase
       .from('iot_commands')
       .select('current_command')
       .eq('id', 1)
       .single()
 
-    if (error || !data) {
+    if (readErr || !data) {
       return NextResponse.json({ success: false, cmd: "NONE", error: "read failed" })
     }
 
     const cmd = String(data.current_command || "NONE").trim().toUpperCase()
 
-    // 2. 若有待執行指令，立即清除（Arduino anon key 沒有 UPDATE 權限，由 Server 代清）
-    if (cmd !== "NONE") {
-      await supabase
-        .from('iot_commands')
-        .update({ current_command: 'NONE' })
-        .eq('id', 1)
-      console.log(`[IoT] GET read-and-clear: ${cmd} → NONE`)
+    if (cmd === "NONE") {
+      return NextResponse.json({ success: true, cmd: "NONE" })
     }
 
+    // 步驟 2：只有當 current_command 仍為剛才讀到的值時才清除
+    // 若兩個請求同時讀到 'V'，只有第一個 UPDATE 能匹配（第二個 UPDATE 時值已是 NONE）
+    const { data: cleared, error: clearErr } = await supabase
+      .from('iot_commands')
+      .update({ current_command: 'NONE' })
+      .eq('id', 1)
+      .eq('current_command', cmd)   // 精確匹配原始值，非 NONE 才更新
+      .select('id')
+      .maybeSingle()
+
+    if (clearErr) {
+      console.error("[IoT] GET clear error:", clearErr)
+      return NextResponse.json({ success: false, cmd: "NONE", error: "clear failed" })
+    }
+
+    if (!cleared) {
+      // 另一個並發請求搶先清除了，回傳 NONE 避免重複執行
+      return NextResponse.json({ success: true, cmd: "NONE" })
+    }
+
+    console.log(`[IoT] GET read-and-clear: ${cmd} → NONE`)
     return NextResponse.json({ success: true, cmd })
   } catch (err) {
     console.error("[IoT] GET error:", err)

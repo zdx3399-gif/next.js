@@ -3585,7 +3585,7 @@ export async function POST(req) {
               try {
                 await supabase
                   .from('iot_commands')
-                  .update({ current_command: 'E', updated_at: new Date().toISOString() })
+                  .update({ current_command: 'E' })
                   .eq('id', 1);
               } catch (iotErr) {
                 console.error('[IoT] 寫入 iot_commands 失敗:', iotErr?.message);
@@ -3730,20 +3730,6 @@ export async function POST(req) {
                 console.log(`[${BOT_TAG}] [緊急廣播] BOT1 broadcast 成功`);
               } catch (broadcastErr) {
                 console.error('[緊急廣播] BOT1 broadcast 失敗:', broadcastErr?.response?.data || broadcastErr?.message);
-              }
-
-              // 同時用 BOT2 廣播，確保追蹤 BOT2 的住戶也能收到
-              try {
-                const bot2Token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2;
-                const bot2Secret = process.env.LINE_CHANNEL_SECRET_BOT2 || process.env.LINE_CHANNEL_SECRET;
-                if (bot2Token) {
-                  const { Client: LineClient } = require('@line/bot-sdk');
-                  const bot2Client = new LineClient({ channelAccessToken: bot2Token, channelSecret: bot2Secret || 'unused' });
-                  await bot2Client.broadcast(broadcastMsgs);
-                  console.log(`[${BOT_TAG}] [緊急廣播] BOT2 broadcast 成功`);
-                }
-              } catch (bot2Err) {
-                console.error('[緊急廣播] BOT2 broadcast 失敗:', bot2Err?.response?.data || bot2Err?.message);
               }
 
               // IoT E 指令：透過 /api/iot 觸發警報（含 service_role key 及 5 秒自動重設）

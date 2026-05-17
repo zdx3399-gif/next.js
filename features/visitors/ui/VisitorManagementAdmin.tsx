@@ -239,15 +239,15 @@ export function VisitorManagementAdmin({ currentUser, isPreviewMode = false }: V
                 onClick={() => handleSelectSendMode("test")}
                 className="w-full px-4 py-3 rounded-xl font-semibold bg-amber-500/20 border border-amber-500 text-amber-600 hover:bg-amber-500/30 transition-colors"
               >
-                🧪 測試 BOT
-                <div className="text-xs font-normal mt-1 opacity-80">限制通知範圍，用於測試</div>
+                🧪 測試傳送
+                <div className="text-xs font-normal mt-1 opacity-80">僅通知管委會 + 管理員，加 [測試] 標記</div>
               </button>
               <button
                 onClick={() => handleSelectSendMode("official")}
-                className="w-full px-4 py-3 rounded-xl font-semibold bg-blue-500/20 border border-blue-500 text-blue-600 hover:bg-blue-500/30 transition-colors"
+                className="w-full px-4 py-3 rounded-xl font-semibold bg-red-500/20 border border-red-500 text-red-600 hover:bg-red-500/30 transition-colors"
               >
-                ✓ 正式 BOT
-                <div className="text-xs font-normal mt-1 opacity-80">通知所有相關住戶</div>
+                ✓ 正式傳送
+                <div className="text-xs font-normal mt-1 opacity-80">傳送給所有相關住戶</div>
               </button>
             </div>
             <div className="border-t border-[var(--theme-border)] p-3 bg-[var(--theme-bg-secondary)]">

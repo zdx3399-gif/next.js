@@ -7,6 +7,7 @@ import {
   triggerEmergency as apiTriggerEmergency,
   deleteEmergency as apiDeleteEmergency,
   editEmergency as apiEditEmergency,
+  reviewEmergency as apiReviewEmergency,
   type EmergencyUpdatePayload,
 } from "../api/emergencies"
 
@@ -97,6 +98,19 @@ export function useEmergencies(isAdmin = false) {
     }
   }
 
+  const reviewEmergency = async (incidentId: string, action: "approve" | "reject", reviewerId: string, sendMode?: "test" | "official") => {
+    try {
+      await apiReviewEmergency(incidentId, action, reviewerId, sendMode)
+      if (isAdmin) {
+        loadEmergencies()
+      }
+    } catch (e: unknown) {
+      console.error("reviewEmergency error:", e)
+      const message = e instanceof Error ? e.message : "未知錯誤"
+      alert("審核失敗：" + message)
+    }
+  }
+
   return {
     emergencies,
     loading,
@@ -104,6 +118,7 @@ export function useEmergencies(isAdmin = false) {
     confirmAndTrigger,
     editEmergency,
     deleteEmergency,
+    reviewEmergency,
     reload: loadEmergencies,
   }
 }

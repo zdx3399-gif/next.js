@@ -94,13 +94,13 @@ function getVisitorOperator(payload = {}) {
   }
 }
 
-async function sendIotCommand(req, cmd) {
+async function sendIotCommand(req, cmd, relatedType = null, relatedId = null, createdBy = null) {
   try {
     const iotUrl = new URL("/api/iot", req.url)
     const res = await fetch(iotUrl.toString(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cmd }),
+      body: JSON.stringify({ cmd, related_type: relatedType, related_id: relatedId, created_by: createdBy }),
     })
 
     const payload = await res.json().catch(() => null)
@@ -269,15 +269,8 @@ export async function POST(req) {
       }
     }
 
-    const iotResult = await sendIotCommand(req, "V")
-
-    return Response.json({ 
-      success: true, 
-      id: visitor.id,
-      message: iotResult.success ? "✅ 訪客預約成功（IOT 已通知）" : "✅ 訪客預約成功（IOT 通知失敗）",
-      iotSent: iotResult.success,
-      iotError: iotResult.error,
-    })
+    // 預約建立時不觸發 IoT（到實際簽到 check_in 時才觸發）
+    return Response.json({ success: true, id: visitor.id, message: "✅ 訪客預約成功" })
   } catch (err) {
     console.error("[visitor] POST error:", err)
     return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 })
@@ -449,16 +442,20 @@ export async function PATCH(req) {
       }
     }
 
-    const iotResult = await sendIotCommand(req, "V")
+    // 只有簽到（check_in）才觸發 IoT 訪客到達聲音
+    if (action === "check_in") {
+      const iotResult = await sendIotCommand(req, "V", "visitor", String(visitor_id), operator.id ? String(operator.id) : null)
+      return Response.json({ 
+        success: true,
+        message: iotResult.success
+          ? `✅ 訪客${actionText}成功（IOT 已通知）`
+          : `✅ 訪客${actionText}成功（IOT 通知失敗）`,
+        iotSent: iotResult.success,
+        iotError: iotResult.error,
+      })
+    }
 
-    return Response.json({ 
-      success: true,
-      message: iotResult.success
-        ? `✅ 訪客${actionText}成功（IOT 已通知）`
-        : `✅ 訪客${actionText}成功（IOT 通知失敗）`,
-      iotSent: iotResult.success,
-      iotError: iotResult.error,
-    })
+    return Response.json({ success: true, message: `✅ 訪客${actionText}成功` })
   } catch (err) {
     console.error("[visitor] PATCH error:", err)
     return Response.json({ error: err?.message ?? "Internal Server Error" }, { status: 500 })

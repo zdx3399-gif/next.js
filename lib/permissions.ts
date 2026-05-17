@@ -22,6 +22,7 @@ export type Section =
   | "moderation"
   | "audit-logs"
   | "decryption"
+  | "arduino"
 
 export const USER_ROLES: UserRole[] = ["resident", "guard", "committee", "admin"]
 
@@ -45,6 +46,7 @@ export const CUSTOMIZABLE_SECTIONS: Section[] = [
   "moderation",
   "audit-logs",
   "decryption",
+  "arduino",
 ]
 
 const ROLE_PERMISSION_STORAGE_KEY = "customRolePermissionsByMode"
@@ -69,8 +71,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "knowledge-base",
   ],
 
-  // 警衛 (Guard): Backend - dashboard, packages, visitors only
-  guard: ["dashboard", "packages", "visitors"],
+  // 警衛 (Guard): Backend - dashboard, packages, visitors, emergencies, arduino IoT
+  guard: ["dashboard", "packages", "visitors", "emergencies", "arduino"],
 
   // 管委會 (Management Committee): 完整後台權限，包含資料管理
   committee: [
@@ -341,7 +343,9 @@ export function getAllowedSections(role: UserRole, isResidentMode = false): Sect
 
   const override = getRolePermissionOverride(role, isResidentMode)
   if (override) {
-    const sections: Section[] = ["dashboard", ...override]
+    // Always include non-customizable sections from base (e.g., arduino)
+    const nonCustomizable = base.filter(s => !CUSTOMIZABLE_SECTIONS.includes(s))
+    const sections: Section[] = [...new Set(["dashboard", ...nonCustomizable, ...override])]
     if (role === "admin" && !sections.includes("ai-auto-fix")) {
       sections.push("ai-auto-fix")
     }

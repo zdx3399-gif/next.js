@@ -2911,17 +2911,9 @@ export async function POST(req) {
               continue;
             }
 
-            // 正規化舊版中文或 submitted 狀態
-            const incidentStatusNorm = { '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', 'submitted': 'pending', 'pending': 'pending', 'draft': 'draft', 'approved': 'approved', 'rejected': 'rejected' }[String(incident.status || '').trim().normalize('NFC')] ?? (String(incident.status || '').trim().normalize('NFC') || 'unknown');
-            if (!['pending', 'draft'].includes(incidentStatusNorm)) {
-              const label = incidentStatusNorm === 'approved' ? '已發布' : incidentStatusNorm === 'rejected' ? '已駁回' : incident.status;
-              await safeReplyMessage(replyToken, userId, { type: 'text', text: `ℹ️ 此事件目前為「${label}」，無法重複審核。` });
-              continue;
-            }
-
-            // 3. 更新 DB 狀態
+            // 3. 原子條件更新：直接在 DB 層過濾已終態，避免 JS 字元編碼問題 + 防競爭條件
             const newStatus = isApprove ? 'approved' : 'rejected';
-            const { error: updateErr } = await supabase
+            const { data: updatedRows, error: updateErr } = await supabase
               .from('emergency_incidents')
               .update({
                 status: newStatus,
@@ -2929,11 +2921,36 @@ export async function POST(req) {
                 reviewed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
-              .eq('id', incidentId);
+              .eq('id', incidentId)
+              .neq('status', 'approved')
+              .neq('status', '已發布')
+              .neq('status', 'rejected')
+              .neq('status', '已駁回')
+              .select('id');
 
             if (updateErr) {
               console.error('[Emergency Review] 更新狀態失敗:', updateErr);
               await safeReplyMessage(replyToken, userId, { type: 'text', text: '❌ 審核更新失敗，請稍後再試。' });
+              continue;
+            }
+
+            if (!updatedRows || updatedRows.length === 0) {
+              const { data: cur } = await supabase
+                .from('emergency_incidents')
+                .select('status')
+                .eq('id', incidentId)
+                .maybeSingle();
+              if (!cur) {
+                await safeReplyMessage(replyToken, userId, { type: 'text', text: '⚠️ 找不到此緊急事件，可能已被處理。' });
+              } else {
+                const st = String(cur.status || '');
+                const isApprovedSt = st === 'approved' || st === '已發布';
+                const isRejectedSt = st === 'rejected' || st === '已駁回';
+                let dupMsg = `ℹ️ 此事件目前為「${st}」，無法重複審核。`;
+                if (isApprove && isApprovedSt) dupMsg = 'ℹ️ 此事件已發布，無需重複確認。';
+                else if (!isApprove && isRejectedSt) dupMsg = 'ℹ️ 此事件已駁回，無需重複操作。';
+                await safeReplyMessage(replyToken, userId, { type: 'text', text: dupMsg });
+              }
               continue;
             }
 
@@ -2978,18 +2995,15 @@ export async function POST(req) {
                 }
               }
 
-              // IoT E 指令
+              // IoT E 指令：寫入 iot_commands 表，Arduino 輪詢 Supabase 後執行
               try {
-                const iotBase = process.env.IOT_DEVICE_BASE_URL?.replace(/\/$/, '');
-                if (iotBase) {
-                  await fetch(`${iotBase}/cmd`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cmd: 'E' }),
-                    signal: AbortSignal.timeout(5000)
-                  }).catch(() => {});
-                }
-              } catch {}
+                await supabase
+                  .from('iot_commands')
+                  .update({ current_command: 'E', updated_at: new Date().toISOString() })
+                  .eq('id', 1);
+              } catch (iotErr) {
+                console.error('[IoT] 寫入 iot_commands 失敗:', iotErr?.message);
+              }
 
               await safeReplyMessage(replyToken, userId, { type: 'text', text: '✅ 已確認發布，緊急事件通知已廣播給所有住戶。' });
             } else {
@@ -3609,39 +3623,59 @@ export async function POST(req) {
 
         // ===== 處理緊急事件審核（committee） =====
         if ((action === 'approve' || action === 'reject') && emergencyEventId) {
+          const safeEventId = String(emergencyEventId).trim();
           try {
-            console.log(`[${BOT_TAG}] [紧急審核] 步驟 1/6 開始 — action=${action} emergencyEventId=${emergencyEventId} userId=${userId}`);
+            console.log(`[${BOT_TAG}] [緊急審核] 開始 — action=${action} eventId=${safeEventId} userId=${userId}`);
 
-            // 檢查操作者是否為管委會（committee）
+            // 1. 檢查操作者是否為管委會（committee）
             const { data: adminProfile, error: adminProfileErr } = await supabase
               .from('profiles')
               .select('id, name, role')
               .eq('line_user_id', userId)
               .maybeSingle();
 
-            console.log(`[${BOT_TAG}] [紧急審核] 步驟 2/6 adminProfile:`, adminProfile ? `id=${adminProfile.id} role=${adminProfile.role}` : '未找到', 'err:', adminProfileErr?.message);
+            console.log(`[${BOT_TAG}] [緊急審核] adminProfile:`, adminProfile ? `id=${adminProfile.id} role=${adminProfile.role}` : '未找到', 'err:', adminProfileErr?.message);
 
             if (adminProfileErr) {
-              console.error('[Emergency Review] 查詢 committee 身分失敗:', adminProfileErr);
-              await safeReplyMessage(replyToken, userId, {
-                type: 'text',
-                text: '❌ 審核失敗，請稍後再試。'
-              });
+              console.error('[Emergency Review] 查詢身分失敗:', adminProfileErr);
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '❌ 審核失敗，請稍後再試。' });
               continue;
             }
 
             if (!adminProfile || !['committee', 'admin'].includes(adminProfile.role)) {
-              console.warn(`[${BOT_TAG}] [紧急審核] 權限拒絕： adminProfile=${JSON.stringify(adminProfile)}`);
-              await safeReplyMessage(replyToken, userId, {
-                type: 'text',
-                text: '⛔ 您沒有審核權限。'
-              });
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '⛔ 您沒有審核權限。' });
               continue;
             }
 
-            // 原子條件更新：直接在 DB 層做 status 過濾，完全避免 JS 字元編碼問題 + 防競爭條件
+            // 2. 預先查詢 incident 狀態（避免 atomic update 返回 0 rows 的 RLS 誤判）
+            const { data: preIncident, error: preErr } = await supabase
+              .from('emergency_incidents')
+              .select('id, event_type, location, description, image_url, status')
+              .eq('id', safeEventId)
+              .maybeSingle();
+
+            console.log(`[${BOT_TAG}] [緊急審核] pre-fetch: id=${safeEventId} status="${preIncident?.status}" err=${preErr?.message}`);
+
+            if (preErr || !preIncident) {
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '⚠️ 找不到此緊急事件，可能已被處理。' });
+              continue;
+            }
+
+            const rawStatus = String(preIncident.status || '').trim();
+            const terminalStatuses = ['approved', '已發布', 'rejected', '已駁回'];
+            if (terminalStatuses.includes(rawStatus)) {
+              const isApproved = rawStatus === 'approved' || rawStatus === '已發布';
+              const isRejected = rawStatus === 'rejected' || rawStatus === '已駁回';
+              let dupMsg = `ℹ️ 此事件目前為「${rawStatus}」，無法重複審核。`;
+              if (action === 'approve' && isApproved) dupMsg = 'ℹ️ 此事件已發布，無需重複確認。';
+              else if (action === 'reject' && isRejected) dupMsg = 'ℹ️ 此事件已駁回，無需重複操作。';
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: dupMsg });
+              continue;
+            }
+
+            // 3. 原子條件更新（status 已知為可審核，防止競爭條件）
             const newStatus = action === 'approve' ? 'approved' : 'rejected';
-            console.log(`[${BOT_TAG}] [紧急審核] 步驟 4/6 原子條件更新 DB status=${newStatus}`);
+            console.log(`[${BOT_TAG}] [緊急審核] 原子更新 → ${newStatus}`);
             const { data: updatedRows, error: updateErr } = await supabase
               .from('emergency_incidents')
               .update({
@@ -3650,9 +3684,11 @@ export async function POST(req) {
                 reviewed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
-              .eq('id', emergencyEventId)
+              .eq('id', safeEventId)
               .neq('status', 'approved')
+              .neq('status', '已發布')
               .neq('status', 'rejected')
+              .neq('status', '已駁回')
               .select('id, event_type, location, description, image_url');
 
             console.log(`[${BOT_TAG}] [紧急審核] 原子更新結果: rows=${updatedRows?.length ?? 0} err=${updateErr?.message}`);
@@ -3667,11 +3703,12 @@ export async function POST(req) {
             }
 
             if (!updatedRows || updatedRows.length === 0) {
-              // 0 rows → 狀態已非可審核，查詢當前狀態給出明確提示
+              // 0 rows → 競爭條件（pre-check 後被其他請求搶先更新），或 RLS 阻擋
+              console.warn(`[${BOT_TAG}] [緊急審核] 更新返回 0 rows（eventId=${safeEventId}）。可能是競爭條件或 RLS 阻擋，請確認 SUPABASE_SERVICE_ROLE_KEY 是否已設置。`);
               const { data: cur } = await supabase
                 .from('emergency_incidents')
                 .select('status')
-                .eq('id', emergencyEventId)
+                .eq('id', safeEventId)
                 .maybeSingle();
               if (!cur) {
                 await safeReplyMessage(replyToken, userId, { type: 'text', text: '⚠️ 找不到此緊急事件，可能已被處理。' });

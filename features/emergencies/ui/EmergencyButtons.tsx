@@ -188,77 +188,74 @@ export function EmergencyButtons({ userId, userName, onTrigger, variant = "full"
       </div>
 
       {selectedType && (
-        <div className="mt-4 p-4 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-secondary)]">
-          <h3 className="font-bold text-[var(--theme-accent)] mb-3">通報表單：{selectedType}</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm mb-1 text-[var(--theme-text-primary)]">地點</label>
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="例如：A棟 1F 大廳"
-                className="w-full px-3 py-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-card)]"
-              />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-[var(--theme-bg-card)] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-[var(--theme-border)]">
+              <h3 className="font-bold text-[var(--theme-accent)] text-lg flex items-center gap-2">
+                <span className="material-icons">emergency</span>
+                通報表單：{selectedType}
+              </h3>
+              <button
+                onClick={() => { setSelectedType(""); setSelectedNote("") }}
+                className="p-1 rounded-full hover:bg-[var(--theme-accent-light)] transition-colors"
+              >
+                <span className="material-icons text-[var(--theme-text-secondary)]">close</span>
+              </button>
             </div>
-            <div>
-              <label className="block text-sm mb-1 text-[var(--theme-text-primary)]">發生什麼事</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="請描述目前狀況，例如有人昏倒、現場人數、是否已聯絡 119/110"
-                rows={3}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-card)]"
-              />
-            </div>            <div>
-              <label className="block text-sm mb-1 text-[var(--theme-text-primary)]">附圖（可選）</label>
-              <div className="flex items-center gap-3">
-                <label className="cursor-pointer flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[var(--theme-border)] hover:border-[var(--theme-accent)] transition-colors text-sm text-[var(--theme-text-muted)]">
-                  <span className="material-icons text-base">📷</span>
-                  {imageFile ? imageFile.name : "點擊上傳圖片"}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null
-                      setImageFile(file)
-                      if (file) {
-                        const reader = new FileReader()
-                        reader.onload = (ev) => setImagePreview(ev.target?.result as string)
-                        reader.readAsDataURL(file)
-                      } else {
-                        setImagePreview(null)
-                      }
-                    }}
-                  />
-                </label>
-                {imageFile && (
-                  <button
-                    type="button"
-                    onClick={() => { setImageFile(null); setImagePreview(null) }}
-                    className="text-xs text-red-500 hover:underline"
-                  >
-                    移除
-                  </button>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-[var(--theme-text-primary)] font-medium mb-2">地點</label>
+                <input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="例如：A棟 1F 大廳"
+                  className="w-full p-3 rounded-xl theme-input outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[var(--theme-text-primary)] font-medium mb-2">發生什麼事</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="請描述目前狀況，例如有人昏倒、現場人數、是否已聯絡 119/110"
+                  rows={4}
+                  className="w-full p-3 rounded-xl theme-input outline-none resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[var(--theme-text-primary)] font-medium mb-2">附圖（可選）</label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="w-full p-3 rounded-xl theme-input outline-none"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null
+                    setImageFile(file)
+                    if (file) {
+                      const reader = new FileReader()
+                      reader.onload = (ev) => setImagePreview(ev.target?.result as string)
+                      reader.readAsDataURL(file)
+                    } else {
+                      setImagePreview(null)
+                    }
+                  }}
+                />
+                {imagePreview && (
+                  <img src={imagePreview} alt="preview" className="mt-2 rounded-lg max-h-32 object-cover border border-[var(--theme-border)]" />
                 )}
               </div>
-              {imagePreview && (
-                <img src={imagePreview} alt="preview" className="mt-2 rounded-lg max-h-32 object-cover border border-[var(--theme-border)]" />
-              )}
-            </div>            <div className="flex gap-2 justify-end">
+            </div>
+            <div className="p-4 border-t border-[var(--theme-border)] flex gap-3">
               <button
-                onClick={() => {
-                  setSelectedType("")
-                  setSelectedNote("")
-                }}
-                className="px-3 py-2 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-card)] transition-all"
+                onClick={() => { setSelectedType(""); setSelectedNote("") }}
+                className="flex-1 px-4 py-3 rounded-xl font-semibold border border-[var(--theme-border)] text-[var(--theme-text-secondary)] hover:bg-[var(--theme-accent-light)] transition-all"
               >
                 取消
               </button>
               <button
                 onClick={submitForm}
                 disabled={submitting}
-                className="px-4 py-2 rounded-lg bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] font-semibold hover:opacity-90 transition-all disabled:opacity-60"
+                className="flex-1 px-4 py-3 rounded-xl font-semibold bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] hover:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {submitting ? "送出中..." : "送出通報"}
               </button>

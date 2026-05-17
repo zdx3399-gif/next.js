@@ -182,13 +182,13 @@ function getPackageOperator(payload = {}) {
   };
 }
 
-async function sendIotCommand(req, cmd) {
+async function sendIotCommand(req, cmd, relatedType = null, relatedId = null, createdBy = null) {
   try {
     const iotUrl = new URL("/api/iot", req.url);
     const res = await fetch(iotUrl.toString(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cmd }),
+      body: JSON.stringify({ cmd, related_type: relatedType, related_id: relatedId, created_by: createdBy }),
     });
 
     const payload = await res.json().catch(() => null);
@@ -387,7 +387,7 @@ export async function POST(req) {
       console.warn(`[LINE] Please ask the resident to bind LINE account via /bind-line page`)
     }
 
-    const iotResult = await sendIotCommand(req, "P");
+    const iotResult = await sendIotCommand(req, "P", "package", insertedPackage?.id ? String(insertedPackage.id) : null, operator.id ? String(operator.id) : null);
 
     return Response.json({ 
       success: true, 
@@ -797,13 +797,10 @@ export async function PATCH(req) {
       }
     }
 
-    const iotResult = await sendIotCommand(req, "P");
-
+    // 包裹領取不需要觸發 IoT 聲音
     return Response.json({ 
       success: true,
-      message: iotResult.success ? "✅ 包裹已領取（IOT 已通知）" : "✅ 包裹已領取（IOT 通知失敗）",
-      iotSent: iotResult.success,
-      iotError: iotResult.error,
+      message: "✅ 包裹已領取",
     });
   } catch (err) {
     console.error("[packages] PATCH error:", err);

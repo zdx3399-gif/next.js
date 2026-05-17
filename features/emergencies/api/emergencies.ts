@@ -141,6 +141,23 @@ export async function triggerEmergency(
   }
 }
 
+export async function reviewEmergency(
+  incidentId: string,
+  action: "approve" | "reject",
+  reviewerId: string,
+  sendMode?: "test" | "official",
+): Promise<void> {
+  const res = await fetch("/api/emergency-incidents/review", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ incidentId, action, reviewerId, sendMode: sendMode || "official" }),
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || `審核失敗（${res.status}）`)
+  }
+}
+
 export async function deleteEmergency(id: string): Promise<void> {
   const supabase = getSupabaseClient()
   if (!supabase) throw new Error("Supabase client unavailable")

@@ -258,12 +258,6 @@ export function ArduinoConsole() {
         color: 'var(--theme-text-primary)',
       }}
     >
-      <div>
-        <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <span className="text-2xl">🤖</span> IOT 控制台
-        </h2>
-      </div>
-
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => handleModeChange("serial")}
@@ -346,37 +340,24 @@ export function ArduinoConsole() {
         {(() => {
           const { visitorLogs, packageLogs, emergencyLogs, maxRows } = parseLogs(log);
           return (
-            <table
-              width="100%"
-              border={1}
-              style={{
-                borderCollapse: "collapse",
-                textAlign: "center",
-                background: 'var(--theme-bg-card)',
-                color: 'var(--theme-text-primary)',
-                fontFamily: "monospace"
-              }}
-            >
+            <table className="w-full border-collapse font-mono text-sm">
               <thead>
-                <tr style={{ background: 'var(--theme-bg-secondary)', color: 'var(--theme-text-primary)' }}>
-                  <th style={{ width: "30%" }}>訪客</th>
-                  <th style={{ width: "20%" }}>包裹</th>
-                  <th style={{ width: "50%", color: 'var(--theme-danger)' }}>緊急</th>
+                <tr className="bg-[var(--theme-bg-secondary)]">
+                  <th className="border border-[var(--theme-border)] px-3 py-2 text-[var(--theme-text-primary)] font-semibold w-[30%]">👤 訪客</th>
+                  <th className="border border-[var(--theme-border)] px-3 py-2 text-[var(--theme-text-primary)] font-semibold w-[20%]">📦 包裹</th>
+                  <th className="border border-[var(--theme-border)] px-3 py-2 text-[var(--theme-danger)] font-semibold w-[50%]">🚨 緊急</th>
                 </tr>
               </thead>
               <tbody>
                 {[...Array(maxRows)].map((_, i) => (
-                  <tr key={i} style={{ background: 'var(--theme-bg-card)', color: 'var(--theme-text-primary)' }}>
-                    <td style={{ verticalAlign: "top", padding: "6px" }}>{visitorLogs[i] || ""}</td>
-                    <td style={{ verticalAlign: "top", padding: "6px" }}>{packageLogs[i] || ""}</td>
-                    <td
-                      style={{
-                        verticalAlign: "top",
-                        padding: "6px",
-                        background: emergencyLogs[i] ? 'var(--theme-danger)' : 'var(--theme-bg-card)',
-                        color: emergencyLogs[i] ? 'var(--theme-bg-card)' : 'var(--theme-text-primary)',
-                      }}
-                    >
+                  <tr key={i} className="hover:bg-[var(--theme-accent-light)] transition-colors">
+                    <td className="border border-[var(--theme-border)] px-3 py-2 align-top text-[var(--theme-text-primary)]">{visitorLogs[i] || ""}</td>
+                    <td className="border border-[var(--theme-border)] px-3 py-2 align-top text-[var(--theme-text-primary)]">{packageLogs[i] || ""}</td>
+                    <td className={`border border-[var(--theme-border)] px-3 py-2 align-top ${
+                      emergencyLogs[i]
+                        ? "bg-[var(--theme-danger)] text-white font-semibold"
+                        : "text-[var(--theme-text-primary)]"
+                    }`}>
                       {emergencyLogs[i] || ""}
                     </td>
                   </tr>

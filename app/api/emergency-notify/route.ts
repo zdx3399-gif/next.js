@@ -334,9 +334,32 @@ export async function POST(req: NextRequest) {
       notificationEventError = err instanceof Error ? err.message : "notification event insert failed"
     }
 
-    // IoT 延遲到審核通過後再發送
-    const iotSent = false
-    const iotError = ""
+    // 訪客(V) / 包裹(P) 不需委員審核，建立時立即觸發 IoT；緊急(E/C) 延遲到審核通過後再送
+    let iotSent = false
+    let iotError = ""
+    if (routing.iotCommand === "V" || routing.iotCommand === "P") {
+      try {
+        const { error: iotUpdateErr } = await supabase
+          .from("iot_commands")
+          .update({ current_command: routing.iotCommand, updated_at: new Date().toISOString() })
+          .eq("id", 1)
+        iotSent = !iotUpdateErr
+        if (iotUpdateErr) iotError = iotUpdateErr.message
+        await logIotCommand(
+          supabase,
+          insertedEmergency?.id,
+          routing.iotCommand,
+          reportedById,
+          iotDeviceId,
+          iotSent ? "sent" : "failed",
+          { cmd: routing.iotCommand },
+          null,
+        )
+      } catch (err: unknown) {
+        iotError = err instanceof Error ? err.message : "IoT 寫入失敗"
+        await logIotCommand(supabase, insertedEmergency?.id, routing.iotCommand, reportedById, iotDeviceId, "failed", { cmd: routing.iotCommand }, { error: iotError })
+      }
+    }
 
     let lineSent = 0
     let lineFailed = 0
@@ -417,7 +440,7 @@ export async function POST(req: NextRequest) {
       }
 
       const reviewFlex = {
-        type: "flex",
+        type: "flex" as const,
         altText: "⚠️ 緊急事件待審核",
         contents: reviewBubble,
       }

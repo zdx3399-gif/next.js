@@ -4,6 +4,15 @@ import { Client } from "@line/bot-sdk"
 
 export const runtime = "nodejs"
 
+// DB 狀態正規化：統一轉為英文 key（pending/draft/approved/rejected）
+// 移除 'submitted': 'pending' ── notify API 現已統一寫入 'pending'，兩者並存會造成語意重疊
+const STATUS_NORM_MAP: Record<string, string> = {
+  '待審核': 'pending',
+  '編輯中': 'draft',
+  '已發布': 'approved',
+  '已駁回': 'rejected',
+}
+
 function getSupabase() {
   const url =
     process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL ||
@@ -18,47 +27,48 @@ function getSupabase() {
   return createClient(url, serviceRoleKey)
 }
 
-function getLineClient() {
-  const channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN
-  if (!channelAccessToken) throw new Error("Missing LINE_CHANNEL_ACCESS_TOKEN")
-  return new Client({ channelAccessToken, channelSecret: process.env.LINE_CHANNEL_SECRET || "unused" })
-}
+async function broadcastApproved(supabase: any, incident: any, sendMode = "official") {
+  const isTest = sendMode === "test"
+  const broadcastText =
+    `${isTest ? "[測試] " : ""}🚨【緊急事件已核准廣播】\n` +
+    `類型：${incident.event_type || "未指定"}\n` +
+    `地點：${incident.location || "未指定"}\n` +
+    `描述：${incident.description || "未提供"}\n` +
+    `時間：${new Date(incident.created_at).toLocaleString("zh-TW", { hour12: false })}\n\n` +
+    (isTest ? "（此為測試通知，僅管理人員收到）" : "請住戶留意安全並配合現場指示。")
 
-async function getLineIdsByRoles(supabase: any, roles: string[]) {
-  const { data } = await supabase.from("profiles").select("line_user_id").in("role", roles)
-  return (data || []).map((p: any) => p.line_user_id).filter(Boolean) as string[]
-}
+  // 測試模式：只廣播 BOT2（測試 BOT），不觸發 BOT1 和 IoT
+  // 正式模式：廣播 BOT2 + BOT1，並觸發 IoT 警報
 
-async function broadcastApproved(supabase: any, incident: any) {
-  // 1. LINE 廣播給 admin + guard + committee
+  // 1. BOT2 廣播（測試/正式都執行）
   try {
-    const lineClient = getLineClient()
-    const targets = await getLineIdsByRoles(supabase, ["admin", "guard", "committee"])
-    const msg =
-      `🚨 緊急事件已核准廣播\n` +
-      `類型：${incident.event_type}\n` +
-      `地點：${incident.location || "未提供"}\n` +
-      `內容：${incident.description || "（無）"}\n` +
-      `時間：${new Date(incident.created_at).toLocaleString("zh-TW", { hour12: false })}`
-    for (const to of targets) {
-      await lineClient.pushMessage(to, { type: "text", text: msg }).catch(() => {})
+    const bot2Token = process.env.LINE_CHANNEL_ACCESS_TOKEN_BOT2
+    if (bot2Token) {
+      const bot2Client = new Client({ channelAccessToken: bot2Token, channelSecret: process.env.LINE_CHANNEL_SECRET_BOT2 || "unused" })
+      await bot2Client.broadcast({ type: "text", text: broadcastText }).catch(() => {})
     }
   } catch {}
 
-  // 2. IoT 發送 E 指令
+  if (isTest) return  // 測試模式到此為止
+
+  // 2. BOT1 交叉廣播（正式模式）
   try {
-    const iotBase = process.env.IOT_DEVICE_BASE_URL?.replace(/\/$/, "")
-    if (iotBase) {
-      await fetch(`${iotBase}/cmd`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cmd: "E" }),
-        signal: AbortSignal.timeout(5000),
-      }).catch(() => {})
+    const bot1Token = process.env.LINE_CHANNEL_ACCESS_TOKEN
+    if (bot1Token) {
+      const bot1Client = new Client({ channelAccessToken: bot1Token, channelSecret: process.env.LINE_CHANNEL_SECRET || "unused" })
+      await bot1Client.broadcast({ type: "text", text: broadcastText }).catch(() => {})
     }
   } catch {}
 
-  // 3. notification_events 紀錄
+  // 3. IoT E 指令（正式模式）
+  try {
+    await supabase
+      .from("iot_commands")
+      .update({ current_command: "E" })
+      .eq("id", 1)
+  } catch {}
+
+  // 4. notification_events 紀錄（正式模式）
   try {
     await supabase.from("notification_events").insert([{
       title: "緊急事件通知",
@@ -76,6 +86,7 @@ export async function POST(req: NextRequest) {
     const incidentId = String(body?.incidentId || "").trim()
     const action = String(body?.action || "").trim().toLowerCase()
     const reviewerId = String(body?.reviewerId || "").trim()
+    const sendMode = body?.sendMode === "test" ? "test" : "official"
 
     if (!incidentId || !reviewerId || !["approve", "reject"].includes(action)) {
       return NextResponse.json(
@@ -109,8 +120,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "找不到事件" }, { status: 404 })
     }
 
-    const statusNormMap: Record<string, string> = { '待審核': 'pending', '編輯中': 'draft', '已發布': 'approved', '已駁回': 'rejected', 'submitted': 'pending' }
-    const normalizedIncidentStatus = statusNormMap[incident.status] ?? incident.status
+    const normalizedIncidentStatus = STATUS_NORM_MAP[incident.status] ?? incident.status
     if (normalizedIncidentStatus !== "pending" && normalizedIncidentStatus !== "draft") {
       return NextResponse.json(
         { success: false, error: `目前狀態為 ${normalizedIncidentStatus}，不可再審核` },
@@ -136,7 +146,7 @@ export async function POST(req: NextRequest) {
 
     // 審核通過後自動廣播
     if (action === "approve") {
-      await broadcastApproved(supabase, incident)
+      await broadcastApproved(supabase, incident, sendMode)
     }
 
     return NextResponse.json({
@@ -198,9 +208,10 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    if (incident.status !== "pending" && incident.status !== "draft") {
+    const normalizedStatus = STATUS_NORM_MAP[incident.status] ?? incident.status
+    if (normalizedStatus !== "pending" && normalizedStatus !== "draft") {
       return new Response(
-        `<html><body><h2>此事件已處理（狀態：${incident.status}）。</h2></body></html>`,
+        `<html><body><h2>此事件已處理（狀態：${normalizedStatus}）。</h2></body></html>`,
         { status: 409, headers: { "Content-Type": "text/html; charset=utf-8" } },
       )
     }

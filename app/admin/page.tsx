@@ -28,6 +28,7 @@ import type { User } from "@/features/profile/api/profile"
 import { syncRolePermissionsFromSupabase } from "@/lib/role-permission-service"
 import { ActionSpotlightPanel } from "@/features/dashboard/ui/ActionSpotlightPanel"
 import { AiAutoFixPanel } from "@/features/ai-auto-fix/ui/AiAutoFixPanel"
+import { ArduinoConsole } from "@/features/arduino/ui/ArduinoConsole"
 
 type Section =
   | "dashboard"
@@ -48,6 +49,7 @@ type Section =
   | "ai-auto-fix"
   | "audit-logs"
   | "decryption"
+  | "arduino"
 
 export default function AdminPage() {
   const router = useRouter()
@@ -211,6 +213,7 @@ export default function AdminPage() {
     { id: "ai-auto-fix", icon: "auto_fix_high", label: "AI 自動修正" },
     { id: "decryption", icon: "lock_open", label: "解密申請" },
     { id: "audit-logs", icon: "history", label: "稽核紀錄" },
+    { id: "arduino", icon: "sensors", label: "IoT 控制台" },
   ]
 
   const normalizedRole = String(currentUser?.role || "").trim().toLowerCase()
@@ -454,6 +457,14 @@ export default function AdminPage() {
                 稽核紀錄
               </h2>
               <AuditLogViewer isPreviewMode={isPreviewMode} />
+            </div>
+          ) : currentSection === "arduino" ? (
+            <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
+              <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">
+                <span className="material-icons">sensors</span>
+                IoT 控制台
+              </h2>
+              <ArduinoConsole />
             </div>
           ) : currentSection === "decryption" ? (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">

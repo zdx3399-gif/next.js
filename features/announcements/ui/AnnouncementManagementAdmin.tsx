@@ -185,6 +185,13 @@ function AnnouncementFormModal({
           </div>
           <div className="flex gap-3 pt-2">
             <button
+              onClick={onClose}
+              disabled={isSaving}
+              className="flex-1 py-3 border border-[var(--theme-border)] text-[var(--theme-text-primary)] rounded-xl font-semibold hover:bg-[var(--theme-bg-secondary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              取消
+            </button>
+            <button
               onClick={onSave}
               disabled={isSaving}
               className="flex-1 py-3 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] rounded-xl font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -197,13 +204,6 @@ function AnnouncementFormModal({
               ) : (
                 isEdit ? "儲存變更" : "新增公告"
               )}
-            </button>
-            <button
-              onClick={onClose}
-              disabled={isSaving}
-              className="flex-1 py-3 border border-[var(--theme-border)] text-[var(--theme-text-primary)] rounded-xl font-semibold hover:bg-[var(--theme-bg-secondary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              取消
             </button>
           </div>
         </div>

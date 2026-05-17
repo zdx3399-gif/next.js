@@ -442,8 +442,8 @@ export async function PATCH(req) {
       }
     }
 
-    // 只有簽到（check_in）才觸發 IoT 訪客到達聲音
-    if (action === "check_in") {
+    // 簽到和簽退都觸發 IoT 訪客聲音
+    if (action === "check_in" || action === "check_out") {
       const iotResult = await sendIotCommand(req, "V", "visitor", String(visitor_id), operator.id ? String(operator.id) : null)
       return Response.json({ 
         success: true,

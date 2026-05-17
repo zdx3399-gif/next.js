@@ -130,18 +130,34 @@ export async function POST(req: NextRequest) {
 
     const nextStatus = action === "approve" ? "approved" : "rejected"
 
-    const { error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from("emergency_incidents")
       .update({
         status: nextStatus,
-        reviewed_by: reviewerId,
-        reviewed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq("id", incidentId)
+      .select("id")
 
     if (updateError) {
       return NextResponse.json({ success: false, error: updateError.message }, { status: 500 })
+    }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      // 0 rows → RLS 阻擋或競爭條件（請確認 SUPABASE_SERVICE_ROLE_KEY 是否已設置）
+      const { data: cur } = await supabase
+        .from("emergency_incidents")
+        .select("status")
+        .eq("id", incidentId)
+        .maybeSingle()
+      const curStatus = cur?.status || "未知"
+      return NextResponse.json(
+        {
+          success: false,
+          error: `審核失敗：當前狀態「${curStatus}」，資料庫更新返回 0 rows（請確認 SUPABASE_SERVICE_ROLE_KEY 是否已設置）`,
+        },
+        { status: 409 },
+      )
     }
 
     // 審核通過後自動廣播
@@ -219,7 +235,7 @@ export async function GET(req: NextRequest) {
     const nextStatus = action === "approve" ? "approved" : "rejected"
     await supabase
       .from("emergency_incidents")
-      .update({ status: nextStatus, reviewed_by: reviewerId, reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ status: nextStatus, updated_at: new Date().toISOString() })
       .eq("id", incidentId)
 
     if (action === "approve") {

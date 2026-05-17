@@ -2917,8 +2917,6 @@ export async function POST(req) {
               .from('emergency_incidents')
               .update({
                 status: newStatus,
-                reviewed_by: reviewer.id,
-                reviewed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
               .eq('id', incidentId)
@@ -2946,9 +2944,11 @@ export async function POST(req) {
                 const st = String(cur.status || '');
                 const isApprovedSt = st === 'approved' || st === '已發布';
                 const isRejectedSt = st === 'rejected' || st === '已駁回';
-                let dupMsg = `ℹ️ 此事件目前為「${st}」，無法重複審核。`;
+                let dupMsg;
                 if (isApprove && isApprovedSt) dupMsg = 'ℹ️ 此事件已發布，無需重複確認。';
                 else if (!isApprove && isRejectedSt) dupMsg = 'ℹ️ 此事件已駁回，無需重複操作。';
+                else if (isApprovedSt || isRejectedSt) dupMsg = `ℹ️ 此事件目前為「${st}」，無法重複審核。`;
+                else dupMsg = `❌ 審核操作失敗（當前狀態：${st}），請確認系統權限（SUPABASE_SERVICE_ROLE_KEY）後重試。`;
                 await safeReplyMessage(replyToken, userId, { type: 'text', text: dupMsg });
               }
               continue;
@@ -2995,14 +2995,16 @@ export async function POST(req) {
                 }
               }
 
-              // IoT E 指令：寫入 iot_commands 表，Arduino 輪詢 Supabase 後執行
+              // IoT E 指令：透過 /api/iot 觸發警報（含 service_role key 及 5 秒自動重設）
               try {
-                await supabase
-                  .from('iot_commands')
-                  .update({ current_command: 'E', updated_at: new Date().toISOString() })
-                  .eq('id', 1);
+                const iotUrl = new URL('/api/iot', req.url);
+                await fetch(iotUrl.toString(), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ cmd: 'E', related_type: 'emergency', related_id: String(incidentId) })
+                });
               } catch (iotErr) {
-                console.error('[IoT] 寫入 iot_commands 失敗:', iotErr?.message);
+                console.error('[IoT] E 指令失敗:', iotErr?.message);
               }
 
               await safeReplyMessage(replyToken, userId, { type: 'text', text: '✅ 已確認發布，緊急事件通知已廣播給所有住戶。' });
@@ -3680,8 +3682,6 @@ export async function POST(req) {
               .from('emergency_incidents')
               .update({
                 status: newStatus,
-                reviewed_by: adminProfile.id,
-                reviewed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
               .eq('id', safeEventId)
@@ -3714,9 +3714,12 @@ export async function POST(req) {
                 await safeReplyMessage(replyToken, userId, { type: 'text', text: '⚠️ 找不到此緊急事件，可能已被處理。' });
               } else {
                 const st = String(cur.status || '');
-                let dupMsg = `ℹ️ 此事件目前狀態「${st}」，無法重複審核。`;
+                const isTerminalSt = ['approved', '已發布', 'rejected', '已駁回'].includes(st);
+                let dupMsg;
                 if (action === 'approve' && (st === 'approved' || st === '已發布')) dupMsg = 'ℹ️ 此事件已發布，無需重複確認。';
                 else if (action === 'reject' && (st === 'rejected' || st === '已駁回')) dupMsg = 'ℹ️ 此事件已駁回，無需重複操作。';
+                else if (isTerminalSt) dupMsg = `ℹ️ 此事件目前為「${st}」，無法重複審核。`;
+                else dupMsg = `❌ 審核操作失敗（當前狀態：${st}），請確認系統權限（SUPABASE_SERVICE_ROLE_KEY）後重試。`;
                 await safeReplyMessage(replyToken, userId, { type: 'text', text: dupMsg });
               }
               continue;
@@ -3763,6 +3766,18 @@ export async function POST(req) {
                 } catch (crossErr) {
                   console.error(`[${BOT_TAG}] [緊急審核] BOT1 cross-broadcast 失敗:`, crossErr?.response?.data || crossErr?.message);
                 }
+              }
+
+              // IoT E 指令：透過 /api/iot 觸發警報（含 service_role key 及 5 秒自動重設）
+              try {
+                const iotUrl = new URL('/api/iot', req.url);
+                await fetch(iotUrl.toString(), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ cmd: 'E', related_type: 'emergency', related_id: String(safeEventId) })
+                });
+              } catch (iotErr) {
+                console.error('[IoT] E 指令失敗:', iotErr?.message);
               }
 
               await safeReplyMessage(replyToken, userId, {

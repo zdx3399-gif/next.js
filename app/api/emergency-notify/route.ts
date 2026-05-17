@@ -341,7 +341,7 @@ export async function POST(req: NextRequest) {
       try {
         const { error: iotUpdateErr } = await supabase
           .from("iot_commands")
-          .update({ current_command: routing.iotCommand, updated_at: new Date().toISOString() })
+          .update({ current_command: routing.iotCommand })
           .eq("id", 1)
         iotSent = !iotUpdateErr
         if (iotUpdateErr) iotError = iotUpdateErr.message

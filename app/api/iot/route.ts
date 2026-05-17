@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 export const runtime = "nodejs"
@@ -110,6 +110,19 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[IoT] Command written: ${normalizedCmd} (related: ${relatedType}/${relatedId})`);
+
+    // 4. 5 秒後自動重設為 NONE（Arduino 用 anon key 無法自行清除 RLS 限制）
+    after(async () => {
+      await new Promise(resolve => setTimeout(resolve, 5000))
+      try {
+        const resetSupa = getSupabase()
+        await resetSupa.from('iot_commands').update({ current_command: 'NONE' }).eq('id', 1)
+        console.log(`[IoT] Auto-reset to NONE (was: ${normalizedCmd})`)
+      } catch (e) {
+        console.warn('[IoT] Auto-reset failed:', e)
+      }
+    })
+
     return NextResponse.json({ success: true, cmd: normalizedCmd, device: "Mailbox updated" });
 
   } catch (error) {

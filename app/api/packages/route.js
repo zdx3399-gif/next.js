@@ -684,8 +684,8 @@ export async function PATCH(req) {
       afterState: { status: "picked_up", picked_up_by },
     });
 
-    // 發送「已領取」LINE 通知
-    if (packageData.unit_id) {
+    // 包裹領取不再發送 LINE 通知（到件時已通知過，避免重複）
+    if (false && packageData.unit_id) {
       let recipientName = "住戶";
       let recipientRoom = "";
 

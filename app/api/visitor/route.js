@@ -383,8 +383,8 @@ export async function PATCH(req) {
       afterState: updateData,
     })
 
-    // 發送 LINE 通知
-    if (visitor.unit_id) {
+    // 只在簽到時發送 LINE 通知（簽退不重複通知）
+    if (action === "check_in" && visitor.unit_id) {
       const { lineUserId, lineDisplayName } = await findLineUserByUnit(supabase, visitor.unit_id)
 
       if (lineUserId) {
@@ -442,8 +442,8 @@ export async function PATCH(req) {
       }
     }
 
-    // 簽到和簽退都觸發 IoT 訪客聲音
-    if (action === "check_in" || action === "check_out") {
+    // 只在簽到時觸發 IoT 訪客聲音（簽退不重複通知）
+    if (action === "check_in") {
       const iotResult = await sendIotCommand(req, "V", "visitor", String(visitor_id), operator.id ? String(operator.id) : null)
       return Response.json({ 
         success: true,

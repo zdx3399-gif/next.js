@@ -127,9 +127,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[IoT] Command written: ${normalizedCmd} (related: ${relatedType}/${relatedId})`);
 
-    // 4. 5 秒後自動重設為 NONE（Arduino 用 anon key 無法自行清除 RLS 限制）
+    // 4. 1.6 秒後自動重設為 NONE（剛好超過 Arduino 1500ms 輪詢週期，確保最多觸發一次）
+    // 原本 5000ms 導致 Arduino 在 5s 內讀到 3 次相同指令（5000/1500≈3）
     after(async () => {
-      await new Promise(resolve => setTimeout(resolve, 5000))
+      await new Promise(resolve => setTimeout(resolve, 1600))
       try {
         const resetSupa = getSupabase()
         await resetSupa.from('iot_commands').update({ current_command: 'NONE' }).eq('id', 1)

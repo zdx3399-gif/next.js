@@ -2011,7 +2011,7 @@ export async function POST(req) {
           try {
             const { data: latestVote, error: voteQueryError } = await supabase
               .from('votes')
-              .select('id, title, description, options, created_at, ends_at, status')
+              .select('id, title, description, vote_url, created_at, ends_at, status')
               .eq('status', 'active')
               .order('created_at', { ascending: false })
               .limit(1)
@@ -2064,7 +2064,8 @@ export async function POST(req) {
                 `選項：${optionsText}\n` +
                 `建立時間：${createdAtText}\n` +
                 `截止時間：${endsAtText}\n` +
-                `說明：${latestVote.description || '無'}`
+                `說明：${latestVote.description || '無'}` +
+                (latestVote.vote_url ? `\n投票連結：${latestVote.vote_url}` : '')
             });
             usedReplyTokens.add(replyToken);
           } catch (err) {
@@ -3507,6 +3508,17 @@ export async function POST(req) {
               continue;
             }
 
+            // 自我審核防護：回報者不能審核自己提交的緊急事件
+            const { data: incidentMeta } = await supabase
+              .from('emergency_incidents')
+              .select('reporter_profile_id')
+              .eq('id', incidentId)
+              .maybeSingle();
+            if (incidentMeta?.reporter_profile_id && incidentMeta.reporter_profile_id === reviewer.id) {
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '⛔ 您不能審核自己提交的緊急事件。' });
+              continue;
+            }
+
             // 2. 原子條件更新：直接在 DB 層做 status 過濾，完全避免 JS 字元編碼問題 + 防競爭條件
             const newStatus = isApprove ? 'approved' : 'rejected';
             const { data: updatedIncidentRows, error: updateErr } = await supabase
@@ -3636,7 +3648,7 @@ export async function POST(req) {
             // 預先查詢 incident 狀態（避免 atomic update 返回 0 rows 的 RLS 誤判）
             const { data: preIncident, error: preErr } = await supabase
               .from('emergency_incidents')
-              .select('id, event_type, location, description, image_url, status')
+              .select('id, event_type, location, description, image_url, status, reporter_line_user_id')
               .eq('id', safeEventId)
               .maybeSingle();
 
@@ -3654,6 +3666,12 @@ export async function POST(req) {
               if (action === 'approve' && (rawStatus === 'approved' || rawStatus === '已發布')) dupMsg = 'ℹ️ 此事件已發布，無需重複確認。';
               else if (action === 'reject' && (rawStatus === 'rejected' || rawStatus === '已駁回')) dupMsg = 'ℹ️ 此事件已駁回，無需重複操作。';
               await safeReplyMessage(replyToken, userId, { type: 'text', text: dupMsg });
+              continue;
+            }
+
+            // 自我審核防護：回報者不能審核自己提交的緊急事件
+            if (preIncident.reporter_line_user_id && preIncident.reporter_line_user_id === userId) {
+              await safeReplyMessage(replyToken, userId, { type: 'text', text: '⛔ 您不能審核自己提交的緊急事件。' });
               continue;
             }
 

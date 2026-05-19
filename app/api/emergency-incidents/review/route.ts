@@ -130,6 +130,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // 自我審核防護：回報者不能審核自己提交的緊急事件
+    if (incident.reporter_profile_id && incident.reporter_profile_id === reviewerId) {
+      return NextResponse.json(
+        { success: false, error: "審核者不能是緊急事件的回報者本人" },
+        { status: 403 },
+      )
+    }
+
     const nextStatus = action === "approve" ? "approved" : "rejected"
 
     const { data: updatedRows, error: updateError } = await supabase

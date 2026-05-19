@@ -1059,6 +1059,19 @@ export async function cancelBooking(bookingId: string, sendMode?: "test" | "offi
     .eq("id", bookingId)
     .maybeSingle()
 
+  // 自我審核防護：管委會不能以管理員身分取消自己的預約
+  const operator = getCurrentOperator()
+  if (operator.id && booking?.user_id === operator.id) {
+    await logFacilityAudit({
+      action: "cancel_booking",
+      targetId: bookingId,
+      reason: "管委會不能取消自己的預約（請使用一般取消功能）",
+      status: "blocked",
+      errorCode: "self_review_blocked",
+    })
+    throw new Error("管委會不能以管理員身分取消自己的預約")
+  }
+
   const { error } = await supabase.from("facility_bookings").update({ status: "cancelled" }).eq("id", bookingId)
 
   if (error) {

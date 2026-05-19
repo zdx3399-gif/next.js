@@ -81,6 +81,20 @@ export function ModerationDetail({ itemId, currentUser, onBack, onResolved }: Mo
       return
     }
 
+    // 自我審核防護：審核者不能與內容發布者為同一人
+    if (queueItem.item_type === "post" && content?.author_id && content.author_id === currentUser.id) {
+      alert("您不能審核自己發布的貼文")
+      return
+    }
+    if (queueItem.item_type === "comment" && content?.author_id && content.author_id === currentUser.id) {
+      alert("您不能審核自己發布的留言")
+      return
+    }
+    if (queueItem.item_type === "report" && content?.reporter_id && content.reporter_id === currentUser.id) {
+      alert("您不能審核自己提交的檢舉")
+      return
+    }
+
     if (!requireSecondConfirmationIfNeeded()) {
       return
     }

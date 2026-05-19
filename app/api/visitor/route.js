@@ -365,8 +365,9 @@ export async function PATCH(req) {
       }
     }
 
-    // 簽到和簽退都觸發 IoT 訪客聲音（LINE 通知只在簽到時發送）
-    if (action === "check_in" || action === "check_out") {
+    // 簽到觸發 IoT 訪客聲音（LINE 通知只在簽到時發送；簽退 IoT 暫時停用）
+    // if (action === "check_in" || action === "check_out") {
+    if (action === "check_in") {
       const iotResult = await sendIotCommand(req, "V", "visitor", String(visitor_id), operator.id ? String(operator.id) : null)
       return Response.json({ 
         success: true,

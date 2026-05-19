@@ -171,6 +171,14 @@ export function EmergencyManagementAdmin({ currentUserId, currentUserName, isPre
       alert("無法取得審核者身分，請重新登入")
       return
     }
+
+    // 自我審核防護：回報者不能審核自己提交的緊急事件
+    const targetEmergency = emergencies.find((e) => e.id === incidentId)
+    if (targetEmergency?.reported_by_id && targetEmergency.reported_by_id === currentUserId) {
+      alert("您不能審核自己提交的緊急事件")
+      return
+    }
+
     const label = action === "approve" ? "核准" : "駁回"
     if (!confirm(`確定要「${label}」此緊急事件嗎？${action === "approve" ? "\n核准後將廣播給住戶並觸發 IoT 緊急警報。" : ""}`)) return
     if (action === "approve") {

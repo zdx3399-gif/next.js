@@ -110,6 +110,39 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 自我審核防護：審核者不能與內容發布者為同一人
+    if (userId) {
+      let contentAuthorId: string | null = null
+      if (queueItem.item_type === "post") {
+        const { data: postMeta } = await supabase
+          .from("community_posts")
+          .select("author_id")
+          .eq("id", queueItem.item_id)
+          .maybeSingle()
+        contentAuthorId = postMeta?.author_id || null
+      } else if (queueItem.item_type === "comment") {
+        const { data: commentMeta } = await supabase
+          .from("post_comments")
+          .select("author_id")
+          .eq("id", queueItem.item_id)
+          .maybeSingle()
+        contentAuthorId = commentMeta?.author_id || null
+      } else if (queueItem.item_type === "report") {
+        const { data: reportMeta } = await supabase
+          .from("reports")
+          .select("reporter_id")
+          .eq("id", queueItem.item_id)
+          .maybeSingle()
+        contentAuthorId = reportMeta?.reporter_id || null
+      }
+      if (contentAuthorId && contentAuthorId === userId) {
+        return NextResponse.json(
+          { error: "審核者不能與內容發布者為同一人" },
+          { status: 403 },
+        )
+      }
+    }
+
     if (queueItem.item_type === "post") {
       console.log("[v0] Updating post:", queueItem.item_id, "action:", resolution.action)
 

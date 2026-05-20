@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>社區貼文 AI 審查系統：Gemini API 付費方案明細</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      background: #1a1a1a;
+      color: #e8e8e8;
+      padding: 40px 32px;
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    /* ── 頂部標題區 ── */
+    .header {
+      text-align: center;
+      margin-bottom: 36px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid rgba(255, 215, 0, 0.35);
+    }
+    .header .badge {
+      display: inline-block;
+      background: rgba(255, 215, 0, 0.12);
+      border: 1px solid rgba(255, 215, 0, 0.4);
+      border-radius: 20px;
+      padding: 4px 16px;
+      font-size: 0.78rem;
+      color: #ffd700;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+    .header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #ffd700;
+      text-shadow: 0 0 24px rgba(255, 215, 0, 0.35);
+      line-height: 1.4;
+    }
+    .header p {
+      margin-top: 8px;
+      font-size: 0.88rem;
+      color: #aaa;
+    }
+
+    /* ── Section 標題 ── */
+    .section {
+      margin-bottom: 32px;
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #ffd700;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+    }
+    .section-title .num {
+      background: rgba(255, 215, 0, 0.15);
+      border: 1px solid rgba(255, 215, 0, 0.4);
+      border-radius: 6px;
+      padding: 2px 10px;
+      font-size: 0.8rem;
+    }
+
+    /* ── 模型卡片 ── */
+    .model-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 720px) { .model-grid { grid-template-columns: 1fr; } }
+
+    .model-card {
+      background: rgba(40, 35, 0, 0.6);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .model-card.primary { border-color: #ffd700; box-shadow: 0 0 18px rgba(255, 215, 0, 0.12); }
+
+    .model-card .model-name {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #ffd700;
+      background: rgba(255, 215, 0, 0.08);
+      border-radius: 6px;
+      padding: 4px 10px;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+    .model-card .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .tag.recommend { background: rgba(255, 215, 0, 0.2); color: #ffd700; border: 1px solid rgba(255, 215, 0, 0.5); }
+    .tag.advanced  { background: rgba(100, 180, 255, 0.15); color: #90ccff; border: 1px solid rgba(100, 180, 255, 0.4); }
+
+    .model-card p { font-size: 0.85rem; color: #ccc; margin-bottom: 8px; }
+    .model-card p strong { color: #e8e8e8; }
+
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+      padding: 5px 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .price-row .label { color: #aaa; }
+    .price-row .val   { font-family: "JetBrains Mono", monospace; color: #ffd700; font-weight: 600; }
+
+    /* ── 表格 ── */
+    .table-wrap { overflow-x: auto; margin-bottom: 24px; }
+    .plan-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #e8e8e8;
+      margin-bottom: 10px;
+    }
+    .plan-label code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.82rem;
+      background: rgba(255, 215, 0, 0.1);
+      border: 1px solid rgba(255, 215, 0, 0.35);
+      border-radius: 4px;
+      padding: 1px 7px;
+      color: #ffd700;
+    }
+    .plan-label .ptag {
+      font-size: 0.72rem;
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    thead tr {
+      background: rgba(255, 215, 0, 0.12);
+    }
+    thead th {
+      padding: 10px 14px;
+      text-align: left;
+      color: #ffd700;
+      font-weight: 700;
+      white-space: nowrap;
+      border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+    }
+    tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
+    tbody tr:hover { background: rgba(255, 215, 0, 0.04); }
+    tbody td {
+      padding: 9px 14px;
+      color: #ccc;
+      white-space: nowrap;
+    }
+    tbody td strong { color: #ffd700; }
+    tbody td.cost-usd { color: #ffd700; font-family: "JetBrains Mono", monospace; font-weight: 600; }
+    tbody td.cost-twd { color: #a8e0a0; font-family: "JetBrains Mono", monospace; font-weight: 600; }
+
+    /* ── 公式區 ── */
+    .formula-box {
+      background: rgba(30, 25, 0, 0.7);
+      border: 1px solid rgba(255, 215, 0, 0.25);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .formula-box .mjx-chtml { font-size: 1rem !important; }
+
+    .calc-item {
+      font-size: 0.85rem;
+      color: #ccc;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .calc-item:last-child { border-bottom: none; }
+    .calc-item .arrow { color: #ffd700; margin: 0 4px; }
+    .calc-item .result { color: #ffd700; font-family: "JetBrains Mono", monospace; font-weight: 600; }
+    .calc-item .note { font-size: 0.78rem; color: #888; margin-top: 3px; }
+
+    /* ── 步驟 ── */
+    .steps { counter-reset: step; }
+    .step-item {
+      display: flex;
+      gap: 16px;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .step-item:last-child { border-bottom: none; }
+    .step-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 215, 0, 0.15);
+      border: 1px solid rgba(255, 215, 0, 0.5);
+      color: #ffd700;
+      font-weight: 700;
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .step-body { font-size: 0.87rem; color: #ccc; line-height: 1.65; }
+    .step-body strong { color: #e8e8e8; }
+    .step-body code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.8rem;
+      background: rgba(255, 215, 0, 0.1);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      border-radius: 4px;
+      padding: 1px 6px;
+      color: #ffd700;
+    }
+
+    /* ── 底部 ── */
+    .footer {
+      text-align: center;
+      margin-top: 36px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      font-size: 0.78rem;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── 標題 ── -->
+  <div class="header">
+    <div class="badge">📋 AI 審查成本規劃文件</div>
+    <h1>社區貼文 AI 審查系統<br>Gemini API 付費方案與模型明細</h1>
+    <p>方案：Pay-as-you-go（按量計費）· 平台：Google AI Studio / Vertex AI</p>
+  </div>
+
+  <!-- ── 一、模型介紹 ── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="num">一</span>推薦採用的付費方案與精確模型
+    </div>
+    <p style="font-size:0.87rem;color:#aaa;margin-bottom:14px;">
+      切換至 <strong style="color:#e8e8e8;">Pay-as-you-go（按量計費）</strong> 方案後，可解除每分鐘 15 次請求的 Free Tier 限制，適用商業 SaaS 部署。
+      內容審查任務推薦以下兩款最新 Flash 模型：
+    </p>
+    <div class="model-grid">
+
+      <!-- 核心推薦 -->
+      <div class="model-card primary">
+        <div>
+          <span class="model-name">gemini-2.5-flash-lite</span>
+          <span class="tag recommend">⭐ 核心推薦</span>
+        </div>
+        <p style="margin-top:10px;"><strong>適用場景：</strong>常規論壇貼文、留言過濾，需應對瞬間高併發。</p>
+        <p><strong>優勢：</strong>極致性價比，延遲最低，吞吐量最大。</p>
+        <div style="margin-top:12px;">
+          <div class="price-row">
+            <span class="label">輸入 (Input)</span>
+            <span class="val">$0.10 USD / 1M tokens</span>
+          </div>
+          <div class="price-row">
+            <span class="label">輸出 (Output)</span>
+            <span class="val">$0.40 USD / 1M tokens</span>
+          </div>
+          <div class="price-row">
+            <span class="label">脈絡快取 (Context Cache)</span>
+            <span class="val">$0.05 USD / 1M tokens</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 進階備用 -->
+      <div class="model-card">
+        <div>
+          <span class="model-name">gemini-2.5-flash</span>
+          <span class="tag advanced">進階備用</span>
+        </div>
+        <p style="margin-top:10px;"><strong>適用場景：</strong>陰陽怪氣、高級酸、暗喻辱罵等 Lite 模型難以判定的情境。</p>
+        <p><strong>優勢：</strong>推理能力更強，語境理解更細膩。</p>
+        <div style="margin-top:12px;">
+          <div class="price-row">
+            <span class="label">輸入 (Input)</span>
+            <span class="val">$0.30 USD / 1M tokens</span>
+          </div>
+          <div class="price-row">
+            <span class="label">輸出 (Output)</span>
+            <span class="val">$2.50 USD / 1M tokens</span>
+          </div>
+          <div class="price-row">
+            <span class="label">脈絡快取 (Context Cache)</span>
+            <span class="val">—</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── 二、月費試算表 ── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="num">二</span>付費層 Pay-as-you-go 月費試算表
+    </div>
+    <p style="font-size:0.82rem;color:#888;margin-bottom:16px;">基準：單次輸入 500 tokens、輸出 50 tokens；匯率 1 USD = 32 TWD（粗估）</p>
+
+    <!-- 方案 A -->
+    <div class="plan-label">
+      📊 方案 A：<code>gemini-2.5-flash-lite</code>
+      <span class="ptag recommend tag">高性價比 ✓ 推薦</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>社區總規模（月計）</th>
+            <th>每日預估貼文量</th>
+            <th>每月總請求數</th>
+            <th>每月費用（USD）</th>
+            <th>每月費用（TWD）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>中小型社區</strong>（約 100 戶）</td>
+            <td>100 篇</td>
+            <td>3,000 次</td>
+            <td class="cost-usd">$0.045</td>
+            <td class="cost-twd">≈ $1.4 元</td>
+          </tr>
+          <tr>
+            <td><strong>大型社區</strong>（約 1,000 戶）</td>
+            <td>1,000 篇</td>
+            <td>30,000 次</td>
+            <td class="cost-usd">$0.45</td>
+            <td class="cost-twd">≈ $15 元</td>
+          </tr>
+          <tr>
+            <td><strong>多社區平台 / SaaS</strong></td>
+            <td>10,000 篇</td>
+            <td>300,000 次</td>
+            <td class="cost-usd">$4.50</td>
+            <td class="cost-twd">≈ $144 元</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 方案 B -->
+    <div class="plan-label">
+      📊 方案 B：<code>gemini-2.5-flash</code>
+      <span class="ptag advanced tag">高精準度</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>社區總規模（月計）</th>
+            <th>每日預估貼文量</th>
+            <th>每月總請求數</th>
+            <th>每月費用（USD）</th>
+            <th>每月費用（TWD）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>中小型社區</strong>（約 100 戶）</td>
+            <td>100 篇</td>
+            <td>3,000 次</td>
+            <td class="cost-usd">$0.26</td>
+            <td class="cost-twd">≈ $8.3 元</td>
+          </tr>
+          <tr>
+            <td><strong>大型社區</strong>（約 1,000 戶）</td>
+            <td>1,000 篇</td>
+            <td>30,000 次</td>
+            <td class="cost-usd">$2.62</td>
+            <td class="cost-twd">≈ $84 元</td>
+          </tr>
+          <tr>
+            <td><strong>多社區平台 / SaaS</strong></td>
+            <td>10,000 篇</td>
+            <td>300,000 次</td>
+            <td class="cost-usd">$26.25</td>
+            <td class="cost-twd">≈ $840 元</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── 三、計費公式 ── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="num">三</span>核心計費公式拆解（供查證）
+    </div>
+
+    <div class="formula-box">
+      <div style="font-size:0.82rem;color:#888;margin-bottom:10px;">總花費公式</div>
+      \[
+        \text{每月總花費} =
+        \bigl(\text{請求數} \times \text{輸入 tokens} \times \text{輸入單價}\bigr)
+        +
+        \bigl(\text{請求數} \times \text{輸出 tokens} \times \text{輸出單價}\bigr)
+      \]
+    </div>
+
+    <p style="font-size:0.85rem;color:#aaa;margin-bottom:12px;">
+      以 <code style="font-family:'JetBrains Mono',monospace;background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.3);border-radius:4px;padding:1px 6px;color:#ffd700;">gemini-2.5-flash-lite</code>
+      處理 <strong style="color:#e8e8e8;">30,000 次</strong>請求為例：
+    </p>
+
+    <div class="formula-box" style="padding:16px 20px;">
+      <div class="calc-item">
+        <strong style="color:#e8e8e8;">輸入成本</strong>
+        <span class="arrow">→</span>
+        30,000 × 500 tokens = 15,000,000 tokens
+        <span class="arrow">→</span>
+        15M × $0.10
+        <span class="result"> = $1.50</span>
+        <div class="note">📌 若命中脈絡快取（Context Caching），費率降至 $0.05 / 1M tokens，成本可減至 $0.75</div>
+      </div>
+      <div class="calc-item" style="margin-top:8px;">
+        <strong style="color:#e8e8e8;">輸出成本</strong>
+        <span class="arrow">→</span>
+        30,000 × 50 tokens = 1,500,000 tokens
+        <span class="arrow">→</span>
+        1.5M × $0.40
+        <span class="result"> = $0.60</span>
+      </div>
+      <div class="calc-item" style="margin-top:8px;background:rgba(255,215,0,0.05);padding:8px;border-radius:6px;border:none;">
+        <strong style="color:#ffd700;">調整後實際總計</strong>
+        <span class="arrow">→</span>
+        約
+        <span class="result">$0.45 ~ $2.10 USD</span>
+        <span style="color:#888;font-size:0.8rem;">（依快取命中率而定）</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 四、開發步驟 ── -->
+  <div class="section">
+    <div class="section-title">
+      <span class="num">四</span>結論與開發步驟
+    </div>
+
+    <div class="steps">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>初期開發與測試</strong> — 在 Google AI Studio 使用 <strong>Free Tier（免費層）</strong> 進行 Prompt 調整，
+          模型選 <code>gemini-2.5-flash-lite</code>，零成本驗證審查邏輯。
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>正式上線營運</strong> — 將 Google Cloud 專案綁定信用卡，升級為 <strong>Pay-as-you-go</strong> 方案，
+          徹底解鎖每分鐘 15 次限制，持續使用 <code>gemini-2.5-flash-lite</code>。
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>模型效能評估</strong> — 上線一週後檢查管委後台「誤判率」。
+          若陰陽怪氣、暗喻辱罵無法精準判定，只需將後端的 Model Name 改為
+          <code>gemini-2.5-flash</code> 即可無縫升級，無需任何架構調整。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    資費以 Google AI Studio 官方公告為準 · 匯率僅供參考（1 USD ≈ 32 TWD） · 2026/05
+  </div>
+
+</body>
+</html>

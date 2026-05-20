@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>多社區管理系統 — 完整系統架構圖</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap");
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      background: linear-gradient(to bottom right, #1a1a1a, #2d2d2d);
+      color: #ffffff;
+      margin: 0;
+      padding: 32px 24px;
+      min-height: 100vh;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #ffd700;
+      text-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+      letter-spacing: 0.02em;
+    }
+    p.subtitle {
+      text-align: center;
+      font-size: 0.85rem;
+      color: #b0b0b0;
+      margin-bottom: 24px;
+    }
+    .btn-bar {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    button {
+      background: transparent;
+      color: #ffd700;
+      border: 1px solid rgba(255, 215, 0, 0.5);
+      border-radius: 8px;
+      padding: 8px 22px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: rgba(255, 215, 0, 0.12);
+      border-color: #ffd700;
+      box-shadow: 0 0 12px rgba(255, 215, 0, 0.25);
+    }
+    #diagram-container {
+      background: rgba(45, 45, 45, 0.85);
+      border: 1px solid rgba(255, 215, 0, 0.25);
+      border-radius: 16px;
+      padding: 28px;
+      overflow: auto;
+      max-width: 100%;
+      box-shadow: 0 15px 40px rgba(255, 215, 0, 0.08);
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>多社區管理系統 — 完整系統架構圖</h1>
+  <p class="subtitle">四種角色 · 路由分派邏輯 · 20+ 業務模組 · 40+ API端點 · 雙 AI 引擎 · IoT整合</p>
+
+  <div class="btn-bar">
+    <button onclick="window.print()">🖨️ 列印 / 匯出 PDF</button>
+    <button onclick="downloadSVG()">⬇️ 下載 SVG</button>
+  </div>
+
+  <div id="diagram-container">
+    <div class="mermaid">
+flowchart TB
+
+    %% ══════════════════════════════════════════════
+    %% 角色層
+    %% ══════════════════════════════════════════════
+    subgraph ROLES["👥 使用者角色（四種）"]
+        direction LR
+        R1["🏠 住戶 resident\n·查詢公告/投票\n·報修/繳費/預約\n·包裹/訪客/緊急查看"]
+        R2["🛡️ 警衛 guard\n·訪客登記 check-in/out\n·包裹代收/領取確認\n·緊急事件通報\n·IoT感測器監控"]
+        R3["🏛️ 管委會 committee\n·所有住戶功能 +\n·住戶資料管理(完整)\n·公告發佈/財務設定\n·審核/稽核/解密申請\n·AI知識修復/交接"]
+        R4["⚙️ 系統管理員 admin\n·全 UI 預覽(資料全遮蔽)\n·canModifyData() 恆為 false (UI層)\n·唯一例外：解密覆核直接呼叫 API\n  繞過 canModifyData 寫入 DB\n·進入/admin 或預覽/dashboard"]
+    end
+
+    %% ══════════════════════════════════════════════
+    %% 認證 & 租戶切換
+    %% ══════════════════════════════════════════════
+    subgraph ENTRY["🔐 認證 & 租戶切換"]
+        direction LR
+        WEB["瀏覽器 HTTPS"]
+        LINE_IN["LINE App / Webhook"]
+        AUTH["/auth\nSupabase Auth\nJWT Token\n選擇社區"]
+        TENANT["tenant-context.tsx\ntenant-server.ts\n依選擇切換\n社區A or B 連線"]
+        PERM["permissions.ts\nrole-permission-service.ts\nshouldUseBackend()\ncanAccessSection()\ngetAllowedSections()\n覆寫存 system_settings\n+ localStorage"]
+    end
+
+    %% ══════════════════════════════════════════════
+    %% 路由頁面
+    %% resident + committee → /dashboard
+    %% guard + admin     → /admin
+    %% admin 亦可預覽 /dashboard (AdminPreviewBanner)
+    %% ══════════════════════════════════════════════
+    subgraph PAGES["📄 路由頁面"]
+        PG1["/dashboard\n住戶儀表板\nresident ✓ | committee ✓\nadmin ✓ 預覽(資料遮蔽)"]
+        PG2["/admin\n管理後台\nguard ✓ | admin ✓"]
+        PG3["/bind-line\nLINE OAuth 綁定"]
+        PG4["/admin/events\n緊急事件 + IoT 控制台\nEmergencyManagementAdmin\n+ ArduinoConsole\nguard ✓ | admin ✓"]
+    end
+
+    %% ══════════════════════════════════════════════
+    %% 業務模組
+    %% ══════════════════════════════════════════════
+    subgraph MODULES["📦 業務模組（features/）"]
+        direction TB
+
+        %% ── 住戶基本功能（resident 可用，committee 也有）──
+        subgraph M_RES["🏠 住戶功能 → /dashboard\n(resident + committee 共用)"]
+            direction LR
+            MR1["📢 announcements\n公告瀏覽/詳情\nlike 互動"]
+            MR2["🗳️ votes\n投票/查看結果\n外部連結投票"]
+            MR3["🔧 maintenance\n報修申請\n進度查詢/照片上傳"]
+            MR4["💰 finance\n管理費查詢\n繳費記錄"]
+            MR5["👤 profile\n個人資料\n緊急聯絡人\nLINE綁定狀態"]
+            MR6["🏢 facilities\n公設預約/查看"]
+            MR7["📋 community\n社區討論/公佈欄"]
+            MR8["📅 meetings\n會議公告\n活動報名"]
+            MR9["📚 knowledge-base / kms\n知識庫瀏覽\nAI問答(RAG)"]
+            MR10["🚨 emergencies\n緊急事件查看\n個人緊急聯絡"]
+            MR11["📦 packages\n住戶查詢自己包裹"]
+            MR12["🚪 visitors\n住戶查看訪客紀錄"]
+            MR13["💬 AiChat 智能助理\nfeatures/support/AiChat\n浮動聊天按鈕(所有住戶可用)\n→ app/api/chat (Groq RAG)\nChatFeedback 使用者評分"]
+        end
+
+        %% ── 管委會後台功能（committee 專屬，從 /dashboard 側邊欄進入）──
+        subgraph M_COMM["🏛️ 管委會後台 → /dashboard 側邊欄\n(committee 專屬，isResidentMode=false)"]
+            direction LR
+            MC1["👥 residents\n住戶完整資料\n新增/編輯/停用\n隱私資料完整可見"]
+            MC2["📣 announcements\n公告發佈/管理\n圖片上傳/排程"]
+            MC3["🗳️ votes\n投票建立/結案\n結果分析"]
+            MC4["🔧 maintenance\n派工/結案/廠商管理\nassignment_snapshot"]
+            MC5["💰 finance\n費用設定/催繳\n收支報表/匯出PDF"]
+            MC6["📅 meetings\n活動建立/通知\n會議紀錄"]
+            MC7["🛡️ moderation (via community)\n內容舉報/審核佇列\nCommunityBoardAdmin 內嵌\n→ app/api/community/reports/\n→ app/api/moderation/resolve/\n→ app/api/community/appeals/\n解除封鎖/禁言/申訴"]
+            MC8["🔍 audit-logs\n操作稽核記錄\n依角色/時間篩選"]
+            MC9["🔓 decryption\n解密申請(第一層)\n委員發起"]
+            MC10["🤖 ai-auto-fix\n知識差距分析\nAI建議修復"]
+            MC11["🔄 handover\n交接文件管理\n知識庫維護"]
+            MC12["� AI 學習佇列管理\nfeatures/support/LearningQueueManager\nAI 未答/低分問題入隊\nreview_status 審核標記\nadmin_notes 批注\n→ app/api/learning-queue/"]
+        end
+
+        %% ── 警衛功能（guard，透過 /admin）──
+        subgraph M_GUARD["🛡️ 警衛功能 → /admin"]
+            direction LR
+            MG1["📦 packages\n包裹代收登記\n住戶領取確認\n→ LINE 推播住戶"]
+            MG2["🚪 visitors\ncheck-in / check-out\n被訪住戶確認\n→ LINE 通知住戶"]
+            MG3["🚨 emergencies\n緊急事件通報\n填寫描述/位置\n→ LINE 推送管委+住戶\n→ IoT 聯動觸發"]
+            MG4["📟 arduino / IoT\n感測器即時數據\n門禁/溫濕度/煙霧\nMQTT / HTTP"]
+        end
+
+        %% ── 系統管理員（admin，全遮蔽預覽，透過 /admin 或 /dashboard）──
+        subgraph M_ADMIN["⚙️ 系統管理員 → /admin\n(全 UI 預覽，資料 100% 遮蔽，無寫入)"]
+            direction LR
+            MA1["🧠 kms / knowledge-base\n知識庫管理(KMS)\n知識卡片 CRUD\ncanManageKMS: committee+admin\n(admin 僅可查看/預覽)"]
+            MA2["🔒 全模組預覽(無寫入)\n公告/投票/維修/財務/住戶\n會議/設施/社區/緊急/個人資料\nai-auto-fix/moderation/handover\nmaskPrivacyData() 全遮蔽\n姓名→*** 電話→****-***-***\n內容→[內容已遮蔽 - 系統管理員無權查看]"]
+            MA3["🔍 audit-logs\n所有角色操作記錄\n依角色/時間/動作篩選\n(UI預覽模式)"]
+            MA4["🔓 decryption 覆核（第二層）\ncommittee 發起 → admin 覆核通過/駁回\nadminReviewDecryptionRequest()\nadmin_approved_by + notes\n⚠️ 直接呼叫 supabase.update()\n  繞過 UI 層 canModifyData()=false\n  屬 API 層特例寫入權限"]
+        end
+    end
+
+    %% ══════════════════════════════════════════════
+    %% API 路由層
+    %% ══════════════════════════════════════════════
+    subgraph APILAY["⚡ API 路由層（app/api/）"]
+        direction TB
+
+        subgraph API_NOTIFY["📣 通知類"]
+            AN1["line / line-bot2\nLINE Webhook 接收\n訊息/事件處理"]
+            AN2["line-notify\n一般推播通知"]
+            AN3["meeting-notify\n會議/活動提醒推播"]
+            AN4["emergency-notify\n緊急推播\n+ server/line-emergency.js"]
+            AN5["remind-fee\n管理費催繳提醒"]
+        end
+
+        subgraph API_DATA["🗄️ 資料類"]
+            AD1["announce\n公告 CRUD"]
+            AD2["votes\n投票 CRUD / 計票"]
+            AD3["maintenance / repairs / routine\n工單建立/派工/結案/定期"]
+            AD4["fees\n費用查詢/新增"]
+            AD5["packages\n包裹 CRUD"]
+            AD6["visitor\n訪客 CRUD / check-in/out"]
+            AD7["emergency-incidents\n緊急事件 CRUD"]
+            AD8["meeting / events / events-create\n會議/活動管理"]
+            AD9["facility\n設施 CRUD / 預約"]
+            AD10["community\n社區資料\ncommunity/reports 舉報\ncommunity/appeals 申訴\ncommunity/admin-board 管委板"]
+            AD11["sync\n⚠️ 目錄存在但為空 (stub)\n跨社區/全域設定同步\n尚未實作 route.ts"]
+            AD12["residents / profile-by-name\n住戶查詢"]
+            AD13["moderation / feedback\n審核/回饋"]
+            AD14["kms / decryption\n金鑰/解密覆核"]
+            AD15["upload-file / upload-image\n附件上傳\n→ export-pdf.ts"]
+            AD16["dashboard\n儀表板統計彙整"]
+            AD17["auth\n登入/登出/token刷新"]
+            AD18["bind-line\nLINE帳號綁定"]
+        end
+
+        subgraph API_AI["🤖 AI 類"]
+            AA1["llm\nGemini → 文字推論\n摘要/分析/建議"]
+            AA2["chat\nGroq Llama3 RAG\n意圖分類→向量檢索\n→知識庫回答"]
+            AA3["knowledge-gap\n知識差距分析\n找出未覆蓋問題"]
+            AA4["learning-queue\n待學習問題佇列\n新問題入隊"]
+            AA5["popular-questions\n熱門問題統計\n頻率排行"]
+            AA6["ai-auto-fix\n知識庫自動補全\n建議新增/修改條目"]
+        end
+
+        subgraph API_IOT["📡 IoT 類"]
+            AI1["iot\n指令下發\n設備狀態查詢"]
+            AI2["iot-emergency-webhook\n感測器觸發緊急\n→ 自動建立事件記錄\n→ 推播通知"]
+        end
+    end
+
+    %% ══════════════════════════════════════════════
+    %% 核心函式庫
+    %% ══════════════════════════════════════════════
+    subgraph LIB["📚 核心函式庫（lib/）"]
+        direction LR
+        LB1["🏘️ supabase.ts\nsupabaseServer.ts\nsupabase/client.ts\n多租戶 Supabase 連線\n依社區 URL 切換"]
+        LB2["🔐 auth-service.ts\nauth-actions.ts\nJWT Token 驗證\nSession 管理\nSupabase Auth"]
+        LB3["🔑 permissions.ts\nrole-permission-service.ts\nROLE_PERMISSIONS 表\ngetAllowedSections()\ncanAccessSection()\n覆寫: system_settings\n+ localStorage sync"]
+        LB4["🤖 gemini-client.ts\nai-chat.ts\nGoogle Gemini Flash 2.0\n文字分析/推論"]
+        LB5["🦙 grok/grokmain.ts\ngrok/embedding.ts\ngrok/chat-logger.ts\n⚠️ 目錄名 grok ≠ xAI Grok\n  實為 Groq API (LPU推論)\nGroq Llama3-8b-8192 RAG\n同義詞正規化 / 意圖分類\n向量相似檢索 (pgvector)\n自建 createClient(SUPABASE_URL)\n查 knowledge 資料表"]
+        LB6["📝 audit.ts\naudit-server.ts\n操作自動記錄\n寫入 audit_logs 表"]
+        LB7["🏗️ tenant-context.tsx\ntenant-server.ts\n社區上下文管理\n動態切換連線"]
+        LB8["📄 export-pdf.ts\nunit-parser.ts\nutils.ts\nPDF 財務報表匯出\n戶號格式解析"]
+        LB9["🚨 server/line-emergency.js\nnotifyEmergencyContact()\nlineBotClient\nIoT → LINE 緊急推播"]
+    end
+
+    %% ══════════════════════════════════════════════
+    %% 外部服務
+    %% ══════════════════════════════════════════════
+    subgraph EXT["🌐 外部服務"]
+        direction LR
+        DB_A[("Supabase\n社區A DB\nPostgreSQL\nRow Level Security\nprofiles/units/audit_logs\n...所有業務資料表")]
+        DB_B[("Supabase\n社區B DB\nPostgreSQL\nRow Level Security\n獨立資料不互通")]
+        LINE_P["LINE Platform\nMessaging API\nLine Notify\nOAuth2 綁定\nPush/Reply Message"]
+        GEM["Google Gemini\nFlash 2.0\n文字推論分析"]
+        GROQ["Groq API\nLlama3-8b-8192\nRAG 快速推論"]
+        ARD["Arduino / IoT 設備\n感測器(溫濕/煙霧/門禁)\nMQTT / HTTP 雙協定"]
+        VCRL["Vercel\nEdge Runtime\nServerless Function\nAnalytics"]
+    end
+
+    %% ══════════════════════════════════════════════
+    %% 流程連線
+    %% ══════════════════════════════════════════════
+
+    %% 入口
+    WEB -->|"① HTTPS 登入請求"| AUTH
+    LINE_IN -->|"Webhook 事件"| AN1
+    AUTH -->|"② 選社區 + 取 JWT"| TENANT
+    TENANT -->|"③ 切換 Supabase 連線"| LB7
+    LB7 --> LB1
+    AUTH -->|"④ 驗證 JWT"| LB2
+    LB2 --> LB1
+    AUTH -->|"⑤ 載入角色權限"| LB3
+    LB3 -->|"角色路由分派"| PERM
+
+    %% 路由分派
+    PERM -->|"resident / committee\n→ /dashboard"| PG1
+    PERM -->|"guard / admin\n→ /admin"| PG2
+    PERM -.->|"admin 亦可預覽\nAdminPreviewBanner"| PG1
+
+    %% 頁面 → 模組
+    PG1 --> M_RES
+    PG1 --> M_COMM
+    PG2 --> M_GUARD
+    PG2 --> M_ADMIN
+    PG3 -->|"LINE OAuth"| LINE_P
+    PG4 --> MG3
+    PG4 --> MG4
+
+    %% 模組 → API
+    M_RES --> API_DATA
+    M_RES --> API_AI
+    M_COMM --> API_DATA
+    M_COMM --> API_NOTIFY
+    M_COMM --> API_AI
+    M_GUARD --> API_DATA
+    M_GUARD --> API_NOTIFY
+    M_GUARD --> API_IOT
+    M_ADMIN -.->|"預覽呼叫\n回傳遮蔽資料"| API_DATA
+
+    %% API → 函式庫
+    API_DATA --> LB1
+    API_DATA --> LB6
+    API_NOTIFY --> LB9
+    API_AI --> LB4
+    API_AI --> LB5
+    API_IOT --> ARD
+    AD15 --> LB8
+    AD17 --> LB2
+
+    %% 函式庫 → 外部服務
+    LB1 -->|"依社區路由"| DB_A
+    LB1 -->|"依社區路由"| DB_B
+    LB4 --> GEM
+    LB5 --> GROQ
+    LB5 -.->|"向量檢索\nknowledge 資料表\n(pgvector)"| LB1
+    LB6 --> LB1
+    LB9 --> LINE_P
+
+    %% LINE 雙向
+    API_NOTIFY --> LINE_P
+    LINE_P -->|"Push 通知 → 住戶/警衛"| LINE_IN
+
+    %% IoT 緊急聯動
+    AI2 -->|"感測器觸發"| AN4
+    AI2 -->|"自動建立事件"| AD7
+
+    %% 稽核（虛線：所有寫入自動觸發）
+    M_RES -.->|"寫入自動稽核"| LB6
+    M_COMM -.->|"寫入自動稽核"| LB6
+    M_GUARD -.->|"寫入自動稽核"| LB6
+
+    %% 部署
+    APILAY -.->|"部署於"| VCRL
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        darkMode: true,
+        background: '#2d2d2d',
+        primaryColor: '#3a3000',
+        primaryTextColor: '#ffffff',
+        primaryBorderColor: '#ffd700',
+        lineColor: '#ffd700',
+        secondaryColor: '#1a1a1a',
+        tertiaryColor: '#252525',
+        tertiaryTextColor: '#ffffff',
+        tertiaryBorderColor: 'rgba(255,215,0,0.4)',
+        noteBkgColor: '#3a3000',
+        noteTextColor: '#ffd700',
+        clusterBkg: 'rgba(255,215,0,0.06)',
+        clusterBorder: 'rgba(255,215,0,0.4)',
+        titleColor: '#ffd700',
+        edgeLabelBackground: '#2d2d2d',
+        nodeTextColor: '#ffffff',
+        fontSize: '13px'
+      },
+      flowchart: {
+        htmlLabels: true,
+        curve: 'basis'
+      }
+    });
+
+    function downloadSVG() {
+      const svg = document.querySelector('.mermaid svg');
+      if (!svg) { alert('圖表尚未載入完成，請稍後再試'); return; }
+      const serializer = new XMLSerializer();
+      const svgStr = serializer.serializeToString(svg);
+      const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'architecture-diagram.svg';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+
+  <style>
+    @media print {
+      .btn-bar { display: none; }
+      body { background: #1a1a1a; color: white; padding: 0; }
+      #diagram-container { background: #2d2d2d; border-radius: 0; padding: 12px; border: none; box-shadow: none; }
+    }
+  </style>
+</body>
+</html>

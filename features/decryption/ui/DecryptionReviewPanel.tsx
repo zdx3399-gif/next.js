@@ -71,7 +71,7 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole, isPreviewMode 
   // admin (第二層): 看 committee_approved 的申請
   const statusFilter = reviewerRole === "committee" 
     ? ["pending"] 
-    : ["committee_approved"]
+    : ["committee_approved", "fully_approved"]
   
   const { requests, refresh, isLoading: isLoadingRequests } = useDecryptionRequests({ 
     status: statusFilter 
@@ -327,9 +327,11 @@ export function DecryptionReviewPanel({ reviewerId, reviewerRole, isPreviewMode 
                     </div>
                   ) : (
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => setSelectedRequest(request.id)}>
-                        開始審核
-                      </Button>
+                      {request.status !== "fully_approved" && (
+                        <Button size="sm" onClick={() => setSelectedRequest(request.id)}>
+                          開始審核
+                        </Button>
+                      )}
                       <HelpHint
                         title="開始審核"
                         description="進入審核模式後可填寫備註並做通過或拒絕。"

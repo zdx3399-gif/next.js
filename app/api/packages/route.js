@@ -684,8 +684,79 @@ export async function PATCH(req) {
       afterState: { status: "picked_up", picked_up_by },
     });
 
-    // 包裹領取不發送 LINE 通知（到件時已通知過，避免重複）
-    // 包裹領取不需要觸發 IoT 聲音
+    // 包裹領取 LINE 通知
+    if (packageData.unit_id) {
+      const { lineUserId, lineDisplayName } = await findLineUserByUnit(supabase, packageData.unit_id);
+      if (lineUserId) {
+        const pickupTime = new Date().toLocaleString("zh-TW", { hour12: false });
+        const flexMessage = {
+          type: "flex",
+          altText: `✅ 包裹已領取 - ${packageData.courier}`,
+          contents: {
+            type: "bubble",
+            hero: {
+              type: "box",
+              layout: "vertical",
+              contents: [
+                {
+                  type: "text",
+                  text: "✅ 包裹領取通知",
+                  weight: "bold",
+                  size: "xl",
+                  color: "#ffffff",
+                },
+              ],
+              backgroundColor: "#06c755",
+              paddingAll: "20px",
+            },
+            body: {
+              type: "box",
+              layout: "vertical",
+              contents: [
+                {
+                  type: "text",
+                  text: `領取人：${picked_up_by}`,
+                  margin: "md",
+                  size: "md",
+                  weight: "bold",
+                },
+                {
+                  type: "text",
+                  text: `快遞公司：${packageData.courier}`,
+                  margin: "sm",
+                  color: "#666666",
+                },
+                ...(packageData.tracking_number
+                  ? [
+                      {
+                        type: "text",
+                        text: `追蹤號：${packageData.tracking_number}`,
+                        margin: "sm",
+                        color: "#666666",
+                        size: "sm",
+                      },
+                    ]
+                  : []),
+                {
+                  type: "text",
+                  text: `領取時間：${pickupTime}`,
+                  margin: "sm",
+                  color: "#666666",
+                  size: "sm",
+                },
+              ],
+            },
+          },
+        };
+        try {
+          await client.pushMessage(lineUserId, flexMessage);
+          console.log(`[LINE] ✅ Pickup notification sent to ${lineDisplayName || lineUserId}`);
+        } catch (e) {
+          console.error("[LINE] ❌ Failed to send pickup notification:", e);
+        }
+      }
+    }
+
     return Response.json({ 
       success: true,
       message: "✅ 包裹已領取",

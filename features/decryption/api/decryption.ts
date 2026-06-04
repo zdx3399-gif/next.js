@@ -220,12 +220,53 @@ export async function getDecryptedAuthorInfo(requestId: string, viewerId: string
   if (request.status !== "fully_approved") throw new Error("此申請尚未完全核准")
   if (new Date(request.accessible_until) < new Date()) throw new Error("解密資訊已過期")
 
-  // 取得作者資訊
+  // 解析發文/留言者的 profile ID
+  // 優先從 target_id 直接查原始貼文/留言，確保資料正確
+  // 若查不到則 fallback 到 decrypted_author_id（核准時預存）
+  let authorProfileId: string | null = null
+
+  if (request.target_type === "post") {
+    const { data: post } = await supabase
+      .from("community_posts")
+      .select("author_id")
+      .eq("id", request.target_id)
+      .single()
+    authorProfileId = post?.author_id ?? null
+  } else if (request.target_type === "comment") {
+    const { data: comment } = await supabase
+      .from("post_comments")
+      .select("author_id")
+      .eq("id", request.target_id)
+      .single()
+    authorProfileId = comment?.author_id ?? null
+  }
+
+  // fallback：若 RLS 擋住或貼文已刪除，改用核准時記錄的 decrypted_author_id
+  if (!authorProfileId) {
+    authorProfileId = request.decrypted_author_id ?? null
+  }
+
+  if (!authorProfileId) throw new Error("無法解析發文者身份，貼文可能已刪除")
+
+  // 取得作者 profile
   const { data: author } = await supabase
     .from("profiles")
-    .select("id, full_name, unit_number, email, phone")
-    .eq("id", request.decrypted_author_id)
+    .select("id, name, unit_id, email, phone")
+    .eq("id", authorProfileId)
     .single()
+
+  if (!author) throw new Error("找不到發文者的個人資料")
+
+  // 取得戶號（unit_number 在 units 表）
+  let unitNumber: string | null = null
+  if (author.unit_id) {
+    const { data: unit } = await supabase
+      .from("units")
+      .select("unit_number, unit_code")
+      .eq("id", author.unit_id)
+      .single()
+    unitNumber = unit?.unit_number || unit?.unit_code || null
+  }
 
   await createAuditLog({
     operatorId: viewerId,
@@ -238,7 +279,13 @@ export async function getDecryptedAuthorInfo(requestId: string, viewerId: string
     additionalData: { module: "decryption", status: "success" },
   })
 
-  return author
+  return {
+    id: author.id,
+    full_name: author.name,
+    unit_number: unitNumber,
+    email: author.email,
+    phone: author.phone,
+  }
 }
 
 export async function getAuditLogs(filters?: {

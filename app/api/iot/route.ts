@@ -18,7 +18,8 @@ export async function GET() {
 // 3. Handle POST: Your frontend calls this when a button (like "Visitor") is clicked
 export async function POST(request: Request) {
   try {
-    const { cmd } = await request.json();
+    // 1. Extract both the command AND the device ID from the frontend
+    const { cmd, deviceId } = await request.json();
     const normalizedCmd = String(cmd || "").trim().toUpperCase();
 
     if (!VALID_COMMANDS.has(normalizedCmd)) {
@@ -28,24 +29,29 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update Row #1 in our Supabase mailbox table with the new command
+    // 2. Ensure a deviceId was provided, default to 1 if not for safety
+    const targetId = deviceId ? parseInt(deviceId) : 1;
+
+    // 3. Update only the specific row matching the targetId
     const { error } = await supabase
       .from('iot_commands')
       .update({ current_command: normalizedCmd })
-      .eq('id', 1);
+      .eq('id', targetId); // <--- DYNAMIC ID HERE
 
     if (error) {
-      console.error("Supabase Error:", error);
       throw error;
     }
 
-    // Return the exact format your ArduinoConsole.tsx expects
-    return NextResponse.json({ success: true, cmd: normalizedCmd, device: "Mailbox updated" });
+    return NextResponse.json({ 
+      success: true, 
+      cmd: normalizedCmd, 
+      device: `Device ${targetId} updated` 
+    });
     
-  } catch (error) {
-    console.error(error);
+  } catch (error: any) {
+    console.error("Mailbox Command Error:", error.message || error);
     return NextResponse.json(
-      { success: false, error: 'Failed to send command to mailbox' }, 
+      { success: false, error: 'Failed to send command' }, 
       { status: 500 }
     );
   }

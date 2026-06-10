@@ -7,7 +7,7 @@ export function ArduinoConsole() {
   const [log, setLog] = useState("")
   const [connectionMode, setConnectionMode] = useState<"serial" | "wifi">("serial")
   const [isConnected, setIsConnected] = useState(false)
-
+  const [selectedDevice, setSelectedDevice] = useState<number>(1)
   // 將 log 依行分割並分類
   function parseLogs(logStr: string) {
     const lines = logStr.split("\n").filter(Boolean);
@@ -151,7 +151,8 @@ export function ArduinoConsole() {
       const res = await fetch("/api/iot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cmd }),
+        body: JSON.stringify({ cmd, deviceId: selectedDevice }), 
+      
       })
 
       const data = await res.json()
@@ -255,7 +256,24 @@ export function ArduinoConsole() {
       >
         🔌 連接 IOT（{connectionMode === "serial" ? "USB" : "Wi-Fi"}）
       </button>
-
+        <div className="flex flex-col gap-2">
+        <label className="text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
+          📍 選擇目標設備
+        </label>
+        <select
+          value={selectedDevice}
+          onChange={(e) => setSelectedDevice(Number(e.target.value))}
+          className="px-4 py-2 rounded-lg transition-colors text-sm font-medium outline-none"
+          style={{
+            background: 'var(--theme-bg-secondary)',
+            color: 'var(--theme-text-primary)',
+            border: '1px solid var(--theme-border)',
+          }}
+        >
+          <option value={1}>IoT 設備 1</option>
+          <option value={2}>IoT 設備 2</option>
+        </select>
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <button
           onClick={() => handleButtonClick("訪客", "V")}

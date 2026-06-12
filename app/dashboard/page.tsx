@@ -293,9 +293,9 @@ export default function DashboardPage() {
       <nav
         className={`fixed lg:static top-0 left-0 h-screen bg-[var(--theme-bg-card)] border-r-2 border-[var(--theme-border-accent)] overflow-y-auto overflow-x-hidden transition-all duration-300 z-[100] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        } ${sidebarCollapsed ? "lg:w-0 lg:hidden" : "lg:w-[280px]"}`}
+        } ${sidebarCollapsed ? "lg:w-0 lg:hidden" : "w-[280px]"}`}
       >
-        <div className={`p-8 pb-6 border-b border-[var(--theme-border)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+        <div className={`p-4 sm:p-8 pb-4 sm:pb-6 border-b border-[var(--theme-border)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
           <div className="text-[var(--theme-accent)] font-bold text-xl">社區管理系統</div>
           {currentUser && <ProfileDropdown currentUser={currentUser} onUpdate={handleProfileUpdate} />}
         </div>
@@ -322,37 +322,37 @@ export default function DashboardPage() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
         <header className="flex justify-between items-center px-4 py-3 border-b border-[var(--theme-border)] flex-shrink-0">
-          <div className="flex gap-2 items-center text-[var(--theme-accent)] font-bold">
-            <button onClick={toggleSidebar} className="material-icons cursor-pointer">
+          <div className="flex gap-2 items-center text-[var(--theme-accent)] font-bold min-w-0">
+            <button onClick={toggleSidebar} className="material-icons cursor-pointer flex-shrink-0">
               menu
             </button>
-            <span>{sectionTitles[currentSection]}</span>
+            <span className="truncate text-sm sm:text-base">{sectionTitles[currentSection]}</span>
           </div>
           <div className="flex gap-2 items-center">
             <ThemeToggle />
             {currentUser?.role === "committee" && (
               <button
                 onClick={switchToAdmin}
-                className="flex gap-2 items-center border-2 border-[var(--theme-border-accent)] rounded-lg px-3 py-2 bg-transparent text-[var(--theme-accent)] cursor-pointer font-semibold hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all"
+                className="flex gap-1 sm:gap-2 items-center border-2 border-[var(--theme-border-accent)] rounded-lg px-2 sm:px-3 py-2 bg-transparent text-[var(--theme-accent)] cursor-pointer font-semibold hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all text-xs sm:text-sm"
               >
-                <span className="material-icons text-lg">admin_panel_settings</span>
-                <span>切換管理員介面</span>
+                <span className="material-icons text-base sm:text-lg">admin_panel_settings</span>
+                <span className="hidden sm:inline">切換管理員介面</span>
               </button>
             )}
             {currentUser?.role === "admin" && (
               <button
                 onClick={switchToAdminPreview}
-                className="flex gap-2 items-center border-2 border-[var(--theme-border-accent)] rounded-lg px-3 py-2 bg-transparent text-[var(--theme-accent)] cursor-pointer font-semibold hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all"
+                className="flex gap-1 sm:gap-2 items-center border-2 border-[var(--theme-border-accent)] rounded-lg px-2 sm:px-3 py-2 bg-transparent text-[var(--theme-accent)] cursor-pointer font-semibold hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all text-xs sm:text-sm"
               >
-                <span className="material-icons text-lg">admin_panel_settings</span>
-                <span>切換管理員介面</span>
+                <span className="material-icons text-base sm:text-lg">admin_panel_settings</span>
+                <span className="hidden sm:inline">切換管理員介面</span>
               </button>
             )}
             <button
               onClick={logout}
-              className="flex gap-2 items-center border-none rounded-lg px-3 py-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] cursor-pointer font-semibold hover:opacity-90"
+              className="flex gap-1 sm:gap-2 items-center border-none rounded-lg px-2 sm:px-3 py-2 bg-[var(--theme-accent)] text-[var(--theme-bg-primary)] cursor-pointer font-semibold hover:opacity-90 text-xs sm:text-sm"
             >
-              <span className="material-icons text-lg">logout</span>
+              <span className="material-icons text-base sm:text-lg">logout</span>
               <span className="hidden sm:inline">登出</span>
             </button>
           </div>

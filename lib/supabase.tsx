@@ -86,3 +86,26 @@ export function getSupabaseClient() {
     throw error
   }
 }
+
+// Create a Supabase client for a specific tenant using NEXT_PUBLIC env vars
+export function createClientForTenant(tenantId: TenantId) {
+  const url =
+    tenantId === "tenant_a"
+      ? process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || ""
+      : process.env.NEXT_PUBLIC_TENANT_B_SUPABASE_URL || ""
+  const anonKey =
+    tenantId === "tenant_a"
+      ? process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || ""
+      : process.env.NEXT_PUBLIC_TENANT_B_SUPABASE_ANON_KEY || ""
+  if (!url || !anonKey) return null
+  try {
+    return createBrowserClient(url, anonKey)
+  } catch {
+    return null
+  }
+}
+
+export const TENANT_LABELS: Record<TenantId, string> = {
+  tenant_a: "社區 A",
+  tenant_b: "社區 B",
+}

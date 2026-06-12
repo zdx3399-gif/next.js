@@ -2,6 +2,8 @@
 
 import { type ReactNode, useEffect, useMemo, useState } from "react"
 
+import { HelpHint } from "@/components/ui/help-hint"
+
 type RecommendedAction = "manual_review" | "auto_apply" | string
 
 type FeedbackItem = {
@@ -268,7 +270,24 @@ export function AiAutoFixPanel({ readOnly = false }: { readOnly?: boolean }) {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-primary)] p-4 sm:p-5">
-        <h3 className="text-lg font-bold text-[var(--theme-text-primary)]">AI 自動修正測試看板</h3>
+        <h3 className="text-lg font-bold text-[var(--theme-text-primary)] flex items-center gap-2">
+          AI 自動修正測試看板
+          <HelpHint
+            title="AI 自動修正看板"
+            description="彙整 AI 回答品質偏低的群組，提供建議修正答案，並支援人工審核與直接套用至知識庫。"
+            workflow={[
+              "先查看摘要區了解目前有多少群組需要審核。",
+              "依問題類型篩選後，逐筆確認 AI 建議答案是否正確。",
+              "若答案可用，直接點套用寫入知識庫；若需修改請先編輯再套用。",
+              "套用後系統會移除已解決的回饋並更新知識庫供後續 AI 使用。",
+            ]}
+            logic={[
+              "只有信心分數達門檻的群組才會自動套用，其餘須人工審核。",
+              "套用會覆蓋同問題舊知識，操作前請確認答案正確性。",
+              "支援衝突偵測，發現相似既有知識時會提示確認再寫入。",
+            ]}
+          />
+        </h3>
         <p className="mt-1 text-sm text-[var(--theme-text-secondary)]">
           這裡會顯示 dry-run 的分群結果、建議修正答案，以及群眾回饋的分類摘要。
         </p>

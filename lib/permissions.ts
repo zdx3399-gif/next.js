@@ -17,12 +17,6 @@ export type Section =
   | "facilities"
   | "community"
   | "knowledge-base"
-  | "handover-knowledge"
-  | "ai-auto-fix"
-  | "moderation"
-  | "audit-logs"
-  | "decryption"
-  | "arduino"
 
 export const USER_ROLES: UserRole[] = ["resident", "guard", "committee", "admin"]
 
@@ -41,10 +35,6 @@ export const CUSTOMIZABLE_SECTIONS: Section[] = [
   "facilities",
   "community",
   "knowledge-base",
-  "handover-knowledge",
-  "ai-auto-fix",
-  "moderation",
-  "audit-logs",
   "decryption",
   "arduino",
 ]
@@ -90,7 +80,6 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "knowledge-base",
     "handover-knowledge",
     "ai-auto-fix",
-    "moderation",
     "audit-logs",
     "decryption",
   ],
@@ -106,16 +95,19 @@ const ROLE_PERMISSIONS: Record<UserRole, Section[]> = {
     "maintenance",
     "finance",
     "residents",      // 可看列表但隱私資料遮蔽
+    "packages",       // 可看但資料遮蔽（預覽模式）
+    "visitors",       // 可看但資料遮蔽（預覽模式）
     "meetings",
     "emergencies",
     "facilities",
     "community",      // 可看但作者資訊遮蔽
+
     "knowledge-base",
     "handover-knowledge",
     "ai-auto-fix",
-    "moderation",     // 可看但用戶資料遮蔽
     "decryption",     // 解密申請覆核（第二層）
     "audit-logs",
+    "permissions",    // 社區功能模組權限（僅系統管理員）
   ],
 }
 
@@ -132,7 +124,6 @@ export const ADMIN_PREVIEW_ONLY_SECTIONS: Section[] = [
   "announcement-details",
   "residents",
   "community",
-  "moderation",
   "votes",
   "maintenance",
   "finance",

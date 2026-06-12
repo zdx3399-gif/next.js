@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner";
+import { HelpHint } from "@/components/ui/help-hint"
 
 export function ArduinoConsole() {
   const [log, setLog] = useState("")
@@ -258,6 +259,24 @@ export function ArduinoConsole() {
         color: 'var(--theme-text-primary)',
       }}
     >
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-base font-semibold text-[var(--theme-text-primary)]">IoT 控制台</span>
+        <HelpHint
+          title="IoT 控制台"
+          description="透過 USB Serial 或 Wi-Fi 連接 Arduino，向硬體發送訪客、包裹、緊急事件等通知指令，並即時查看回應日誌。"
+          workflow={[
+            "先選擇連線模式（USB Serial 或 Wi-Fi），再點『連接 IOT』建立連線。",
+            "連線成功後，點對應按鈕發送通知指令（訪客 / 包裹 / 緊急事件 / 緊急取消）。",
+            "下方分類表格會即時顯示各類型指令的回應日誌。",
+            "操作完成後可點『清除日誌』歸零日誌顯示。",
+          ]}
+          logic={[
+            "USB Serial 需瀏覽器支援 Web Serial API（建議 Chrome）。",
+            "Wi-Fi 模式透過後端 API 轉發指令，不需要 Web Serial。",
+            "緊急事件指令（E）發送後，需用緊急取消（C）才能解除警報。",
+          ]}
+        />
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => handleModeChange("serial")}

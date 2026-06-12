@@ -11,6 +11,7 @@ import { MeetingManagementAdmin } from "@/features/meetings/ui/MeetingManagement
 import { EmergencyManagementAdmin } from "@/features/emergencies/ui/EmergencyManagementAdmin"
 import { FacilityManagementAdmin } from "@/features/facilities/ui/FacilityManagementAdmin"
 import { ResidentManagementAdmin } from "@/features/residents/ui/ResidentManagementAdmin"
+import { PermissionsManagementAdmin } from "@/features/residents/ui/PermissionsManagementAdmin"
 import { AnnouncementDetailsAdmin } from "@/features/announcements/ui/AnnouncementDetailsAdmin"
 import { AnnouncementManagementAdmin } from "@/features/announcements/ui/AnnouncementManagementAdmin"
 import { CommunityBoardAdmin } from "@/features/community/ui/CommunityBoardAdmin"
@@ -50,6 +51,7 @@ type Section =
   | "audit-logs"
   | "decryption"
   | "arduino"
+  | "permissions"
 
 export default function AdminPage() {
   const router = useRouter()
@@ -214,6 +216,7 @@ export default function AdminPage() {
     { id: "decryption", icon: "lock_open", label: "解密申請" },
     { id: "audit-logs", icon: "history", label: "稽核紀錄" },
     { id: "arduino", icon: "sensors", label: "IoT 控制台" },
+    { id: "permissions", icon: "admin_panel_settings", label: "社區功能模組權限" },
   ]
 
   const normalizedRole = String(currentUser?.role || "").trim().toLowerCase()
@@ -230,6 +233,9 @@ export default function AdminPage() {
         if (item.id === "ai-auto-fix") {
           return effectiveRole === "admin" || effectiveRole === "committee"
         }
+        if (item.id === "permissions") {
+          return effectiveRole === "admin"
+        }
         return canAccessSection(effectiveRole, item.id as any, false)
       })
     : []
@@ -237,7 +243,9 @@ export default function AdminPage() {
   const hasAccess = currentUser
     ? currentSection === "ai-auto-fix"
       ? effectiveRole === "admin" || effectiveRole === "committee"
-      : canAccessSection(effectiveRole, currentSection, false)
+      : currentSection === "permissions"
+        ? effectiveRole === "admin"
+        : canAccessSection(effectiveRole, currentSection, false)
     : false
   const isPreviewMode = currentUser ? isAdminPreviewMode(effectiveRole, currentSection as any) : false
 
@@ -250,9 +258,9 @@ export default function AdminPage() {
       <nav
         className={`fixed lg:static top-0 left-0 h-screen bg-[var(--theme-bg-card)] backdrop-blur-lg border-r-2 border-[var(--theme-border-accent)] overflow-y-auto overflow-x-hidden transition-all duration-300 z-[100] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        } ${sidebarCollapsed ? "lg:w-0 lg:hidden" : "lg:w-[280px]"}`}
+        } ${sidebarCollapsed ? "lg:w-0 lg:hidden" : "w-[280px]"}`}
       >
-        <div className={`p-8 pb-6 border-b border-[var(--theme-border)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+        <div className={`p-4 sm:p-8 pb-4 sm:pb-6 border-b border-[var(--theme-border)] ${sidebarCollapsed ? "lg:hidden" : ""}`}>
           <div className="text-[var(--theme-accent)] font-bold text-xl">社區管理系統</div>
           {currentUser && (
             <ProfileDropdown
@@ -309,7 +317,7 @@ export default function AdminPage() {
                 className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-2 border-[var(--theme-border-accent)] rounded-lg text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all font-semibold text-xs sm:text-sm"
               >
                 <span className="material-icons text-base sm:text-lg">home</span>
-                <span>切換住戶介面</span>
+                <span className="hidden sm:inline">切換住戶介面</span>
               </button>
             )}
             {currentUser?.role === "admin" && (
@@ -318,7 +326,7 @@ export default function AdminPage() {
                 className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-2 border-[var(--theme-border-accent)] rounded-lg text-[var(--theme-accent)] hover:bg-[var(--theme-accent)] hover:text-[var(--theme-bg-primary)] transition-all font-semibold text-xs sm:text-sm"
               >
                 <span className="material-icons text-base sm:text-lg">home</span>
-                <span>切換住戶介面</span>
+                <span className="hidden sm:inline">切換住戶介面</span>
               </button>
             )}
             <button
@@ -466,6 +474,8 @@ export default function AdminPage() {
               </h2>
               <ArduinoConsole />
             </div>
+          ) : currentSection === "permissions" ? (
+            <PermissionsManagementAdmin isPreviewMode={false} />
           ) : currentSection === "decryption" ? (
             <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-5">
               <h2 className="flex gap-2 items-center text-[var(--theme-accent)] mb-5 text-xl">

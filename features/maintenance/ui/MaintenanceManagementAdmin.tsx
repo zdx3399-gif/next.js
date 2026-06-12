@@ -661,7 +661,7 @@ export function MaintenanceManagementAdmin({ isPreviewMode = false }: Maintenanc
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full table-fixed border-collapse">
+        <table className="w-full min-w-[1100px] table-fixed border-collapse">
           <thead>
             <tr className="bg-[var(--theme-accent-light)]">
               <th className="w-[9%] p-3 text-left text-[var(--theme-accent)] border-b border-[var(--theme-border)] whitespace-nowrap"><div className="inline-flex items-center gap-2 whitespace-nowrap"><span>設備</span><HelpHint title="設備欄" description="顯示故障設備類別。" workflow={["查看每筆案件的設備大類。","搭配搜尋可快速篩出同設備問題。"]} logic={["設備欄是案件分類起點，利於統計熱點故障。"]} /></div></th>

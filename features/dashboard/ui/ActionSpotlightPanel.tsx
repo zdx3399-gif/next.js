@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { HelpHint } from "@/components/ui/help-hint"
 
 type ModuleStat = {
   key: string
@@ -139,8 +140,23 @@ export function ActionSpotlightPanel({ userId, role = "committee", onNavigate }:
     <div className="space-y-4">
       <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-4 sm:p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3 mb-3">
-          <div>
+          <div className="flex items-center gap-2">
             <h2 className="text-lg sm:text-xl font-bold text-[var(--theme-text-primary)]">待辦事項</h2>
+            <HelpHint
+              title="待辦事項面板"
+              description="即時彙整各功能模組的未處理項目數量，並顯示即將到期的週期性任務與系統通知，協助管理端快速掌握優先工作項目。"
+              workflow={[
+                "先看各模組卡片上的數字，數字越大代表待處理件數越多。",
+                "點模組卡片可直接跳轉到對應模組的待處理列表。",
+                "查看週期性任務區，確認是否有即將到期的例行作業。",
+                "點鈴鐺圖示查看系統通知，閱讀後未讀數字會自動歸零。",
+              ]}
+              logic={[
+                "待辦數字是系統即時計算結果，點重新整理可取得最新數據。",
+                "週期性任務到期日由後台設定，到期後才會出現在此面板。",
+                "通知中心依上次查看時間計算未讀數，切換頁面後會保留閱讀記錄。",
+              ]}
+            />
           </div>
           <div className="relative flex items-center gap-2">
             <button
@@ -151,7 +167,7 @@ export function ActionSpotlightPanel({ userId, role = "committee", onNavigate }:
             >
               <span className="inline-flex items-center gap-1">
                 <span className="material-icons text-base">refresh</span>
-                重新整理
+                <span className="hidden sm:inline">重新整理</span>
               </span>
             </button>
             <button
@@ -255,7 +271,23 @@ export function ActionSpotlightPanel({ userId, role = "committee", onNavigate }:
 
       <div className="bg-[var(--theme-bg-card)] border border-[var(--theme-border)] rounded-2xl p-4 sm:p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-base sm:text-lg font-bold text-[var(--theme-text-primary)]">週期性任務</h3>
+          <h3 className="text-base sm:text-lg font-bold text-[var(--theme-text-primary)] flex items-center gap-2">
+            週期性任務
+            <HelpHint
+              title="週期性任務"
+              description="顯示目前已到期或即將到期的例行任務，例如每月費用結算、定期設施巡檢等，確保常規作業不遺漏。"
+              workflow={[
+                "查看任務標題與到期日，確認是否需要立即處理。",
+                "點『去處理』跳轉到對應功能頁面執行操作。",
+                "完成後點『標記完成』，任務會從列表移除。",
+                "點 SOP 可查看對應交接知識庫的標準作業流程。",
+              ]}
+              logic={[
+                "任務由後台依角色與頻率自動產生，無需手動建立。",
+                "到期但未完成的任務會持續顯示直到標記完成為止。",
+              ]}
+            />
+          </h3>
           <span className="px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--theme-accent-light)] text-[var(--theme-accent)]">
             {data?.routines?.length || 0} 筆
           </span>

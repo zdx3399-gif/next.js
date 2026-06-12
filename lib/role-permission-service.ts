@@ -4,7 +4,7 @@ import {
   clearRolePermissionOverrides,
   setRolePermissionOverrides,
 } from "@/lib/permissions"
-import { getSupabaseClient } from "@/lib/supabase"
+import { getSupabaseClient, createClientForTenant, type TenantId } from "@/lib/supabase"
 
 const ROLE_PERMISSION_SETTING_KEY = "role_permissions"
 
@@ -15,8 +15,21 @@ type ModePermissionPayload = {
 }
 
 function isTableMissingError(error: any): boolean {
+  if (!error || typeof error !== "object") return false
+  // Empty error object — typically means the table/relation doesn't exist
+  // and PostgREST returned a non-standard error payload.
+  if (Object.keys(error).length === 0) return true
   const message = String(error?.message || "")
-  return error?.code === "42P01" || message.includes("system_settings")
+  const hint = String(error?.hint || "")
+  const details = String(error?.details || "")
+  return (
+    error?.code === "42P01" ||           // PostgreSQL undefined_table
+    error?.code === "PGRST204" ||        // PostgREST: schema cache miss
+    message.includes("system_settings") ||
+    message.includes("does not exist") ||
+    hint.includes("system_settings") ||
+    details.includes("system_settings")
+  )
 }
 
 export async function loadRolePermissionsFromSupabase(): Promise<ModePermissionPayload | null> {
@@ -111,5 +124,75 @@ export async function syncRolePermissionsFromSupabase(): Promise<boolean> {
   const payload = await loadRolePermissionsFromSupabase()
   if (payload === null) return false
   applyRolePermissionOverridesToLocal(payload)
+  return true
+}
+
+// ── Tenant-specific helpers for PermissionsManagementAdmin ──
+
+function parsePermissionPayload(value: unknown): ModePermissionPayload {
+  if (!value || typeof value !== "object") return {}
+  const parsed = value as Record<string, any>
+
+  const isLegacy = USER_ROLES.some((role) => Array.isArray(parsed[role]))
+  if (isLegacy) {
+    const legacy: RolePermissionPayload = {}
+    for (const role of USER_ROLES) {
+      if (Array.isArray(parsed[role])) legacy[role] = parsed[role]
+    }
+    return { adminMode: legacy, residentMode: {} }
+  }
+
+  const residentMode: RolePermissionPayload = {}
+  const adminMode: RolePermissionPayload = {}
+  for (const role of USER_ROLES) {
+    if (Array.isArray(parsed?.residentMode?.[role])) residentMode[role] = parsed.residentMode[role]
+    if (Array.isArray(parsed?.adminMode?.[role])) adminMode[role] = parsed.adminMode[role]
+  }
+  return { residentMode, adminMode }
+}
+
+export async function loadRolePermissionsForTenant(tenantId: TenantId): Promise<ModePermissionPayload | null> {
+  const supabase = createClientForTenant(tenantId)
+  if (!supabase) return null
+
+  const { data, error } = await supabase
+    .from("system_settings")
+    .select("setting_value")
+    .eq("setting_key", ROLE_PERMISSION_SETTING_KEY)
+    .maybeSingle()
+
+  if (error) {
+    if (!isTableMissingError(error)) {
+      console.error(`Failed to load role permissions for ${tenantId}:`, error)
+    }
+    return null
+  }
+
+  return parsePermissionPayload(data?.setting_value)
+}
+
+export async function saveRolePermissionsForTenant(
+  tenantId: TenantId,
+  payload: ModePermissionPayload,
+): Promise<boolean> {
+  const supabase = createClientForTenant(tenantId)
+  if (!supabase) return false
+
+  const { error } = await supabase.from("system_settings").upsert(
+    {
+      setting_key: ROLE_PERMISSION_SETTING_KEY,
+      setting_value: payload,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "setting_key" },
+  )
+
+  if (error) {
+    if (!isTableMissingError(error)) {
+      console.error(`Failed to save role permissions for ${tenantId}:`, error)
+    }
+    return false
+  }
+
   return true
 }

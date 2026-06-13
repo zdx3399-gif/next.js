@@ -1,10 +1,16 @@
 import { NextRequest } from 'next/server';
 import { chat } from '@/lib/grok/grokmain';
 
+const MAX_QUESTION_LENGTH = 75;
+
 export async function POST(req: NextRequest) {
   const { message } = await req.json();
   if (!message || typeof message !== 'string') {
     return new Response('缺少 message 欄位', { status: 400 });
+  }
+  const normalizedMessage = message.trim();
+  if (normalizedMessage.length > MAX_QUESTION_LENGTH) {
+    return new Response(`每個問題最多 ${MAX_QUESTION_LENGTH} 字`, { status: 400 });
   }
 
   const encoder = new TextEncoder();
@@ -14,7 +20,7 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
 
-      await chat(message, (status: string) => {
+      await chat(normalizedMessage, (status: string) => {
         sendEvent({ type: 'status', status });
       })
         .then((result) => {

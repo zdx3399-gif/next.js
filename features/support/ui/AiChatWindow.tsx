@@ -37,6 +37,8 @@ interface AiChatWindowProps {
   onDrag: (position: { x: number; y: number }) => void
 }
 
+const MAX_QUESTION_LENGTH = 75
+
 export function AiChatWindow({
   isOpen,
   onClose,
@@ -229,6 +231,7 @@ export function AiChatWindow({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            maxLength={MAX_QUESTION_LENGTH}
             onKeyPress={(e) => {
               if (e.key === "Enter") sendMessage()
             }}
@@ -243,6 +246,9 @@ export function AiChatWindow({
           >
             <span className="material-icons">send</span>
           </button>
+        </div>
+        <div className="mt-1 text-right text-xs text-[var(--theme-text-muted)]">
+          {input.length} / {MAX_QUESTION_LENGTH}
         </div>
         <div className="flex justify-center gap-4 mt-3">
           <button

@@ -12,7 +12,9 @@ export interface ModerationQueueItem {
   due_at: string | null
   overdue: boolean
   status: "pending" | "in_review" | "resolved"
+  appeal_status: "not_appealed" | "appealing" | "approved" | "rejected"
   assigned_to: string | null
+  appeal_status?: "not_appealed" | "appealing" | "approved" | "rejected"
   resolved_at: string | null
   resolution: string | null
   created_at: string

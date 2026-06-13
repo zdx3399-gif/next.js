@@ -100,14 +100,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // 建立新版本
+    const newId = crypto.randomUUID()
     const { data: newCard, error: newErr } = await supabase
       .from("knowledge_cards")
       .insert([
         {
           ...oldCard,
           ...updates,
-          // ❗️注意：supabase insert 時不要傳 id（你原本用 undefined，我改成刪掉更乾淨）
-          id: undefined as any,
+          // 顯式生成新 UUID
+          id: newId,
           version: (oldCard.version || 0) + 1,
           previous_version_id: id,
           changelog,

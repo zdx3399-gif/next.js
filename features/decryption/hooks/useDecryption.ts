@@ -122,10 +122,11 @@ export function useDecryptedAuthorInfo() {
   const [isLoading, setIsLoading] = useState(false)
   const [authorInfo, setAuthorInfo] = useState<any>(null)
 
-  const getAuthor = async (requestId: string, viewerId: string) => {
+  const getAuthor = async (requestId: string, viewerId: string, viewerRole: "admin" | "committee" = "committee") => {
+    setAuthorInfo(null)
     setIsLoading(true)
     try {
-      const result = await getDecryptedAuthorInfo(requestId, viewerId)
+      const result = await getDecryptedAuthorInfo(requestId, viewerId, viewerRole)
       setAuthorInfo(result)
       return result
     } finally {
@@ -133,7 +134,11 @@ export function useDecryptedAuthorInfo() {
     }
   }
 
-  return { getAuthor, authorInfo, isLoading }
+  const clearAuthor = () => {
+    setAuthorInfo(null)
+  }
+
+  return { getAuthor, authorInfo, isLoading, clearAuthor }
 }
 
 export function useAuditLogs(filters?: {

@@ -116,8 +116,28 @@ export async function getRejectedKMSPosts() {
 
   return (data || []).filter((post) => {
     const kmsSuggestion = post.structured_data?.kms_suggestion
-    return kmsSuggestion?.suitable === true && kmsSuggestion?.rejected === true && !kmsSuggestion?.imported
+    const rejectedBySuggestion = kmsSuggestion?.suitable === true && kmsSuggestion?.rejected === true && !kmsSuggestion?.imported
+    // 舊測試資料可能只有標題前綴，沒有完整 kms_suggestion 結構
+    const rejectedByTitlePrefix = typeof post.title === "string" && post.title.startsWith("【AI拒絕入庫】")
+    return rejectedBySuggestion || rejectedByTitlePrefix
   })
+}
+
+function normalizeCategoryFilter(category?: string): string[] {
+  if (!category) return []
+
+  const mapping: Record<string, string[]> = {
+    package: ["package", "包裹"],
+    visitor: ["visitor", "訪客", "門禁管理"],
+    repair: ["repair", "報修", "維修管理"],
+    facility: ["facility", "設施", "公共設施", "設施安全"],
+    fee: ["fee", "管理費", "財務"],
+    emergency: ["emergency", "緊急"],
+    rules: ["rules", "規章"],
+    other: ["other", "其他"],
+  }
+
+  return mapping[category] || [category]
 }
 
 // 將貼文轉換成知識卡
@@ -145,10 +165,13 @@ export async function importPostToKMS(
   const kmsSuggestion = post.structured_data?.kms_suggestion || {}
 
   // 建立知識卡
+  // 建立知識卡
+  const cardId = crypto.randomUUID()
   const { data: card, error: cardError } = await supabase
     .from("knowledge_cards")
     .insert([
       {
+        id: cardId,
         source_type: "community_post",
         source_id: postId,
         title: overrides?.title || kmsSuggestion.suggested_title || kmsSuggestion.title || post.title,
@@ -249,13 +272,14 @@ export async function getKnowledgeCards(filters?: { category?: string; credibili
   if (!filters?.status) {
     query = query.eq("status", "active")
   } else if (filters.status === "all") {
-    query = query.in("status", ["active", "unverified", "archived"])
+    query = query.in("status", ["active", "unverified", "archived", "removed"])
   } else {
     query = query.eq("status", filters.status)
   }
 
   if (filters?.category) {
-    query = query.eq("category", filters.category)
+    const categories = normalizeCategoryFilter(filters.category)
+    query = categories.length === 1 ? query.eq("category", categories[0]) : query.in("category", categories)
   }
 
   if (filters?.credibility) {
@@ -310,6 +334,7 @@ export async function createKnowledgeCard(card: {
     .insert([
       {
         ...card,
+        id: crypto.randomUUID(),
         status: "active",
         version: 1,
       },
@@ -361,7 +386,7 @@ export async function updateKnowledgeCard(
       {
         ...oldCard,
         ...updates,
-        id: undefined,
+        id: crypto.randomUUID(),
         version: oldCard.version + 1,
         previous_version_id: cardId,
         created_by: userId,

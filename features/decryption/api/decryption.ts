@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabase"
+import { getCurrentTenant, getSupabaseClient } from "@/lib/supabase"
 import { createAuditLog } from "@/lib/audit"
 
 export interface DecryptionRequest {
@@ -204,88 +204,26 @@ export async function adminReviewDecryptionRequest(
   return result
 }
 
-// 取得解密後的作者資訊
-export async function getDecryptedAuthorInfo(requestId: string, viewerId: string) {
-  const supabase = getSupabaseClient()
-  if (!supabase) return null
-
-  // 檢查申請狀態
-  const { data: request } = await supabase
-    .from("decryption_requests")
-    .select("*")
-    .eq("id", requestId)
-    .single()
-
-  if (!request) throw new Error("找不到此申請")
-  if (request.status !== "fully_approved") throw new Error("此申請尚未完全核准")
-  if (new Date(request.accessible_until) < new Date()) throw new Error("解密資訊已過期")
-
-  // 解析發文/留言者的 profile ID
-  // 優先從 target_id 直接查原始貼文/留言，確保資料正確
-  // 若查不到則 fallback 到 decrypted_author_id（核准時預存）
-  let authorProfileId: string | null = null
-
-  if (request.target_type === "post") {
-    const { data: post } = await supabase
-      .from("community_posts")
-      .select("author_id")
-      .eq("id", request.target_id)
-      .single()
-    authorProfileId = post?.author_id ?? null
-  } else if (request.target_type === "comment") {
-    const { data: comment } = await supabase
-      .from("post_comments")
-      .select("author_id")
-      .eq("id", request.target_id)
-      .single()
-    authorProfileId = comment?.author_id ?? null
+// 取得解密後的作者資訊（透過 server-side API 繞過 RLS）
+export async function getDecryptedAuthorInfo(requestId: string, viewerId: string, viewerRole: "admin" | "committee" = "committee") {
+  let tenantId: "tenant_a" | "tenant_b" = "tenant_a"
+  try {
+    tenantId = getCurrentTenant()
+  } catch {
+    tenantId = "tenant_a"
   }
-
-  // fallback：若 RLS 擋住或貼文已刪除，改用核准時記錄的 decrypted_author_id
-  if (!authorProfileId) {
-    authorProfileId = request.decrypted_author_id ?? null
-  }
-
-  if (!authorProfileId) throw new Error("無法解析發文者身份，貼文可能已刪除")
-
-  // 取得作者 profile
-  const { data: author } = await supabase
-    .from("profiles")
-    .select("id, name, unit_id, email, phone")
-    .eq("id", authorProfileId)
-    .single()
-
-  if (!author) throw new Error("找不到發文者的個人資料")
-
-  // 取得戶號（unit_number 在 units 表）
-  let unitNumber: string | null = null
-  if (author.unit_id) {
-    const { data: unit } = await supabase
-      .from("units")
-      .select("unit_number, unit_code")
-      .eq("id", author.unit_id)
-      .single()
-    unitNumber = unit?.unit_number || unit?.unit_code || null
-  }
-
-  await createAuditLog({
-    operatorId: viewerId,
-    operatorRole: "admin",
-    actionType: "decryption_viewed",
-    targetType: "decryption_request",
-    targetId: requestId,
-    reason: "查看解密資訊",
-    afterState: { viewed_at: new Date().toISOString() },
-    additionalData: { module: "decryption", status: "success" },
+  const response = await fetch("/api/decryption/author-info", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requestId, viewerId, viewerRole, tenantId }),
   })
 
-  return {
-    id: author.id,
-    full_name: author.name,
-    unit_number: unitNumber,
-    email: author.email,
-    phone: author.phone,
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: "請求失敗" }))
+    throw new Error(err.error || "無法取得作者資訊")
   }
+
+  return response.json()
 }
 
 export async function getAuditLogs(filters?: {

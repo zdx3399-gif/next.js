@@ -178,7 +178,11 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
     search: searchQuery || undefined,
   })
 
+  // 統計卡固定使用「全部狀態 + 全分類」來源，避免受目前篩選條件影響
+  const { cards: summaryRealCards } = useKnowledgeCards({ status: "all" })
+
   const cards = isPreviewMode ? PREVIEW_CARDS : realCards
+  const summaryCards = isPreviewMode ? PREVIEW_CARDS : summaryRealCards
   const loading = isPreviewMode ? false : realLoading
   const error = isPreviewMode ? null : realError
   const refresh = isPreviewMode ? () => {} : realRefresh
@@ -245,6 +249,13 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
     if (selectedStatus === "all") return true
     return card.status === selectedStatus
   })
+
+  const activeCardsCount = summaryCards.filter((c) => c.status === "active").length
+  const officialCardsCount = summaryCards.filter((c) => c.credibility === "official").length
+  // 畫面待入庫 = AI 待審貼文 + 知識卡 unverified
+  const unverifiedCardsCount = pendingPosts.length + summaryCards.filter((c) => c.status === "unverified").length
+  // 畫面拒絕入庫 = AI 已拒絕貼文 + 知識卡 archived
+  const archivedCardsCount = rejectedPosts.length + summaryCards.filter((c) => c.status === "archived").length
 
   const handleCreate = async () => {
     if (actionSubmitting) return
@@ -486,47 +497,42 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
             ))}
           </div>
 
-          {/* Stats - 修正狀態計數 */}
+          {/* Stats：統一使用 knowledge_cards 來源，避免和貼文建議數混淆 */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-card border rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-primary">{cards.length}</div>
+              <div className="text-2xl font-bold text-primary">{summaryCards.length}</div>
               <div className="text-sm text-muted-foreground">總知識卡</div>
             </div>
             <div className="bg-card border rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-green-500">{cards.filter((c) => c.status === "active").length}</div>
+              <div className="text-2xl font-bold text-green-500">{activeCardsCount}</div>
               <div className="text-sm text-muted-foreground">已發布</div>
             </div>
             <div className="bg-card border rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-blue-500">
-                {cards.filter((c) => c.credibility === "official").length}
-              </div>
+              <div className="text-2xl font-bold text-blue-500">{officialCardsCount}</div>
               <div className="text-sm text-muted-foreground">官方文件</div>
             </div>
             <div className="bg-card border rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-yellow-500">
-                {pendingPosts.length}
-              </div>
+              <div className="text-2xl font-bold text-yellow-500">{unverifiedCardsCount}</div>
               <div className="text-sm text-muted-foreground">待入庫</div>
             </div>
             <div className="bg-card border rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-gray-400">{rejectedPosts.length}</div>
+              <div className="text-2xl font-bold text-gray-400">{archivedCardsCount}</div>
               <div className="text-sm text-muted-foreground">拒絕入庫</div>
             </div>
           </div>
 
-          {/* 合併後：待入庫狀態直接顯示原待入庫審核貼文 */}
+
+          {/* 待入庫頁：顯示待審貼文建議 + 待入庫知識卡 */}
           {selectedStatus === "unverified" && (
             <div className="space-y-4">
               <div className="bg-card border rounded-lg p-4">
-                <h3 className="font-semibold mb-2 flex items-center gap-2">待入庫(待入庫審核)</h3>
-                <p className="text-sm text-muted-foreground">以下貼文經 AI 評估後建議納入知識庫，請審核後決定是否入庫。</p>
+                <h3 className="font-semibold mb-2 flex items-center gap-2">待審貼文建議</h3>
+                <p className="text-sm text-muted-foreground">以下內容來自 community_posts 的 AI 建議，會和待入庫知識卡一併反映在上方統計。</p>
               </div>
 
               {pendingLoading ? (
                 <div className="text-center py-8 text-muted-foreground">載入中...</div>
-              ) : pendingPosts.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">目前沒有待入庫的貼文</div>
-              ) : (
+              ) : pendingPosts.length > 0 ? (
                 <div className="space-y-3">
                   {pendingPosts.map((post) => {
                     const kmsSuggestion = (post as any).structured_data?.kms_suggestion || {}
@@ -598,22 +604,22 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
                     )
                   })}
                 </div>
-              )}
+              ) : filteredCards.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">目前沒有待入庫資料</div>
+              ) : null}
             </div>
           )}
 
           {selectedStatus === "archived" && (
             <div className="space-y-4">
               <div className="bg-card border rounded-lg p-4">
-                <h3 className="font-semibold mb-2 flex items-center gap-2">拒絕入庫</h3>
-                <p className="text-sm text-muted-foreground">以下貼文是已被管理員拒絕入庫的紀錄。</p>
+                <h3 className="font-semibold mb-2 flex items-center gap-2">已拒絕的貼文建議</h3>
+                <p className="text-sm text-muted-foreground">以下內容來自 community_posts 的審核結果，會和拒絕入庫知識卡一併反映在上方統計。</p>
               </div>
 
               {rejectedLoading ? (
                 <div className="text-center py-8 text-muted-foreground">載入中...</div>
-              ) : rejectedPosts.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">目前沒有拒絕入庫的貼文</div>
-              ) : (
+              ) : rejectedPosts.length > 0 ? (
                 <div className="space-y-3">
                   {rejectedPosts.map((post) => {
                     const kmsSuggestion = (post as any).structured_data?.kms_suggestion || {}
@@ -651,12 +657,14 @@ export function KnowledgeBaseAdmin({ currentUser, isPreviewMode = false }: Knowl
                     )
                   })}
                 </div>
-              )}
+              ) : filteredCards.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">目前沒有拒絕入庫資料</div>
+              ) : null}
             </div>
           )}
 
           {/* Cards list */}
-          {selectedStatus !== "unverified" && selectedStatus !== "archived" && (loading ? (
+          {(loading ? (
             <div className="text-center py-8 text-muted-foreground">載入中...</div>
           ) : error ? (
             <div className="text-center py-8 text-destructive">{error}</div>

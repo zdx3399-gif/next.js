@@ -235,6 +235,12 @@ export async function POST(req: NextRequest) {
       .from("moderation_queue")
       .update({
         status: "resolved",
+        appeal_status:
+          queueItem?.appeal_status === "appealing"
+            ? resolution.action === "approve"
+              ? "approved"
+              : "rejected"
+            : queueItem?.appeal_status || "not_appealed",
         resolved_at: new Date().toISOString(),
         resolution: JSON.stringify({ ...resolution, resolved_by: userId }),
       })
@@ -272,15 +278,23 @@ export async function POST(req: NextRequest) {
 
         if (openAppeal?.id) {
           const appealStatus = resolution.action === "approve" ? "restored" : "rejected"
-          await supabase
-            .from("moderation_appeals")
-            .update({
-              status: appealStatus,
-              reviewed_by: userId,
-              reviewed_at: new Date().toISOString(),
-              review_note: resolution.reason || null,
-            })
-            .eq("id", openAppeal.id)
+          // 同步回寫 moderation_queue.appeal_status
+          const queueAppealStatus = resolution.action === "approve" ? "approved" : "rejected"
+          await Promise.all([
+            supabase
+              .from("moderation_appeals")
+              .update({
+                status: appealStatus,
+                reviewed_by: userId,
+                reviewed_at: new Date().toISOString(),
+                review_note: resolution.reason || null,
+              })
+              .eq("id", openAppeal.id),
+            supabase
+              .from("moderation_queue")
+              .update({ appeal_status: queueAppealStatus })
+              .eq("id", itemId),
+          ])
 
           await writeServerAuditLog({
             supabase,

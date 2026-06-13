@@ -642,7 +642,8 @@ export async function getUserModerationAppeals(authorId: string): Promise<Modera
 
   const payload = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new Error(payload?.error || "讀取申訴紀錄失敗")
+    console.warn("[v0] 讀取申訴紀錄失敗，改以空資料降級:", payload?.error || res.status)
+    return []
   }
 
   return Array.isArray(payload?.data) ? (payload.data as ModerationAppeal[]) : []

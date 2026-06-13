@@ -58,6 +58,7 @@ interface ModerationQueueItem {
   item_id: string
   priority: "low" | "medium" | "high" | "urgent"
   status: "pending" | "in_review" | "resolved"
+  appeal_status?: "not_appealed" | "appealing" | "approved" | "rejected"
   ai_risk_summary?: string
   ai_suggested_action?: string
   created_at: string
@@ -561,7 +562,7 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
         </div>
         <div className="bg-[var(--theme-bg-primary)] border border-[var(--theme-border)] rounded-xl p-4 text-center">
           <div className="text-2xl font-bold text-yellow-500">{stats.pending}</div>
-          <div className="text-sm text-[var(--theme-text-secondary)]">待審核</div>
+          <div className="text-sm text-[var(--theme-text-secondary)]">貼文待審核</div>
         </div>
         <div className="bg-[var(--theme-bg-primary)] border border-[var(--theme-border)] rounded-xl p-4 text-center">
           <div className="text-2xl font-bold text-purple-500">{stats.shadow}</div>

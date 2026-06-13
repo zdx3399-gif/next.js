@@ -101,14 +101,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<any>
     }
 
     // 建立新版本
+    const newId = crypto.randomUUID()
     const { data: newCard, error: newErr } = await supabase
       .from("knowledge_cards")
       .insert([
         {
           ...oldCard,
           ...updates,
-          // 不要傳入原 id（留給資料庫產生）
-          id: undefined as any,
+          // 顯式生成新 UUID
+          id: newId,
           version: (oldCard.version || 0) + 1,
           previous_version_id: id,
           changelog,

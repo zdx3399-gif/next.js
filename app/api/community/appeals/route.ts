@@ -245,6 +245,7 @@ export async function POST(req: NextRequest) {
       ai_risk_summary: "住戶申訴案件：請人工複審",
       ai_suggested_action: "review_appeal",
       status: "pending",
+      appeal_status: "appealing",
     }
 
     const { data: existingQueueItem } = await supabase
@@ -350,6 +351,10 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query
     if (error) {
+      // 部分環境可能尚未套用 moderation_appeals schema 或受 RLS 限制，降級回傳空陣列避免前端整體崩潰
+      if (error.code === "42P01" || error.code === "42501") {
+        return NextResponse.json({ data: [], warning: error.message })
+      }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 

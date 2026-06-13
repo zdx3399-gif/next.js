@@ -16,7 +16,14 @@ export type Section =
   | "emergencies"
   | "facilities"
   | "community"
+  | "moderation"
   | "knowledge-base"
+  | "handover-knowledge"
+  | "ai-auto-fix"
+  | "audit-logs"
+  | "decryption"
+  | "arduino"
+  | "permissions"
 
 export const USER_ROLES: UserRole[] = ["resident", "guard", "committee", "admin"]
 
@@ -335,8 +342,8 @@ export function getAllowedSections(role: UserRole, isResidentMode = false): Sect
   const override = getRolePermissionOverride(role, isResidentMode)
   if (override) {
     // Always include non-customizable sections from base (e.g., arduino)
-    const nonCustomizable = base.filter(s => !CUSTOMIZABLE_SECTIONS.includes(s))
-    const sections: Section[] = [...new Set(["dashboard", ...nonCustomizable, ...override])]
+    const nonCustomizable = base.filter((s) => !CUSTOMIZABLE_SECTIONS.includes(s))
+    const sections = Array.from(new Set<Section>(["dashboard", ...nonCustomizable, ...override]))
     if (role === "admin" && !sections.includes("ai-auto-fix")) {
       sections.push("ai-auto-fix")
     }

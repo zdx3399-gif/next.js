@@ -3,61 +3,89 @@
 import { useState } from "react"
 import { ModerationQueue } from "./ModerationQueue"
 import { ModerationDetail } from "./ModerationDetail"
+import { MobileReviewDialog } from "./MobileReviewDialog"
 import type { User } from "@/features/profile/api/profile"
-import { HelpHint } from "@/components/ui/help-hint"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface ModerationPanelProps {
   currentUser: User
 }
 
 export function ModerationPanel({ currentUser }: ModerationPanelProps) {
-  const [view, setView] = useState<"queue" | "detail">("queue")
+  const isMobile = useIsMobile()
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   const handleSelectItem = (itemId: string) => {
     setSelectedItemId(itemId)
-    setView("detail")
-  }
-
-  const handleBack = () => {
-    setView("queue")
-    setSelectedItemId(null)
+    if (isMobile) setDialogOpen(true)
   }
 
   const handleResolved = () => {
-    setView("queue")
     setSelectedItemId(null)
+    setDialogOpen(false)
   }
 
+  // ── 桌機：左右分欄 ──────────────────────────────────────────
+  if (!isMobile) {
+    return (
+      <div className="flex gap-0 h-[calc(100vh-200px)] min-h-[520px]">
+        {/* 左側佇列 */}
+        <div className="w-[340px] shrink-0 border-r border-[var(--theme-border)] overflow-y-auto pr-0">
+          <div className="px-4 pt-3 pb-2 border-b border-[var(--theme-border)] sticky top-0 bg-[var(--theme-bg-primary)] z-10">
+            <span className="text-sm font-semibold text-[var(--theme-text-primary)]">審核佇列</span>
+          </div>
+          <ModerationQueue
+            currentUser={currentUser}
+            onSelectItem={handleSelectItem}
+            selectedItemId={selectedItemId ?? undefined}
+            compact
+          />
+        </div>
+
+        {/* 右側詳情 */}
+        <div className="flex-1 overflow-y-auto pl-0">
+          {selectedItemId ? (
+            <div className="p-4">
+              <ModerationDetail
+                key={selectedItemId}
+                itemId={selectedItemId}
+                currentUser={currentUser}
+                onBack={() => setSelectedItemId(null)}
+                onResolved={handleResolved}
+                inPanel
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-[var(--theme-text-secondary)] gap-3">
+              <span className="material-icons text-5xl opacity-30">gavel</span>
+              <p className="text-sm">請從左側佇列選擇一件案件開始審核</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── 手機：佇列 + 強化 Dialog ─────────────────────────────────
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2">
-        <span className="text-[var(--theme-text-primary)] text-sm font-medium">管理端內容審核</span>
-        <HelpHint
-          title="管理端審核中心"
-          description="可先在佇列挑選案件，再進入詳情進行處置與留存理由。"
-          workflow={[
-            "先在佇列篩選待處理案件並點選目標。",
-            "進入詳情頁閱讀內容與檢舉資訊後做處置。",
-            "完成送出後會回到佇列，繼續下一筆案件。",
-          ]}
-          logic={[
-            "審核流程分為佇列挑件與詳情決策兩段，降低誤判。",
-            "每次處置都需留存原因，供稽核與申訴追溯。",
-          ]}
-        />
+      <div className="mb-3 px-1">
+        <span className="text-sm font-semibold text-[var(--theme-text-primary)]">審核佇列</span>
       </div>
-      {view === "queue" ? (
-        <ModerationQueue currentUser={currentUser} onSelectItem={handleSelectItem} />
-      ) : (
-        selectedItemId && (
-          <ModerationDetail
-            itemId={selectedItemId}
-            currentUser={currentUser}
-            onBack={handleBack}
-            onResolved={handleResolved}
-          />
-        )
+      <ModerationQueue
+        currentUser={currentUser}
+        onSelectItem={handleSelectItem}
+        selectedItemId={selectedItemId ?? undefined}
+      />
+      {selectedItemId && (
+        <MobileReviewDialog
+          open={dialogOpen}
+          itemId={selectedItemId}
+          currentUser={currentUser}
+          onClose={() => { setDialogOpen(false); setSelectedItemId(null) }}
+          onResolved={handleResolved}
+        />
       )}
     </div>
   )

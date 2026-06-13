@@ -16,9 +16,10 @@ interface ModerationDetailProps {
   currentUser: User
   onBack: () => void
   onResolved: () => void
+  inPanel?: boolean
 }
 
-export function ModerationDetail({ itemId, currentUser, onBack, onResolved }: ModerationDetailProps) {
+export function ModerationDetail({ itemId, currentUser, onBack, onResolved, inPanel = false }: ModerationDetailProps) {
   const { queueItem, content, reports, loading, error } = useModerationItemDetail(itemId)
   const [action, setAction] = useState<string>("approve")
   const [reason, setReason] = useState("")
@@ -149,28 +150,21 @@ export function ModerationDetail({ itemId, currentUser, onBack, onResolved }: Mo
 
   return (
     <div className="space-y-4">
-      {/* Back Button */}
-      <Button variant="outline" onClick={onBack} className="flex gap-2 items-center bg-transparent">
-        <span className="material-icons">arrow_back</span>
-        返回列表
-      </Button>
-      <div className="flex items-center gap-2 text-xs text-[var(--theme-text-secondary)]">
-        <span>審核詳情頁</span>
-        <HelpHint
-          title="管理端審核詳情"
-          description="此頁可比對內容、檢舉資訊並做最終處理。"
-          workflow={[
-            "先閱讀內容詳情與 AI 風險摘要。",
-            "再查看相關檢舉資訊與時間脈絡。",
-            "最後選擇處理動作並填寫原因送出。",
-          ]}
-          logic={[
-            "詳情頁整合決策所需資訊，避免只憑單一訊號下判斷。",
-            "處理結果會影響內容可見性與後續申訴依據。",
-          ]}
-          align="center"
-        />
-      </div>
+      {/* Back Button — inPanel 模式下不顯示 */}
+      {!inPanel && (
+        <Button variant="outline" onClick={onBack} className="flex gap-2 items-center bg-transparent">
+          <span className="material-icons">arrow_back</span>
+          返回列表
+        </Button>
+      )}
+      {inPanel && (
+        <div className="flex items-center justify-between pb-2 border-b border-[var(--theme-border)]">
+          <span className="text-sm font-semibold text-[var(--theme-text-primary)]">審核詳情</span>
+          <Button variant="ghost" size="sm" onClick={onBack} className="text-xs text-[var(--theme-text-secondary)] h-7">
+            <span className="material-icons text-sm mr-1">close</span>清除選取
+          </Button>
+        </div>
+      )}
 
       {/* AI Risk Summary */}
       {queueItem.ai_risk_summary && (

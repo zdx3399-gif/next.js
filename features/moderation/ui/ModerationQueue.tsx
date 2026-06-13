@@ -13,9 +13,11 @@ import { HelpHint } from "@/components/ui/help-hint"
 interface ModerationQueueProps {
   currentUser: User
   onSelectItem: (itemId: string) => void
+  selectedItemId?: string
+  compact?: boolean
 }
 
-export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueueProps) {
+export function ModerationQueue({ currentUser, onSelectItem, selectedItemId, compact = false }: ModerationQueueProps) {
   const [statusFilter, setStatusFilter] = useState<string>("pending")
   const [priorityFilter, setPriorityFilter] = useState<string | undefined>(undefined)
   const { queue, loading, error, assign } = useModerationQueue({
@@ -72,8 +74,8 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex gap-2 items-center overflow-x-auto pb-2">
-        <HelpHint
+      <div className={`flex gap-2 items-center overflow-x-auto pb-2 ${compact ? "px-3 pt-2" : ""}`}>
+        {!compact && <HelpHint
           title="管理端佇列篩選"
           description="佇列狀態邏輯：\n• 待處理（pending）：新進案件，尚未開始審核。\n• 審核中（in_review）：已進入人工處理流程。\n• 已處理（resolved）：已完成處置並結案。\n\n優先級邏輯：urgent > high > medium > low，建議先處理緊急與高風險案件。"
           workflow={[
@@ -86,7 +88,7 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
             "建議先處理 urgent/high，可降低高風險延誤。",
           ]}
           align="center"
-        />
+        />}
         <div className="flex gap-2">
           <Button
             onClick={() => setStatusFilter("pending")}
@@ -137,7 +139,7 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
       </div>
 
       {/* Queue List */}
-      <div className="space-y-3">
+      <div className={`space-y-2 ${compact ? "px-2 pb-3" : "space-y-3"}`}>
         {queue.length === 0 ? (
           <Card className="p-8 text-center text-[var(--theme-text-secondary)]">
             <span className="material-icons text-4xl mb-2 opacity-50">check_circle</span>
@@ -147,85 +149,57 @@ export function ModerationQueue({ currentUser, onSelectItem }: ModerationQueuePr
           queue.map((item) => {
             const priorityBadge = getPriorityBadge(item.priority)
             const isOverdue = item.overdue || (item.due_at && new Date(item.due_at) < new Date())
+            const isSelected = selectedItemId === item.id
 
             return (
               <Card
                 key={item.id}
-                className={`p-4 hover:shadow-lg transition-shadow cursor-pointer ${isOverdue ? "border-l-4 border-l-red-500" : ""}`}
+                className={`p-3 hover:shadow-md transition-all cursor-pointer border-l-4 ${
+                  isSelected
+                    ? "border-l-[var(--theme-accent)] bg-[var(--theme-accent)]/5 shadow-md"
+                    : isOverdue
+                      ? "border-l-red-500"
+                      : "border-l-transparent"
+                }`}
                 onClick={() => onSelectItem(item.id)}
               >
-                <div className="flex gap-3 items-start">
-                  <div className="flex-1">
-                    <div className="flex gap-2 items-center mb-2 flex-wrap">
-                      <Badge className={priorityBadge.className}>{priorityBadge.label}</Badge>
-                      <Badge variant="outline">{getItemTypeLabel(item.item_type)}</Badge>
-                      <HelpHint
-                        title="管理端案件標籤"
-                        description="案件標籤說明：\n• 優先級：決定處理先後。\n• 內容類型：貼文 / 留言 / 檢舉。\n• 已指派：已有審核人員接手。\n• 逾期：已超過 due_at 或系統標記 overdue。"
-                        workflow={[
-                          "先看優先級與內容類型判斷案件性質。",
-                          "再看是否已指派與是否逾期，決定是否要優先接手。",
-                        ]}
-                        logic={[
-                          "標籤組合提供快速風險判斷，減少逐筆展開成本。",
-                          "逾期或高優先級案件通常應排在前面處理。",
-                        ]}
-                        align="center"
-                      />
-                      {item.assigned_to && (
-                        <Badge variant="secondary" className="flex gap-1 items-center">
-                          <span className="material-icons text-xs">person</span>
-                          已指派
+                <div className="flex gap-2 items-start">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex gap-1.5 items-center mb-1.5 flex-wrap">
+                      <Badge className={`${priorityBadge.className} text-xs px-1.5 py-0`}>{priorityBadge.label}</Badge>
+                      <Badge variant="outline" className="text-xs px-1.5 py-0">{getItemTypeLabel(item.item_type)}</Badge>
+                      {!compact && item.assigned_to && (
+                        <Badge variant="secondary" className="flex gap-1 items-center text-xs px-1.5 py-0">
+                          <span className="material-icons text-xs">person</span>已指派
                         </Badge>
                       )}
                       {isOverdue && (
-                        <Badge variant="destructive" className="flex gap-1 items-center">
-                          <span className="material-icons text-xs">schedule</span>
-                          逾期
-                        </Badge>
+                        <Badge variant="destructive" className="text-xs px-1.5 py-0">逾期</Badge>
                       )}
                     </div>
 
-                    <p className="text-[var(--theme-text-primary)] font-medium mb-2">
+                    <p className="text-[var(--theme-text-primary)] text-sm font-medium truncate mb-1">
                       {item.ai_risk_summary || "待審核項目"}
                     </p>
 
-                    <div className="flex gap-4 items-center text-xs text-[var(--theme-text-secondary)]">
+                    <div className="flex gap-3 items-center text-xs text-[var(--theme-text-secondary)]">
                       <span className="flex gap-1 items-center">
                         <span className="material-icons text-sm">schedule</span>
-                        {new Date(item.created_at).toLocaleString("zh-TW")}
+                        {new Date(item.created_at).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </span>
-                      {item.due_at && (
+                      {item.due_at && !compact && (
                         <span className="flex gap-1 items-center">
                           <span className="material-icons text-sm">event</span>
                           期限: {new Date(item.due_at).toLocaleDateString("zh-TW")}
                         </span>
                       )}
                     </div>
-
-                    {item.ai_suggested_action && (
-                      <p className="text-xs text-blue-600 mt-2">AI 建議: {item.ai_suggested_action}</p>
-                    )}
                   </div>
 
-                  {!item.assigned_to && item.status === "pending" && (
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" onClick={(e) => handleAssignToMe(item.id, e)} className="shrink-0">
-                        指派給我
-                      </Button>
-                      <HelpHint
-                        title="管理端指派"
-                        description="先指派再處理可避免多人重複作業。"
-                        workflow={[
-                          "確認案件尚未指派後點「指派給我」。",
-                          "指派成功後再進入詳情頁執行審核。",
-                        ]}
-                        logic={[
-                          "先指派可建立責任歸屬，避免多位管理員重複處理。",
-                        ]}
-                        align="center"
-                      />
-                    </div>
+                  {!compact && !item.assigned_to && item.status === "pending" && (
+                    <Button size="sm" className="shrink-0 text-xs h-7" onClick={(e) => handleAssignToMe(item.id, e)}>
+                      接案
+                    </Button>
                   )}
                 </div>
               </Card>

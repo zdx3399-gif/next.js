@@ -16,6 +16,8 @@ import {
   ShieldAlert,
   FileWarning,
   EyeOff,
+  Unlock,
+  Scale,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -41,6 +43,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getSupabaseClient } from "@/lib/supabase"
 import type { User } from "@/features/profile/api/profile"
 import type { CommunityPost } from "../api/community"
+import { createDecryptionRequest } from "@/features/decryption/api/decryption"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { HelpHint } from "@/components/ui/help-hint"
 
 interface CommunityBoardAdminProps {
@@ -223,6 +227,9 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
   const [actionType, setActionType] = useState<string>("")
   const [actionReason, setActionReason] = useState("")
   const [queueFilter, setQueueFilter] = useState<"pending" | "resolved">("pending")
+  const [showDecryptionDialog, setShowDecryptionDialog] = useState(false)
+  const [decryptionReason, setDecryptionReason] = useState("")
+  const [decryptionTrigger, setDecryptionTrigger] = useState<"legal_request" | "serious_violation">("legal_request")
 
   // 統計
   const [stats, setStats] = useState({
@@ -447,6 +454,34 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
     } catch (e: any) {
       console.error("[v0] Error in handleModerationResolve:", e)
       alert("操作失敗: " + e.message)
+    }
+  }
+
+  const handleDecryptionRequest = async () => {
+    if (!selectedPost) return
+    if (isPreviewMode) {
+      alert("預覽模式僅供檢視，不會寫入資料庫")
+      return
+    }
+    const userId = currentUser?.id || localStorage.getItem("userId")
+    if (!userId) {
+      alert("請先登入")
+      return
+    }
+    try {
+      await createDecryptionRequest({
+        requestedBy: userId,
+        targetType: "post",
+        targetId: selectedPost.id,
+        reason: decryptionReason,
+        triggerCondition: decryptionTrigger,
+      })
+      alert("解密申請已提交，等待管委會及系統管理員雙層審核")
+      setShowDecryptionDialog(false)
+      setDecryptionReason("")
+      setDecryptionTrigger("legal_request")
+    } catch (e: any) {
+      alert("提交失敗: " + e.message)
     }
   }
 
@@ -733,6 +768,17 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
                             <Eye className="w-4 h-4 mr-2" />
                             查看詳情
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedPost(post)
+                              setDecryptionReason("")
+                              setDecryptionTrigger("legal_request")
+                              setShowDecryptionDialog(true)
+                            }}
+                          >
+                            <Unlock className="w-4 h-4 mr-2 text-blue-500" />
+                            申請解密身分
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {post.status !== "published" && (
                             <DropdownMenuItem onClick={() => openActionDialog(post, "publish")}>
@@ -992,9 +1038,95 @@ export function CommunityBoardAdmin({ currentUser, isPreviewMode = false }: Comm
         </DialogContent>
       </Dialog>
 
-      {/* 審核處理 Dialog */}
-      <Dialog open={showModerationDialog} onOpenChange={setShowModerationDialog}>
+      {/* 管委會申請解密 Dialog */}
+      <Dialog open={showDecryptionDialog} onOpenChange={setShowDecryptionDialog}>
         <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scale className="w-5 h-5 text-blue-500" />
+              申請解密匿名身分
+            </DialogTitle>
+            <DialogDescription>
+              管委會基於法律要求或嚴重違規等原因，向系統提出解密匿名作者身分申請。申請須經管委會初審及系統管理員覆核後方可生效。
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPost && (
+            <div className="p-3 bg-[var(--theme-bg-secondary)] rounded-lg">
+              <p className="text-xs text-[var(--theme-text-secondary)] mb-1">申請對象貼文</p>
+              <p className="font-semibold text-sm truncate">{selectedPost.title}</p>
+              <p className="text-xs text-[var(--theme-text-secondary)] line-clamp-2 mt-1">{selectedPost.content}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <Label>申請原因類型</Label>
+              <Select
+                value={decryptionTrigger}
+                onValueChange={(v) => setDecryptionTrigger(v as "legal_request" | "serious_violation")}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="legal_request">
+                    <div className="flex items-center gap-2">
+                      <Scale className="w-4 h-4 text-blue-500" />
+                      法律要求（司法協助、法院命令等）
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="serious_violation">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-orange-500" />
+                      嚴重違規（威脅、詐欺、重大社區安全）
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>
+                詳細說明
+                <span className="text-red-500 ml-1">*</span>
+              </Label>
+              <Textarea
+                value={decryptionReason}
+                onChange={(e) => setDecryptionReason(e.target.value)}
+                placeholder={
+                  decryptionTrigger === "legal_request"
+                    ? "請說明法律依據，例如：收到某法院○年○字第○號函，要求提供匿名發文者身分資訊..."
+                    : "請說明違規事實，例如：該貼文多次發出恐嚇內容，已有住戶反映人身安全受威脅..."
+                }
+                className="mt-2"
+                rows={4}
+              />
+            </div>
+          </div>
+
+          <div className="p-3 bg-yellow-500/10 rounded-lg text-xs text-yellow-600 dark:text-yellow-400">
+            <AlertTriangle className="w-3 h-3 inline mr-1" />
+            本申請將記錄於稽核日誌，並需管委會初審及系統管理員覆核方可生效。不當申請可能產生法律責任。
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDecryptionDialog(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={handleDecryptionRequest}
+              disabled={!decryptionReason.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Unlock className="w-4 h-4 mr-2" />
+              提交申請
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 審核處理 Dialog */}
+      <Dialog open={showModerationDialog} onOpenChange={setShowModerationDialog}>        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>審核處理</DialogTitle>
             <DialogDescription>請選擇對此項目的處理方式</DialogDescription>

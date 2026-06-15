@@ -2,12 +2,14 @@
 
 import { useState } from "react"
 import { getAIResponseStream } from "../api/support"
+import type { ChatUsage } from "@/lib/grok/usage"
 
 interface Message {
   type: "user" | "bot"
   text: string
   images?: string[]
   chatId?: number | null
+  usage?: ChatUsage
 }
 
 export function useAiChat() {
@@ -38,7 +40,8 @@ export function useAiChat() {
           type: "bot", 
           text: data.answer,
           images: data.images || [],
-          chatId: data.chatId || null
+          chatId: data.chatId || null,
+          usage: data.usage,
         }])
       } else {
         // 如果是字串

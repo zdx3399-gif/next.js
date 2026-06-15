@@ -17,7 +17,7 @@ interface ChatData {
   similarity: number;
   match_count: number;
   response_ms: number;
-  api_used: { cohere: boolean; groq: boolean };
+  api_used: Record<string, unknown>;
 }
 
 function calculatePriority(chatData: ChatData): number {
@@ -43,6 +43,7 @@ function checkNeedsReview(chatData: ChatData): { type: string; description: stri
 }
 
 export async function saveChatWithLearning(chatData: ChatData) {
+  const startedAt = Date.now();
   try {
     const issue = checkNeedsReview(chatData);
     const priority = issue ? calculatePriority(chatData) : 5;
@@ -70,14 +71,43 @@ export async function saveChatWithLearning(chatData: ChatData) {
 
     if (error) {
       console.error('[ChatLogger] 儲存失敗:', error.message);
-      return { success: false, chatId: null };
+      return {
+        success: false,
+        chatId: null,
+        databaseUsage: {
+          name: 'insert_chat_history',
+          kind: 'write' as const,
+          rows: 0,
+          durationMs: Date.now() - startedAt,
+          error: error.message,
+        },
+      };
     }
 
     console.log(`[ChatLogger] 對話已記錄 (ID: ${data.id})${issue ? ` ⚠️ 需審核: ${issue.type}` : ''}`);
-    return { success: true, chatId: data.id };
+    return {
+      success: true,
+      chatId: data.id,
+      databaseUsage: {
+        name: 'insert_chat_history',
+        kind: 'write' as const,
+        rows: 1,
+        durationMs: Date.now() - startedAt,
+      },
+    };
   } catch (err: any) {
     console.error('[ChatLogger] 例外錯誤:', err.message);
-    return { success: false, chatId: null };
+    return {
+      success: false,
+      chatId: null,
+      databaseUsage: {
+        name: 'insert_chat_history',
+        kind: 'write' as const,
+        rows: 0,
+        durationMs: Date.now() - startedAt,
+        error: err.message,
+      },
+    };
   }
 }
 

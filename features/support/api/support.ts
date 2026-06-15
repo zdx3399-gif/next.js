@@ -6,6 +6,7 @@
 
 import { getSupabaseClient } from "@/lib/supabase"
 import { createAuditLog } from "@/lib/audit"
+import type { ChatUsage } from "@/lib/grok/usage"
 
 export interface ChatMessage {
   id?: string
@@ -110,7 +111,7 @@ export async function fetchUserChatHistory(userId: string): Promise<ChatMessage[
 }
 
 // AI 回應邏輯 - 呼叫後端 RAG API
-export async function getAIResponse(message: string): Promise<{ answer: string; images?: string[]; chatId?: number | null } | string> {
+export async function getAIResponse(message: string): Promise<{ answer: string; images?: string[]; chatId?: number | null; usage?: ChatUsage } | string> {
   try {
     const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || '';
     
@@ -132,7 +133,8 @@ export async function getAIResponse(message: string): Promise<{ answer: string; 
     return {
       answer: data.answer || '抱歉，我無法回答這個問題。',
       images: data.images || [],
-      chatId: data.chatId || null
+      chatId: data.chatId || null,
+      usage: data.usage,
     };
   } catch (error) {
     console.error('AI API 錯誤:', error);
@@ -144,7 +146,7 @@ export async function getAIResponse(message: string): Promise<{ answer: string; 
 export async function getAIResponseStream(
   message: string,
   onStatus: (status: string) => void
-): Promise<{ answer: string; images?: string[]; chatId?: number | null } | string> {
+): Promise<{ answer: string; images?: string[]; chatId?: number | null; usage?: ChatUsage } | string> {
   try {
     const API_URL = process.env.NEXT_PUBLIC_AI_API_URL || '';
 
@@ -190,6 +192,7 @@ export async function getAIResponseStream(
               answer: payload.answer || '抱歉，我無法回答這個問題。',
               images: payload.images || [],
               chatId: payload.chatId || null,
+              usage: payload.usage,
             };
           } else if (payload.type === 'error') {
             throw new Error(payload.error);

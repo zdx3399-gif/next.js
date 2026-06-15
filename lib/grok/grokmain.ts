@@ -1,8 +1,15 @@
 // grokmain.ts - 核心聊天邏輯（RAG + Groq）
 
 import { createClient } from '@supabase/supabase-js';
-import { getEmbedding } from './embedding';
+import { getEmbeddingWithUsage } from './embedding';
 import { saveChatWithLearning } from './chat-logger';
+import {
+  createEmptyChatUsage,
+  estimateTokensFromCharacters,
+  finalizeChatUsage,
+  type ChatUsage,
+  type DatabaseOperationUsage,
+} from './usage';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
@@ -11,6 +18,71 @@ const supabase = createClient(
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || 'placeholder-key';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama3-8b-8192';
+
+function secondsToMs(value: unknown): number | null {
+  return typeof value === 'number' ? Math.round(value * 1000) : null;
+}
+
+async function trackDatabaseOperation(
+  usage: ChatUsage,
+  name: string,
+  kind: DatabaseOperationUsage['kind'],
+  operation: PromiseLike<any>,
+) {
+  const startedAt = Date.now();
+  const result = await operation;
+  const rows = Array.isArray(result?.data) ? result.data.length : result?.data ? 1 : 0;
+  usage.database.operations.push({
+    name,
+    kind,
+    rows,
+    durationMs: Date.now() - startedAt,
+    ...(result?.error ? { error: String(result.error.message || result.error) } : {}),
+  });
+  return result;
+}
+
+async function callGroq(
+  usage: ChatUsage,
+  messages: Array<{ role: string; content: string }>,
+) {
+  const systemPrompt = messages.filter((message) => message.role === 'system').map((message) => message.content).join('\n');
+  const userPrompt = messages.filter((message) => message.role === 'user').map((message) => message.content).join('\n');
+  usage.groq.systemPromptCharacters += systemPrompt.length;
+  usage.groq.userPromptCharacters += userPrompt.length;
+  usage.groq.estimatedSystemPromptTokens += estimateTokensFromCharacters(systemPrompt);
+  usage.groq.estimatedUserPromptTokens += estimateTokensFromCharacters(userPrompt);
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages,
+      temperature: 0.3,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `Groq API HTTP ${res.status}`);
+  }
+
+  const providerUsage = data?.usage || data?.x_groq?.usage || {};
+  usage.groq.requestCount += 1;
+  usage.groq.promptTokens += Number(providerUsage.prompt_tokens || 0);
+  usage.groq.completionTokens += Number(providerUsage.completion_tokens || 0);
+  usage.groq.totalTokens += Number(
+    providerUsage.total_tokens ||
+    Number(providerUsage.prompt_tokens || 0) + Number(providerUsage.completion_tokens || 0)
+  );
+  usage.groq.cachedPromptTokens += Number(providerUsage.prompt_tokens_details?.cached_tokens || 0);
+  usage.groq.reasoningTokens += Number(providerUsage.completion_tokens_details?.reasoning_tokens || 0);
+  usage.groq.queueTimeMs = secondsToMs(providerUsage.queue_time);
+  usage.groq.promptTimeMs = secondsToMs(providerUsage.prompt_time);
+  usage.groq.completionTimeMs = secondsToMs(providerUsage.completion_time);
+  usage.groq.totalTimeMs = secondsToMs(providerUsage.total_time);
+  return data;
+}
 
 const SYNONYMS: Record<string, string[]> = {
   '包裹': ['包裹', '郵件', '快遞', '宅配', '包包', '貨物', '寄件', '收件', '掛號'],
@@ -82,17 +154,24 @@ export interface ChatResult {
   sources?: any[];
   chatId?: number | null;
   error?: string;
+  usage?: ChatUsage;
 }
 
 export async function chat(query: string, onStatus?: (status: string) => void): Promise<ChatResult> {
   const sendStatus = (status: string) => { if (typeof onStatus === 'function') onStatus(status); };
   const startTime = Date.now();
+  const usage = createEmptyChatUsage(GROQ_MODEL, query);
+  const finish = (result: ChatResult): ChatResult => ({
+    ...result,
+    usage: finalizeChatUsage(usage, startTime),
+  });
   let searchMethod = 'vector';
   let maxSimilarity = 0;
   let matchCount = 0;
   const apiUsed = { cohere: false, groq: false };
 
   const normalized_question = normalizeQuestion(query);
+  usage.rag.normalizedQuestionCharacters = normalized_question.length;
   const intentResult = classifyIntent(query);
   const intent = intentResult.intent;
   const intent_confidence = intentResult.confidence > 0 ? intentResult.confidence : null;
@@ -101,7 +180,17 @@ export async function chat(query: string, onStatus?: (status: string) => void): 
   sendStatus('正在理解您的問題...');
 
   // 1. 生成 embedding
-  const queryEmbedding = await getEmbedding(query, 'search_query');
+  const embeddingResult = await getEmbeddingWithUsage(query, 'search_query');
+  const queryEmbedding = embeddingResult.embedding;
+  usage.cohere = {
+    model: embeddingResult.model,
+    inputType: embeddingResult.inputType,
+    inputTokens: embeddingResult.inputTokens,
+    billedInputTokens: embeddingResult.billedInputTokens,
+    cacheHit: embeddingResult.cacheHit,
+    requestCount: embeddingResult.cacheHit ? 0 : 1,
+    durationMs: embeddingResult.durationMs,
+  };
   if (queryEmbedding) apiUsed.cohere = true;
 
   // Fallback: embedding 失敗 → 純關鍵字搜尋
@@ -114,53 +203,60 @@ export async function chat(query: string, onStatus?: (status: string) => void): 
       for (let i = 0; i <= words.length - n; i++) ngrams.push(words.slice(i, i + n).join(''));
     }
 
-    const { data: allData } = await supabase.from('knowledge').select('id, content').not('embedding', 'is', null);
+    const { data: allData } = await trackDatabaseOperation(
+      usage,
+      'read_knowledge_for_keyword_fallback',
+      'read',
+      supabase.from('knowledge').select('id, content').not('embedding', 'is', null),
+    );
     if (allData && allData.length > 0) {
       const keywordMatches = allData.filter(item => ngrams.some(kw => item.content.includes(kw)));
       matchCount = keywordMatches.length;
       if (keywordMatches.length > 0) {
         const context = keywordMatches.slice(0, 3).map(item => item.content).join('\n\n---\n\n');
+        usage.rag.contextCharacters = context.length;
+        usage.rag.estimatedContextTokens = estimateTokensFromCharacters(context);
+        usage.rag.sourceCount = Math.min(keywordMatches.length, 3);
+        usage.rag.searchMethod = searchMethod;
         sendStatus('找到相關資料，正在生成回答...');
         try {
           apiUsed.groq = true;
-          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
-            body: JSON.stringify({
-              model: GROQ_MODEL,
-              messages: [
-                { role: 'system', content: '你是檢索增強型助理，回答一律使用繁體中文，只能根據參考資料回答。' },
-                { role: 'user', content: `問題：${query}\n\n參考資料：\n${context}` },
-              ],
-              temperature: 0.3,
-            }),
-          });
-          const data = await res.json();
+          const data = await callGroq(usage, [
+            { role: 'system', content: '你是檢索增強型助理，回答一律使用繁體中文，只能根據參考資料回答。' },
+            { role: 'user', content: `問題：${query}\n\n參考資料：\n${context}` },
+          ]);
           const answer = data.choices[0].message.content;
           const saveResult = await saveChatWithLearning({
             question: query, question_embedding: null, answer,
             sources: null, images: [], search_method: searchMethod,
             similarity: 0, match_count: matchCount,
-            response_ms: Date.now() - startTime, api_used: apiUsed,
+            response_ms: Date.now() - startTime, api_used: { ...apiUsed, token_usage: usage },
           });
-          return { answer, images: [], chatId: saveResult.chatId };
+          usage.database.operations.push(saveResult.databaseUsage);
+          return finish({ answer, images: [], chatId: saveResult.chatId });
         } catch {
-          return { answer: '抱歉，AI 服務暫時無法使用，請稍後再試。', images: [] };
+          return finish({ answer: '抱歉，AI 服務暫時無法使用，請稍後再試。', images: [] });
         }
       }
     }
-    return { answer: '抱歉，我找不到相關資料來回答這個問題。', images: [] };
+    usage.rag.searchMethod = searchMethod;
+    return finish({ answer: '抱歉，我找不到相關資料來回答這個問題。', images: [] });
   }
 
   sendStatus('正在搜尋知識庫...');
 
   // 2. 向量搜尋
-  const { data: searchResults, error: searchError } = await supabase.rpc('search_knowledge', {
-    query_embedding: queryEmbedding,
-    match_threshold: 0.25,
-    match_count: 5,
-  });
-  if (searchError) return { error: '搜尋失敗' };
+  const { data: searchResults, error: searchError } = await trackDatabaseOperation(
+    usage,
+    'rpc_search_knowledge',
+    'rpc',
+    supabase.rpc('search_knowledge', {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.25,
+      match_count: 5,
+    }),
+  );
+  if (searchError) return finish({ error: '搜尋失敗' });
 
   let finalResults = searchResults;
   const maxSim = searchResults?.[0]?.similarity || 0;
@@ -175,7 +271,12 @@ export async function chat(query: string, onStatus?: (status: string) => void): 
     for (let n = 1; n <= 3; n++) {
       for (let i = 0; i <= words.length - n; i++) ngrams.push(words.slice(i, i + n).join(''));
     }
-    const { data: allData } = await supabase.from('knowledge').select('id, content').not('embedding', 'is', null);
+    const { data: allData } = await trackDatabaseOperation(
+      usage,
+      'read_knowledge_for_low_similarity_fallback',
+      'read',
+      supabase.from('knowledge').select('id, content').not('embedding', 'is', null),
+    );
     if (allData) {
       const keywordMatches = allData.filter(item => ngrams.some(kw => item.content.includes(kw)));
       matchCount = keywordMatches.length;
@@ -190,23 +291,37 @@ export async function chat(query: string, onStatus?: (status: string) => void): 
 
   // 4. 完全找不到 → 試圖用圖片回答
   if (!finalResults || finalResults.length === 0) {
-    const { data: imageResults } = await supabase.rpc('search_images', {
-      query_embedding: queryEmbedding, match_threshold: 0.4, match_count: 1,
-    });
+    const { data: imageResults } = await trackDatabaseOperation(
+      usage,
+      'rpc_search_images_without_knowledge',
+      'rpc',
+      supabase.rpc('search_images', {
+        query_embedding: queryEmbedding, match_threshold: 0.4, match_count: 1,
+      }),
+    );
     const images = imageResults?.map((img: any) => img.url) || [];
     if (images.length > 0) {
       const imgDesc = imageResults[0]?.description || '相關設施';
-      return { answer: `以下是${imgDesc}的相關圖片。`, images };
+      return finish({ answer: `以下是${imgDesc}的相關圖片。`, images });
     }
-    return { answer: '抱歉，我找不到相關資料來回答這個問題。', images: [] };
+    return finish({ answer: '抱歉，我找不到相關資料來回答這個問題。', images: [] });
   }
 
   const context = finalResults.slice(0, 3).map((item: any) => item.content).join('\n\n---\n\n');
+  usage.rag.contextCharacters = context.length;
+  usage.rag.estimatedContextTokens = estimateTokensFromCharacters(context);
+  usage.rag.sourceCount = Math.min(finalResults.length, 3);
+  usage.rag.searchMethod = searchMethod;
 
   // 5. 搜尋相關圖片
-  const { data: imageResults } = await supabase.rpc('search_images', {
-    query_embedding: queryEmbedding, match_threshold: 0.65, match_count: 3,
-  });
+  const { data: imageResults } = await trackDatabaseOperation(
+    usage,
+    'rpc_search_related_images',
+    'rpc',
+    supabase.rpc('search_images', {
+      query_embedding: queryEmbedding, match_threshold: 0.65, match_count: 3,
+    }),
+  );
   const images = imageResults?.map((img: any) => img.url) || [];
 
   sendStatus('正在生成回答...');
@@ -219,20 +334,10 @@ export async function chat(query: string, onStatus?: (status: string) => void): 
       systemPrompt += `\n\n【圖片已附加】使用者可以看到${imgDesc}的圖片。請在回答中提及「如圖所示」或「請參考圖片」。`;
     }
 
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `問題：${query}\n\n參考資料：\n${context}` },
-        ],
-        temperature: 0.3,
-      }),
-    });
-
-    const data = await res.json();
+    const data = await callGroq(usage, [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `問題：${query}\n\n參考資料：\n${context}` },
+    ]);
     apiUsed.groq = true;
     const answer = data.choices[0].message.content;
 
@@ -241,10 +346,15 @@ export async function chat(query: string, onStatus?: (status: string) => void): 
     answered = !isNotFoundAnswer && finalResults.length > 0;
 
     // 寫入 chat_log
-    await supabase.from('chat_log').insert([{
-      raw_question: query, normalized_question, intent, intent_confidence,
-      answered, created_at: new Date().toISOString(),
-    }]);
+    await trackDatabaseOperation(
+      usage,
+      'insert_chat_log',
+      'write',
+      supabase.from('chat_log').insert([{
+        raw_question: query, normalized_question, intent, intent_confidence,
+        answered, created_at: new Date().toISOString(),
+      }]),
+    );
 
     // 儲存對話記錄 + 學習佇列判斷
     matchCount = searchResults?.length || 0;
@@ -252,16 +362,23 @@ export async function chat(query: string, onStatus?: (status: string) => void): 
       question: query, question_embedding: queryEmbedding, answer,
       sources: searchResults?.slice(0, 3) || null, images,
       search_method: searchMethod, similarity: maxSimilarity,
-      match_count: matchCount, response_ms: Date.now() - startTime, api_used: apiUsed,
+      match_count: matchCount, response_ms: Date.now() - startTime,
+      api_used: { ...apiUsed, token_usage: usage },
     });
+    usage.database.operations.push(saveResult.databaseUsage);
 
-    return { answer, images, sources: searchResults?.slice(0, 3), chatId: saveResult.chatId };
+    return finish({ answer, images, sources: searchResults?.slice(0, 3), chatId: saveResult.chatId });
   } catch (error: any) {
     console.error('[Error] Groq API:', error.message);
-    await supabase.from('chat_log').insert([{
-      raw_question: query, normalized_question, intent, intent_confidence,
-      answered: false, created_at: new Date().toISOString(),
-    }]);
-    return { error: 'AI 回答生成失敗' };
+    await trackDatabaseOperation(
+      usage,
+      'insert_failed_chat_log',
+      'write',
+      supabase.from('chat_log').insert([{
+        raw_question: query, normalized_question, intent, intent_confidence,
+        answered: false, created_at: new Date().toISOString(),
+      }]),
+    );
+    return finish({ error: 'AI 回答生成失敗' });
   }
 }

@@ -5,6 +5,7 @@ import type React from "react"
 import { useRef, useState, useEffect } from "react"
 import { EmergencyButtons } from "@/features/emergencies/ui/EmergencyButtons"
 import { ChatFeedback } from "./ChatFeedback"
+import type { ChatUsage } from "@/lib/grok/usage"
 
 interface User {
   id?: string
@@ -19,6 +20,7 @@ interface Message {
   text: string
   images?: string[]
   chatId?: number | null
+  usage?: ChatUsage
 }
 
 interface AiChatWindowProps {
@@ -38,6 +40,73 @@ interface AiChatWindowProps {
 }
 
 const MAX_QUESTION_LENGTH = 75
+
+function formatDuration(value: number | null) {
+  return value === null ? "未提供" : `${value} ms`
+}
+
+function UsageDetails({ usage }: { usage: ChatUsage }) {
+  return (
+    <details className="mt-3 border-t border-current/20 pt-2 text-xs">
+      <summary className="cursor-pointer font-semibold">Token / 資源明細</summary>
+      <div className="mt-2 space-y-2 leading-5">
+        <div>
+          <strong>總計：</strong>
+          Input {usage.totals.inputTokens}、Output {usage.totals.outputTokens}、Total {usage.totals.totalTokens}
+          ，整體耗時 {usage.totals.requestDurationMs} ms
+        </div>
+        <div>
+          <strong>Groq：</strong>
+          Prompt {usage.groq.promptTokens}、Completion {usage.groq.completionTokens}、Total {usage.groq.totalTokens}
+          ，模型 {usage.groq.model}，呼叫 {usage.groq.requestCount} 次
+        </div>
+        <div>
+          <strong>Groq 細分：</strong>
+          Cached prompt {usage.groq.cachedPromptTokens}、Reasoning {usage.groq.reasoningTokens}；
+          System prompt {usage.groq.systemPromptCharacters} 字（估計 {usage.groq.estimatedSystemPromptTokens} tokens）、
+          User prompt {usage.groq.userPromptCharacters} 字（估計 {usage.groq.estimatedUserPromptTokens} tokens）
+        </div>
+        <div>
+          <strong>Groq 時間：</strong>
+          Queue {formatDuration(usage.groq.queueTimeMs)}、Prompt {formatDuration(usage.groq.promptTimeMs)}、
+          Completion {formatDuration(usage.groq.completionTimeMs)}、Total {formatDuration(usage.groq.totalTimeMs)}
+        </div>
+        <div>
+          <strong>Cohere Embedding：</strong>
+          輸入 {usage.cohere.inputTokens} tokens、實際計費 {usage.cohere.billedInputTokens} tokens，
+          {usage.cohere.cacheHit ? "快取命中" : "呼叫 API"}，耗時 {usage.cohere.durationMs} ms
+        </div>
+        <div>
+          <strong>RAG：</strong>
+          問題 {usage.rag.questionCharacters} 字、正規化後 {usage.rag.normalizedQuestionCharacters} 字、
+          Context {usage.rag.contextCharacters} 字（估計 {usage.rag.estimatedContextTokens} tokens）、
+          來源 {usage.rag.sourceCount} 筆、搜尋方式 {usage.rag.searchMethod}
+        </div>
+        <div>
+          <strong>資料庫：</strong>
+          Token 0、操作 {usage.database.queryCount} 次、讀取 {usage.database.rowsRead} 筆、
+          寫入 {usage.database.rowsWritten} 筆、總耗時 {usage.database.totalDurationMs} ms
+        </div>
+        {usage.database.operations.length > 0 ? (
+          <div>
+            <strong>資料庫操作：</strong>
+            <ul className="mt-1 space-y-1">
+              {usage.database.operations.map((operation, index) => (
+                <li key={`${operation.name}-${index}`}>
+                  {operation.name}：{operation.kind}、{operation.rows} 筆、{operation.durationMs} ms
+                  {operation.error ? `、錯誤 ${operation.error}` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <div className="text-[var(--theme-text-muted)]">
+          資料庫不使用模型 token；RAG context token 是估算值，供應商 usage 才是實際 token。
+        </div>
+      </div>
+    </details>
+  )
+}
 
 export function AiChatWindow({
   isOpen,
@@ -204,6 +273,7 @@ export function AiChatWindow({
                   onFeedbackSubmit={handleFeedbackSubmit}
                 />
               )}
+              {msg.type === "bot" && msg.usage ? <UsageDetails usage={msg.usage} /> : null}
             </div>
           </div>
         ))}

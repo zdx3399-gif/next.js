@@ -339,6 +339,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const authorId = searchParams.get("authorId")
     const status = searchParams.get("status")
+    const includeUnappealed = searchParams.get("includeUnappealed") === "1"
 
     let query = supabase.from("moderation_appeals").select("*").order("created_at", { ascending: false })
 
@@ -358,7 +359,44 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ data: data || [] })
+    const appeals = data || []
+    const postIds = Array.from(new Set(appeals.map((item: any) => item.post_id).filter(Boolean)))
+
+    let postsById = new Map<string, any>()
+    if (postIds.length > 0) {
+      const { data: posts, error: postError } = await supabase.from("community_posts").select("*").in("id", postIds)
+
+      if (postError) {
+        console.warn("[v0] Failed to attach post data for appeals:", postError.message)
+      } else {
+        postsById = new Map((posts || []).map((post: any) => [post.id, post]))
+      }
+    }
+
+    const enriched = appeals.map((item: any) => ({
+      ...item,
+      post: postsById.get(item.post_id) || null,
+    }))
+
+    let unappealedPosts: any[] = []
+    if (includeUnappealed && authorId) {
+      const { data: candidatePosts, error: candidateError } = await supabase
+        .from("community_posts")
+        .select("*")
+        .eq("author_id", authorId)
+        .eq("status", "pending")
+        .not("ai_risk_level", "is", null)
+        .is("moderated_by", null)
+        .order("updated_at", { ascending: false })
+
+      if (candidateError) {
+        console.warn("[v0] Failed to fetch unappealed posts:", candidateError.message)
+      } else {
+        unappealedPosts = candidatePosts || []
+      }
+    }
+
+    return NextResponse.json({ data: enriched, unappealedPosts })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "讀取申訴失敗" }, { status: 500 })
   }

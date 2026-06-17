@@ -6,9 +6,7 @@ import { Input } from "@/components/ui/input"
 import { CommunityPostCard } from "./CommunityPostCard"
 import { useCommunityPosts, useInteractions } from "../hooks/useCommunity"
 import {
-  getPostsByIds,
-  getOwnModeratedPosts,
-  getUserModerationAppeals,
+  getUserAppealContext,
   submitModerationAppeal,
   type CommunityPost,
   type ModerationAppeal,
@@ -104,20 +102,16 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
     }
 
     try {
-      const ownModeratedPosts = await getOwnModeratedPosts(currentUser.id)
-      const appeals = await getUserModerationAppeals(currentUser.id)
+      const { appeals, unappealedPosts: ownModeratedPosts } = await getUserAppealContext(currentUser.id)
 
-      const appealPostIds = Array.from(new Set(appeals.map((a) => a.post_id)))
-      const appealPosts = await getPostsByIds(appealPostIds)
-      const aiAppealPostIds = new Set(
-        appealPosts.filter((post) => post?.id && post.ai_risk_level).map((post) => post.id),
-      )
+      const appealPosts = appeals
+        .map((appeal) => appeal.post)
+        .filter((post): post is CommunityPost => Boolean(post?.id))
 
       // appeals 已依 created_at DESC 排序，第一筆即為最新申訴
       const statusMap: Record<string, ModerationAppeal["status"]> = {}
       const appealUpdatedAt: Record<string, string> = {}
       for (const appeal of appeals) {
-        if (!aiAppealPostIds.has(appeal.post_id)) continue
         if (!statusMap[appeal.post_id]) {
           statusMap[appeal.post_id] = appeal.status
           appealUpdatedAt[appeal.post_id] = appeal.updated_at
@@ -129,7 +123,7 @@ export function CommunityPostList({ currentUser, onSelectPost, onCreatePost }: C
         if (post?.id) moderatedById.set(post.id, post)
       }
       for (const post of appealPosts) {
-        if (post?.id && post.ai_risk_level) moderatedById.set(post.id, post)
+        if (post?.id) moderatedById.set(post.id, post)
       }
 
       // 申訴後成功：只顯示 30 天內剛恢復的，避免舊紀錄堆積

@@ -87,11 +87,17 @@ export interface ModerationAppeal {
   author_id: string
   reason: string
   status: "pending" | "reviewing" | "restored" | "rejected" | "cancelled"
+  post?: CommunityPost | null
   review_note?: string | null
   reviewed_by?: string | null
   reviewed_at?: string | null
   created_at: string
   updated_at: string
+}
+
+export interface UserAppealContext {
+  appeals: ModerationAppeal[]
+  unappealedPosts: CommunityPost[]
 }
 
 function getCurrentOperator() {
@@ -647,6 +653,27 @@ export async function getUserModerationAppeals(authorId: string): Promise<Modera
   }
 
   return Array.isArray(payload?.data) ? (payload.data as ModerationAppeal[]) : []
+}
+
+export async function getUserAppealContext(authorId: string): Promise<UserAppealContext> {
+  if (!authorId) {
+    return { appeals: [], unappealedPosts: [] }
+  }
+
+  const res = await fetch(`/api/community/appeals?authorId=${encodeURIComponent(authorId)}&includeUnappealed=1`, {
+    cache: "no-store",
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    console.warn("[v0] 讀取申訴上下文失敗，改以空資料降級:", payload?.error || res.status)
+    return { appeals: [], unappealedPosts: [] }
+  }
+
+  return {
+    appeals: Array.isArray(payload?.data) ? (payload.data as ModerationAppeal[]) : [],
+    unappealedPosts: Array.isArray(payload?.unappealedPosts) ? (payload.unappealedPosts as CommunityPost[]) : [],
+  }
 }
 
 export async function getUserReports(userId: string): Promise<Report[]> {

@@ -1,8 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Search, Plus, RefreshCw, Pencil, Trash2, MoreVertical } from "lucide-react"
+import { Search, Plus, RefreshCw, Pencil, Trash2, MoreVertical, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -108,6 +109,8 @@ export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: H
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [detailCard, setDetailCard] = useState<HandoverKnowledgeCard | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [selectedCard, setSelectedCard] = useState<HandoverKnowledgeCard | null>(null)
   const [formData, setFormData] = useState({
@@ -187,6 +190,11 @@ export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: H
       category: card.category,
     })
     setShowEditDialog(true)
+  }
+
+  const openDetailDialog = (card: HandoverKnowledgeCard) => {
+    setDetailCard(card)
+    setShowDetailDialog(true)
   }
 
   const handleEditCard = async () => {
@@ -317,32 +325,37 @@ export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: H
         ))}
       </div>
 
-      <div className="space-y-3">
-        {loading ? (
-          <div className="text-center py-8 text-muted-foreground">載入中...</div>
-        ) : cards.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">目前沒有交接知識資料</div>
-        ) : (
-          <>
-            {cards.map((card) => (
-              <div key={card.id} className="bg-card border rounded-lg p-4 hover:border-primary/50 transition-colors">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap gap-2 mb-2">
+      {loading ? (
+        <div className="text-center py-8 text-muted-foreground">載入中...</div>
+      ) : cards.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">目前沒有交接知識資料</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {cards.map((card) => (
+            <Card
+              key={card.id}
+              className="hover:shadow-md transition-shadow duration-200 overflow-hidden border-border/40"
+            >
+              <div className="p-4 md:p-5">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => openDetailDialog(card)}
+                    className="flex-1 min-w-0 text-left"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
                       <Badge
                         variant="outline"
                         className={categoryBadgeClassMap[card.category] || "bg-gray-500/20 text-gray-500 border-gray-500/50"}
                       >
                         {CATEGORY_OPTIONS.find((option) => option.value === card.category)?.label || card.category}
                       </Badge>
-                      <Badge variant="outline">{statusLabelMap[card.status] || card.status}</Badge>
+                      <Badge variant="outline" className="text-xs border-border/50">
+                        {statusLabelMap[card.status] || card.status}
+                      </Badge>
                     </div>
-                    <h4 className="font-semibold text-foreground">{card.title}</h4>
-                    <p className="text-sm text-muted-foreground whitespace-pre-line mt-1">{card.summary}</p>
-                    <div className="text-xs text-muted-foreground mt-2">
-                      建立時間：{new Date(card.created_at).toLocaleString("zh-TW")}
-                    </div>
-                  </div>
+                    <h3 className="font-semibold text-base md:text-lg leading-snug text-balance hover:text-primary transition-colors">{card.title}</h3>
+                  </button>
 
                   {!isPreviewMode && currentUser && (
                     <DropdownMenu>
@@ -364,11 +377,35 @@ export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: H
                     </DropdownMenu>
                   )}
                 </div>
+
+                <p
+                  onClick={() => openDetailDialog(card)}
+                  className="text-sm text-muted-foreground leading-relaxed line-clamp-3 mb-4 cursor-pointer"
+                >
+                  {card.summary}
+                </p>
+
+                <div className="flex items-center justify-between pt-3 border-t border-border/40 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-3">
+                    <span>👍 {card.helpful_count || 0}</span>
+                    <span>👎 {card.not_helpful_count || 0}</span>
+                    <span>👁 {card.view_count || 0} 次瀏覽</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 h-8 px-2 text-primary hover:text-primary"
+                    onClick={() => openDetailDialog(card)}
+                  >
+                    查看詳情
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
-            ))}
-          </>
-        )}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="max-w-lg">
@@ -516,6 +553,82 @@ export function HandoverKnowledgeAdmin({ currentUser, isPreviewMode = false }: H
               {submitting ? "刪除中..." : "確認刪除"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          {detailCard && (
+            <>
+              <DialogHeader>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <Badge
+                    variant="outline"
+                    className={categoryBadgeClassMap[detailCard.category] || "bg-gray-500/20 text-gray-500 border-gray-500/50"}
+                  >
+                    {CATEGORY_OPTIONS.find((option) => option.value === detailCard.category)?.label || detailCard.category}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs border-border/50">
+                    {statusLabelMap[detailCard.status] || detailCard.status}
+                  </Badge>
+                  {detailCard.version && detailCard.version > 1 && (
+                    <Badge variant="outline" className="text-xs">版本 {detailCard.version}</Badge>
+                  )}
+                </div>
+                <DialogTitle>{detailCard.title}</DialogTitle>
+                <DialogDescription>{detailCard.summary}</DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                {Array.isArray(detailCard.steps) && detailCard.steps.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm text-foreground mb-2">操作步驟</h4>
+                    <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
+                      {(detailCard.steps as Array<{ step?: number; text?: string } | string>).map((step, index) => (
+                        <li key={index}>{typeof step === "string" ? step : step.text}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {detailCard.contact_info && Object.keys(detailCard.contact_info as Record<string, unknown>).length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm text-foreground mb-2">聯絡資訊</h4>
+                    <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground space-y-1">
+                      {Object.entries(detailCard.contact_info as Record<string, unknown>).map(([key, value]) => (
+                        <div key={key}>
+                          <span className="text-foreground">{key}</span>：{String(value)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-4 pt-3 border-t border-border/40 text-xs text-muted-foreground">
+                  <span>👍 {detailCard.helpful_count || 0}</span>
+                  <span>👎 {detailCard.not_helpful_count || 0}</span>
+                  <span>👁 {detailCard.view_count || 0} 次瀏覽</span>
+                  <span>建立時間：{new Date(detailCard.created_at).toLocaleString("zh-TW")}</span>
+                </div>
+              </div>
+
+              <DialogFooter>
+                {!isPreviewMode && currentUser && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDetailDialog(false)
+                      openEditDialog(detailCard)
+                    }}
+                  >
+                    <Pencil className="w-4 h-4 mr-2" />
+                    編輯
+                  </Button>
+                )}
+                <Button onClick={() => setShowDetailDialog(false)}>關閉</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

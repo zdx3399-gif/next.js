@@ -9,8 +9,12 @@ export type UserRole = "resident" | "guard" | "committee" | "admin"
 // Server-side tenant configuration (can access non-public env vars)
 const TENANT_CONFIG = {
   tenant_a: {
-    url: process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || "",
-    anonKey: process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY || "",
+    url: process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+    anonKey:
+      process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      "",
     name: "社區 A",
   },
   tenant_b: {
@@ -34,7 +38,7 @@ function validateTenantConfig(tenantId: TenantId) {
     if (!config.anonKey) missing.push(`${tenantId.toUpperCase()}_SUPABASE_ANON_KEY`)
 
     throw new Error(
-      `環境變數未設定：${missing.join(", ")}。請在 v0 左側邊欄的「Vars」區域或 .env.local 檔案中設定這些變數。`,
+      `環境變數未設定：${missing.join(", ")}。若為單一租戶部署，也可設定 SUPABASE_URL / SUPABASE_ANON_KEY。`,
     )
   }
 

@@ -27,6 +27,39 @@ export interface LoginResult {
   tenant_id?: string
 }
 
+function resolveSupabaseCredentials() {
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    ""
+
+  const anonKey =
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    ""
+
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.TENANT_A_SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+
+  return {
+    url,
+    anonKey,
+    serviceRoleKey,
+    source:
+      process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
+        ? "SUPABASE_URL/SUPABASE_ANON_KEY"
+        : process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_URL && process.env.NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY
+          ? "NEXT_PUBLIC_TENANT_A_SUPABASE_URL/NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY"
+          : process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+            ? "NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY"
+            : "",
+  }
+}
+
 /**
  * 執行登入驗證（共享邏輯）
  */
@@ -36,15 +69,22 @@ export async function performLogin(email: string, password: string): Promise<Log
     console.log("[v0] performLogin: Starting authentication for:", normalizedEmail)
 
     // 檢查環境變數
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      console.error("[v0] Missing Supabase environment variables")
+    const { url, anonKey, serviceRoleKey, source } = resolveSupabaseCredentials()
+    if (!url || !anonKey) {
+      console.error("[v0] Missing Supabase environment variables for login")
       return {
         success: false,
-        error: "伺服器設定錯誤 - 缺少 Supabase 憑證",
+        error: "伺服器設定錯誤 - 缺少 Supabase 憑證（請設定 SUPABASE_URL/SUPABASE_ANON_KEY 或 NEXT_PUBLIC_TENANT_A_SUPABASE_URL/NEXT_PUBLIC_TENANT_A_SUPABASE_ANON_KEY）",
       }
     }
 
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
+    console.log("[v0] performLogin: Using Supabase credentials source:", source)
+    const supabaseAuth = createClient(url, anonKey)
+    const supabaseDb = createClient(url, serviceRoleKey || anonKey)
+
+    if (!serviceRoleKey) {
+      console.warn("[v0] performLogin: SUPABASE_SERVICE_ROLE_KEY not set, profiles query may be affected by RLS")
+    }
 
     if (!normalizedEmail || !password) {
       return {
@@ -53,7 +93,7 @@ export async function performLogin(email: string, password: string): Promise<Log
       }
     }
 
-    const PROFILE_SELECT = `
+    const PROFILE_SELECT_FULL = `
       id,
       email,
       password,
@@ -70,29 +110,84 @@ export async function performLogin(email: string, password: string): Promise<Log
       created_at
     `
 
+    const PROFILE_SELECT_FALLBACK = `
+      id,
+      email,
+      password,
+      name,
+      phone,
+      role,
+      status,
+      tenant_id,
+      unit_id,
+      created_at
+    `
+
+    const isMissingColumnError = (message?: string) => {
+      const text = (message || "").toLowerCase()
+      return text.includes("column") && text.includes("does not exist")
+    }
+
+    const queryProfileById = async (userId: string) => {
+      const full = await supabaseDb.from("profiles").select(PROFILE_SELECT_FULL).eq("id", userId).maybeSingle()
+
+      if (!full.error || !isMissingColumnError(full.error.message)) {
+        return full
+      }
+
+      console.warn("[v0] profiles query fallback by id due to missing column:", full.error.message)
+      return await supabaseDb.from("profiles").select(PROFILE_SELECT_FALLBACK).eq("id", userId).maybeSingle()
+    }
+
+    const queryProfileByEmail = async (targetEmail: string) => {
+      const full = await supabaseDb
+        .from("profiles")
+        .select(PROFILE_SELECT_FULL)
+        .ilike("email", targetEmail)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!full.error || !isMissingColumnError(full.error.message)) {
+        return full
+      }
+
+      console.warn("[v0] profiles query fallback by email due to missing column:", full.error.message)
+      return await supabaseDb
+        .from("profiles")
+        .select(PROFILE_SELECT_FALLBACK)
+        .ilike("email", targetEmail)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    }
+
     let resolvedUser: any = null
 
     // 1) 優先走 Supabase Auth（加密密碼的正式來源）
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabaseAuth.auth.signInWithPassword({
       email: normalizedEmail,
       password,
     })
 
     if (!authError && authData.user) {
-      const { data: profileById, error: profileError } = await supabase
-        .from("profiles")
-        .select(PROFILE_SELECT)
-        .eq("id", authData.user.id)
-        .maybeSingle()
+      const { data: profileById, error: profileError } = await queryProfileById(authData.user.id)
 
-      if (profileError || !profileById) {
-        return {
-          success: false,
-          error: "登入成功但找不到個人資料，請聯繫管理員",
+      if (!profileError && profileById) {
+        resolvedUser = profileById
+      } else {
+        // 相容資料重建場景：auth.users id 與 profiles.id 可能不一致，改以 email 補抓
+        const { data: profileByEmail, error: profileByEmailError } = await queryProfileByEmail(normalizedEmail)
+
+        if (profileByEmailError || !profileByEmail) {
+          return {
+            success: false,
+            error: "登入成功但找不到個人資料，請聯繫管理員",
+          }
         }
-      }
 
-      resolvedUser = profileById
+        resolvedUser = profileByEmail
+      }
     } else {
       // 2) 舊資料相容：若 Auth 驗證失敗，嘗試 profiles 明文密碼
       const authMessage = authError?.message || ""
@@ -106,15 +201,26 @@ export async function performLogin(email: string, password: string): Promise<Log
         }
       }
 
-      const { data: legacyProfile, error: legacyError } = await supabase
-        .from("profiles")
-        .select(PROFILE_SELECT)
-        .ilike("email", normalizedEmail)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      const { data: legacyProfile, error: legacyError } = await queryProfileByEmail(normalizedEmail)
 
-      if (legacyError || !legacyProfile || legacyProfile.password !== password) {
+      if (legacyError) {
+        console.error("[v0] Legacy login failed: profiles query error", {
+          email: normalizedEmail,
+          message: legacyError.message,
+        })
+        return {
+          success: false,
+          error: `登入驗證失敗（profiles 查詢錯誤）：${legacyError.message}`,
+        }
+      }
+
+      if (!legacyProfile) {
+        console.warn("[v0] Legacy login failed: profile not found", { email: normalizedEmail })
+      } else if (legacyProfile.password !== password) {
+        console.warn("[v0] Legacy login failed: password mismatch", { email: normalizedEmail })
+      }
+
+      if (!legacyProfile || legacyProfile.password !== password) {
         return {
           success: false,
           error: "Email 或密碼錯誤",
@@ -125,15 +231,19 @@ export async function performLogin(email: string, password: string): Promise<Log
     }
 
     // 檢查帳號狀態
-    if (resolvedUser.status !== "active") {
+    const normalizedStatus = String(resolvedUser.status || "")
+      .trim()
+      .toLowerCase()
+
+    if (normalizedStatus && normalizedStatus !== "active") {
       return {
         success: false,
-        error: "帳號已被停用，請聯繫管理員",
+        error: `帳號狀態不可登入（目前狀態：${resolvedUser.status}），請聯繫管理員`,
       }
     }
 
     // 更新最後登入時間
-    await supabase.from("profiles").update({ updated_at: new Date().toISOString() }).eq("id", resolvedUser.id)
+    await supabaseDb.from("profiles").update({ updated_at: new Date().toISOString() }).eq("id", resolvedUser.id)
 
     console.log("[v0] 登入成功:", { email: normalizedEmail, role: resolvedUser.role, tenant_id: resolvedUser.tenant_id })
 

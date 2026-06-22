@@ -12,6 +12,11 @@ export interface HandoverKnowledgeCard {
   view_count: number
   helpful_count: number
   not_helpful_count: number
+  steps?: unknown
+  notes?: unknown
+  contact_info?: unknown
+  credibility?: string
+  version?: number
 }
 
 export const HANDOVER_SCENARIO = "handover_sop"
@@ -35,7 +40,7 @@ export async function getHandoverCards(filters?: { category?: string; status?: s
 
   let query = supabase
     .from("knowledge_cards")
-    .select("id, title, summary, category, status, created_at, updated_at, view_count, helpful_count, not_helpful_count")
+    .select("id, title, summary, category, status, created_at, updated_at, view_count, helpful_count, not_helpful_count, steps, notes, contact_info, credibility, version")
     .eq("situation", HANDOVER_SCENARIO)
     .order("created_at", { ascending: false })
 

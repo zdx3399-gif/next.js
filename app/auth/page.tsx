@@ -223,7 +223,7 @@ export default function AuthPage() {
         )}
 
         {isLoginMode ? (
-          <form onSubmit={handleLogin}>
+          <form method="post" action="/auth?mode=login" onSubmit={handleLogin}>
             <div className="mb-6">
               <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
                 電子郵件
@@ -262,7 +262,7 @@ export default function AuthPage() {
             </button>
           </form>
         ) : (
-          <form onSubmit={handleRegister}>
+          <form method="post" action="/auth?mode=register" onSubmit={handleRegister}>
             <div className="mb-6">
               <label className="block mb-2 font-medium" style={{ color: "var(--theme-text-primary)" }}>
                 選擇社區
